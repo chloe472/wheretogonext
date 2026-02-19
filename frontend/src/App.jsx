@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
+import Dashboard from './components/Dashboard';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -23,9 +24,19 @@ function App() {
     closeAuthModal();
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('wheretogonext_token');
+    localStorage.removeItem('wheretogonext_user');
+    setUser(null);
+  };
+
   return (
     <>
-      <LandingPage onStartPlanning={openAuthModal} />
+      {user ? (
+        <Dashboard user={user} onLogout={handleLogout} />
+      ) : (
+        <LandingPage onStartPlanning={openAuthModal} />
+      )}
       {authModalOpen && (
         <AuthModal
           onClose={closeAuthModal}

@@ -36,7 +36,13 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ credential: tokenResponse.access_token }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(res.ok ? 'Invalid response from server' : 'Sign-in failed. Is the server running?');
+        }
         if (!res.ok) throw new Error(data.error || 'Sign-in failed');
         if (onLoginSuccess && data.user && data.token) {
           onLoginSuccess(data.user, data.token);

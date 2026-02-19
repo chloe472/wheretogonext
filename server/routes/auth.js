@@ -54,13 +54,15 @@ router.post('/google', async (req, res) => {
     });
   } catch (err) {
     console.error('Google auth error:', err);
-    if (err.message?.includes('Invalid Google access token')) {
-      return res.status(401).json({ error: 'Invalid or expired Google sign-in. Try again.' });
+    if (!res.headersSent) {
+      if (err.message?.includes('Invalid Google access token')) {
+        return res.status(401).json({ error: 'Invalid or expired Google sign-in. Try again.' });
+      }
+      if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ error: 'Server misconfiguration (JWT_SECRET).' });
+      }
+      res.status(500).json({ error: 'Sign-in failed. Try again.' });
     }
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ error: 'Server misconfiguration (JWT_SECRET).' });
-    }
-    res.status(500).json({ error: 'Sign-in failed. Try again.' });
   }
 });
 
