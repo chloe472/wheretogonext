@@ -1,0 +1,15 @@
+{
+  "name": "wheretogonext",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Travel planner - MERN stack",
+  "scripts": {
+    "client": "cd frontend && npm run dev",
+    "server": "cd server && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install:all": "npm install && cd frontend && npm install && cd ../server && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
