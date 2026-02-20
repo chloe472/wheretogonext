@@ -16,15 +16,18 @@ wheretogonext/
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
-├── server/            # Node.js + Express – API
-│   ├── index.js
+├── backend/           # Node.js + Express – API
+│   ├── src/
+│   │   ├── index.js
+│   │   ├── models/
+│   │   └── routes/
 │   └── package.json
 ├── package.json       # Root scripts (run client + server)
 └── README.md
 ```
 
 - **frontend**: React SPA; proxy to `/api` for backend.
-- **server**: Express API; add routes (e.g. `/api/auth`), MongoDB connection, and env (e.g. `PORT`, `MONGODB_URI`) when ready.
+- **backend**: Express API; routes in `src/routes/`, models in `src/models/`; env (e.g. `PORT`, `MONGODB_URI`, `JWT_SECRET`) in `backend/.env`.
 
 ## Run locally
 
@@ -60,11 +63,10 @@ npm run dev
    - **Authorized JavaScript origins:** add `http://localhost:3000` (and your production URL later).
    - Copy the **Client ID** (e.g. `xxx.apps.googleusercontent.com`).
 
-2. **Server env** (`server/.env`)
-   - `GOOGLE_CLIENT_ID=` your Client ID
-   - `JWT_SECRET=` a long random string (e.g. `openssl rand -hex 32`)
+2. **Backend env** (`backend/.env`)
+   - Copy from `backend/.envexample` and set `MONGODB_URI`, `JWT_SECRET` (e.g. `openssl rand -hex 32`). Google Client ID is only needed in the frontend.
 
 3. **Frontend env** (`frontend/.env`)
    - `VITE_GOOGLE_CLIENT_ID=` same Client ID as above
 
-4. Restart server and frontend. “Continue with Google” will open the Google sign-in popup; after sign-in the user is created/found in MongoDB and a JWT is stored in the app.
+4. Restart backend and frontend. “Continue with Google” will open the Google sign-in popup; after sign-in the user is created/found in MongoDB and a JWT is stored in the app.

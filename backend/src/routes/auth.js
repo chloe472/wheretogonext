@@ -16,6 +16,11 @@ async function getGoogleUser(accessToken) {
 
 router.post('/google', async (req, res) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      console.error('Google auth: JWT_SECRET is not set in backend/.env');
+      return res.status(500).json({ error: 'Server misconfiguration (JWT_SECRET). Add it to backend/.env' });
+    }
+
     const { credential } = req.body;
     if (!credential) {
       return res.status(400).json({ error: 'Missing credential (Google access token)' });
@@ -58,10 +63,10 @@ router.post('/google', async (req, res) => {
       if (err.message?.includes('Invalid Google access token')) {
         return res.status(401).json({ error: 'Invalid or expired Google sign-in. Try again.' });
       }
-      if (!process.env.JWT_SECRET) {
-        return res.status(500).json({ error: 'Server misconfiguration (JWT_SECRET).' });
+      if (err.name === 'MongoServerError' || err.message?.includes('MongoDB')) {
+        return res.status(503).json({ error: 'Database unavailable. Check backend/.env MONGODB_URI and that MongoDB is running.' });
       }
-      res.status(500).json({ error: 'Sign-in failed. Try again.' });
+      res.status(500).json({ error: err.message || 'Sign-in failed. Try again.' });
     }
   }
 });

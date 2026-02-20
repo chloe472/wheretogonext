@@ -5,9 +5,9 @@
   "description": "Travel planner - MERN stack",
   "scripts": {
     "client": "cd frontend && npm run dev",
-    "server": "cd server && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "install:all": "npm install && cd frontend && npm install && cd ../server && npm install"
+    "server": "cd backend && npm run dev",
+    "dev": "node -e \"console.log('\\n  Frontend: http://localhost:3000\\n  API:      http://localhost:5000\\n')\" && concurrently -n server,client \"npm run server\" \"npm run client\"",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

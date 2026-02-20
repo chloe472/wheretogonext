@@ -5,9 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
-    },
+    // Don't set COOP here: Google OAuth popup needs to check window.closed; strict COOP blocks that and causes "Sign-in failed" + console errors.
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

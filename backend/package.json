@@ -1,10 +1,10 @@
 {
-  "name": "wheretogonext-server",
+  "name": "wheretogonext-backend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch index.js",
-    "start": "node index.js"
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
