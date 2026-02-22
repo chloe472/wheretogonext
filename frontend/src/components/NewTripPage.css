@@ -1,0 +1,267 @@
+.new-trip {
+  min-height: 100vh;
+  background: #fff;
+}
+
+.new-trip__header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.new-trip__back {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #374151;
+  text-decoration: none;
+}
+
+.new-trip__back:hover {
+  color: #111;
+  text-decoration: underline;
+}
+
+.new-trip__main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.new-trip__title {
+  margin: 0 0 2rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111;
+  text-align: center;
+}
+
+.new-trip__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.new-trip__label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.new-trip__input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
+  color: #111;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.new-trip__input:hover {
+  border-color: #d1d5db;
+}
+
+.new-trip__input:focus {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+}
+
+.new-trip__input--where {
+  padding-right: 1rem;
+}
+
+.new-trip__input--date {
+  padding-left: 2.5rem;
+}
+
+.new-trip__field {
+  position: relative;
+}
+
+/* Where to? suggestions */
+.new-trip__suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.new-trip__suggestion {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: #374151;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.new-trip__suggestion:hover {
+  background: #f9fafb;
+}
+
+.new-trip__suggestion--empty {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.new-trip__suggestion-name {
+  font-weight: 500;
+  color: #111;
+}
+
+.new-trip__suggestion-meta {
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.new-trip__type-badge {
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.new-trip__type-badge--city {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.new-trip__type-badge--country {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.new-trip__type-badge--province {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Dates row */
+.new-trip__dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.new-trip__date-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.new-trip__date-icon {
+  position: absolute;
+  left: 1rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.new-trip__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.new-trip__invite {
+  padding: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #2563eb;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.new-trip__invite:hover {
+  text-decoration: underline;
+}
+
+.new-trip__friends-wrap {
+  position: relative;
+}
+
+.new-trip__friends-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.new-trip__friends-btn:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.new-trip__friends-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 220px;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.new-trip__friends-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.new-trip__submit {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #ea580c;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.new-trip__submit:hover {
+  background: #c2410c;
+}
+
+.new-trip__submit:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.3);
+}

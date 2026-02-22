@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Bell,
   User,
@@ -12,46 +13,8 @@ import {
   FileText,
   ChevronRight,
 } from 'lucide-react';
+import { MOCK_TRIPS } from '../data/mockTrips';
 import './Dashboard.css';
-
-const MOCK_TRIPS = [
-  {
-    id: '1',
-    title: 'Summer Europe Adventure',
-    dates: 'Jun 15 - Jul 2, 2026',
-    locations: 'Paris, Rome, Barcelona',
-    placesSaved: 47,
-    budget: '$3.2k',
-    travelers: 4,
-    status: 'Planning',
-    statusClass: 'trip-card__status--planning',
-    image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&h=240&fit=crop',
-  },
-  {
-    id: '2',
-    title: 'Tokyo Spring Cherry Blossoms',
-    dates: 'Mar 20 - Apr 5, 2027',
-    locations: 'Tokyo, Kyoto, Osaka',
-    placesSaved: 23,
-    budget: '$4.5k',
-    travelers: 2,
-    status: 'Upcoming',
-    statusClass: 'trip-card__status--upcoming',
-    image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&h=240&fit=crop',
-  },
-  {
-    id: '3',
-    title: 'Bali Wellness Retreat',
-    dates: 'Aug 10 - Aug 24, 2026',
-    locations: 'Ubud, Seminyak, Canggu',
-    placesSaved: 15,
-    budget: '$2.8k',
-    travelers: 1,
-    status: 'Dreaming',
-    statusClass: 'trip-card__status--dreaming',
-    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400&h=240&fit=crop',
-  },
-];
 
 const MOCK_COMING_UP = [
   { id: '1', name: 'Summer Europe', day: 15, month: 'JUN', label: 'Departure in 4 months' },
@@ -131,10 +94,10 @@ export default function Dashboard({ user, onLogout }) {
             <p className="dashboard__greeting">
               Welcome back! Let&apos;s continue planning your perfect trips.
             </p>
-            <button type="button" className="dashboard__new-trip">
+            <Link to="/new-trip" className="dashboard__new-trip">
               <Plus size={20} aria-hidden />
               New Trip
-            </button>
+            </Link>
           </section>
 
           <section className="dashboard__trips">
@@ -186,9 +149,9 @@ export default function Dashboard({ user, onLogout }) {
                         <strong>{trip.travelers}</strong> Travelers
                       </span>
                     </div>
-                    <a href={`#trip-${trip.id}`} className="trip-card__link">
+                    <Link to={`/trip/${trip.id}`} className="trip-card__link">
                       View Trip Details <ChevronRight size={16} aria-hidden />
-                    </a>
+                    </Link>
                   </div>
                 </li>
               ))}

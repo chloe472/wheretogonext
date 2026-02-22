@@ -1,0 +1,919 @@
+/* Trip Details (Kanban) page */
+.trip-details {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+.trip-details--missing {
+  padding: 2rem;
+  text-align: center;
+}
+
+.trip-details--missing a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: none;
+}
+
+.trip-details--missing a:hover {
+  text-decoration: underline;
+}
+
+/* Header */
+.trip-details__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.trip-details__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.trip-details__logo {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 6px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.trip-details__logo:hover {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.trip-details__logo-letter {
+  line-height: 1;
+}
+
+.trip-details__trip-info {
+  min-width: 0;
+}
+
+.trip-details__title-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111;
+  cursor: pointer;
+}
+
+.trip-details__title-btn:hover {
+  color: #374151;
+}
+
+.trip-details__spent {
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.trip-details__spent a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.trip-details__spent a:hover {
+  text-decoration: underline;
+}
+
+.trip-details__center {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trip-details__pill {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+
+.trip-details__pill--btn {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.trip-details__pill--btn:hover {
+  background: #e5e7eb;
+}
+
+.trip-details__currency-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__currency-btn:hover {
+  background: #e5e7eb;
+}
+
+.trip-details__currency-wrap {
+  position: relative;
+}
+
+
+.trip-details__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__icon-btn:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.trip-details__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.trip-details__save {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: #dc2626;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 0.5rem;
+}
+
+.trip-details__save:hover {
+  background: #b91c1c;
+}
+
+/* Body: columns */
+.trip-details__body {
+  flex: 1;
+  overflow: auto;
+}
+
+.trip-details__columns {
+  display: flex;
+  min-height: calc(100vh - 60px);
+  align-items: stretch;
+}
+
+/* Day column */
+.trip-details__day-col {
+  flex: 0 0 240px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  padding: 0.75rem;
+}
+
+.trip-details__day-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.trip-details__day-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.trip-details__grip {
+  flex-shrink: 0;
+  color: #9ca3af;
+  cursor: grab;
+}
+
+.trip-details__day-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-details__day-menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.trip-details__day-menu:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.trip-details__day-input {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  font-size: 0.8125rem;
+  color: #111;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  outline: none;
+}
+
+.trip-details__day-input::placeholder {
+  color: #9ca3af;
+}
+
+.trip-details__day-input:hover,
+.trip-details__day-input:focus {
+  border-bottom-color: #e5e7eb;
+}
+
+.trip-details__day-content {
+  flex: 1;
+  min-height: 120px;
+  margin-top: 0.75rem;
+}
+
+.trip-details__add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #fff;
+  background: #1e3a5f;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__add-btn:hover {
+  background: #16304d;
+}
+
+/* Map column */
+.trip-details__map-col {
+  flex: 0 0 320px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #e5e7eb;
+}
+
+.trip-details__map-col--expand-half {
+  flex: 1 1 50%;
+}
+
+.trip-details__map-col--expand-full {
+  flex: 1 1 100%;
+  max-width: 100%;
+}
+
+.trip-details__map-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.trip-details__map-dropdown-wrap {
+  position: relative;
+}
+
+.trip-details__map-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__map-expand-btn:hover {
+  background: #e5e7eb;
+}
+
+.trip-details__map-dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.trip-details__map-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+}
+
+.trip-details__map-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  text-align: left;
+  color: #374151;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.trip-details__map-dropdown-item:hover {
+  background: #f3f4f6;
+}
+
+.trip-details__map-dropdown-item--active {
+  font-weight: 600;
+  color: #111;
+}
+
+.trip-details__map-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.trip-details__map-filter {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.trip-details__map-filter:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.trip-details__map-filter--active {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.trip-details__map-area {
+  flex: 1;
+  min-height: 300px;
+  position: relative;
+}
+
+.trip-details__map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #e0e7ff 0%, #fce7f3 100%);
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.trip-details__map-placeholder svg {
+  color: #9ca3af;
+}
+
+.trip-details__map-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.trip-details__map-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.trip-details__map-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.trip-details__map-ctrl:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.trip-details__map-zoom {
+  display: flex;
+  flex-direction: column;
+  margin-left: auto;
+}
+
+.trip-details__map-zoom-btn {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: #374151;
+  background: #f3f4f6;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+}
+
+.trip-details__map-zoom-btn:first-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.trip-details__map-zoom-btn:last-child {
+  border-radius: 0 0 4px 4px;
+  border-bottom: none;
+}
+
+.trip-details__map-zoom-btn:hover {
+  background: #e5e7eb;
+}
+
+.trip-details__map-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.trip-details__map-info:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Add to trip – bottom action sheet */
+.trip-details__add-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  cursor: default;
+}
+
+.trip-details__add-sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  padding: 1.25rem 1rem 1.5rem;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.trip-details__add-sheet-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.trip-details__add-sheet-subtitle {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.trip-details__add-sheet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.trip-details__add-sheet-list li {
+  margin: 0;
+}
+
+.trip-details__add-sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  margin: 0 -0.5rem;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.trip-details__add-sheet-option:hover {
+  background: #f3f4f6;
+}
+
+.trip-details__add-sheet-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.trip-details__add-sheet-icon-svg {
+  color: #fff;
+  stroke: #fff;
+}
+
+.trip-details__add-sheet-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.trip-details__add-sheet-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.trip-details__add-sheet-desc {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+/* Shared modal */
+.trip-details__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: default;
+}
+
+.trip-details__modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.trip-details__modal-close:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.trip-details__modal-cancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #374151;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-cancel:hover {
+  background: #e5e7eb;
+}
+
+.trip-details__modal-update {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: #ea580c;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-update:hover {
+  background: #c2410c;
+}
+
+/* When (date) modal */
+.trip-details__when-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 560px;
+  padding: 1.25rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.trip-details__when-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.trip-details__when-modal-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.trip-details__when-modal-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.trip-details__when-calendars {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.trip-details__calendar {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-details__calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.trip-details__calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__calendar-nav:hover {
+  background: #f3f4f6;
+}
+
+.trip-details__calendar-month {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.trip-details__calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.trip-details__calendar-wd {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.trip-details__calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.trip-details__calendar-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #111;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__calendar-cell:hover {
+  background: #f3f4f6;
+}
+
+.trip-details__calendar-cell--other {
+  color: #9ca3af;
+}
+
+.trip-details__calendar-cell--range {
+  background: rgba(234, 88, 12, 0.2);
+  color: #111;
+}
+
+.trip-details__calendar-cell--range-end {
+  background: #ea580c;
+  color: #fff;
+}
+
+.trip-details__calendar-cell--range-end:hover {
+  background: #c2410c;
+  color: #fff;
+}
+
+.trip-details__when-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Currency modal */
+.trip-details__currency-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 380px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.trip-details__currency-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.trip-details__currency-modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.trip-details__currency-list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.trip-details__currency-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.625rem 0.5rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: #374151;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__currency-option:hover {
+  background: #f3f4f6;
+}
+
+.trip-details__currency-option--selected {
+  font-weight: 600;
+  color: #111;
+}
+
+.trip-details__currency-check {
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
+.trip-details__currency-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

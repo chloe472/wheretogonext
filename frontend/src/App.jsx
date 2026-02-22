@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
+import TripDetailsPage from './components/TripDetailsPage';
+import NewTripPage from './components/NewTripPage';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -31,19 +34,46 @@ function App() {
   };
 
   return (
-    <>
-      {user ? (
-        <Dashboard user={user} onLogout={handleLogout} />
-      ) : (
-        <LandingPage onStartPlanning={openAuthModal} />
-      )}
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            user ? (
+              <Dashboard user={user} onLogout={handleLogout} />
+            ) : (
+              <LandingPage onStartPlanning={openAuthModal} />
+            )
+          }
+        />
+        <Route
+          path="/new-trip"
+          element={
+            user ? (
+              <NewTripPage user={user} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/trip/:tripId"
+          element={
+            user ? (
+              <TripDetailsPage user={user} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+      </Routes>
       {authModalOpen && (
         <AuthModal
           onClose={closeAuthModal}
           onLoginSuccess={handleLoginSuccess}
         />
       )}
-    </>
+    </BrowserRouter>
   );
 }
 
