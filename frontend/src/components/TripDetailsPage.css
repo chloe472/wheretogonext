@@ -38,27 +38,23 @@
 }
 
 .trip-details__logo {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #dc2626;
+  background: #1a1a1a;
   color: #fff;
-  font-weight: 700;
-  font-size: 1rem;
-  border-radius: 6px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border-radius: 50%;
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .trip-details__logo:hover {
-  background: #b91c1c;
+  background: #333;
   color: #fff;
-}
-
-.trip-details__logo-letter {
-  line-height: 1;
 }
 
 .trip-details__trip-info {
@@ -185,6 +181,43 @@
 
 .trip-details__save:hover {
   background: #b91c1c;
+}
+
+/* View toggle (Kanban / Calendar) */
+.trip-details__view-toggle {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.trip-details__view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.trip-details__view-toggle-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.trip-details__view-toggle-btn--active {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.trip-details__view-toggle-btn--active:hover {
+  background: #16304d;
+  color: #fff;
 }
 
 /* Body: columns */
@@ -533,6 +566,125 @@
 .trip-details__map-info:hover {
   background: #f3f4f6;
   color: #374151;
+}
+
+/* Calendar view */
+.trip-details__calendar-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.trip-details__calendar-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+}
+
+.trip-details__calendar-day-tabs {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.trip-details__calendar-day-tab {
+  flex: 0 0 140px;
+  min-width: 120px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-right: 1px solid #e5e7eb;
+}
+
+.trip-details__calendar-day-tab-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #111;
+}
+
+.trip-details__calendar-day-tab-city {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.trip-details__calendar-timeline-wrap {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: auto;
+}
+
+.trip-details__calendar-times {
+  flex-shrink: 0;
+  width: 52px;
+  padding: 0.5rem 0;
+  border-right: 1px solid #e5e7eb;
+}
+
+.trip-details__calendar-time-row {
+  height: 48px;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.trip-details__calendar-time-label {
+  font-size: 0.6875rem;
+  color: #9ca3af;
+}
+
+.trip-details__calendar-grid {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.trip-details__calendar-day-col {
+  flex: 1;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #f3f4f6;
+}
+
+.trip-details__calendar-cell {
+  height: 48px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.trip-details__calendar-fab {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+}
+
+.trip-details__calendar-fab:hover {
+  background: #1d4ed8;
+  transform: scale(1.05);
+}
+
+.trip-details__calendar-fab:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
 }
 
 /* Add to trip – bottom action sheet */

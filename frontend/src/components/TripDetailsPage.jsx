@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
-  Copy,
   Trash2,
   ShoppingCart,
   GripVertical,
@@ -24,6 +23,8 @@ import {
   Heart,
   X,
   Check,
+  LayoutGrid,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import { getTripById, getTripDays } from '../data/mockTrips';
 import './TripDetailsPage.css';
@@ -151,6 +152,8 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
   const [dayTitles, setDayTitles] = useState({});
   const [addSheetDay, setAddSheetDay] = useState(null);
+  const [addSheetFromCalendar, setAddSheetFromCalendar] = useState(false);
+  const [viewMode, setViewMode] = useState('kanban');
   const [dateRange, setDateRange] = useState(null);
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
@@ -228,7 +231,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       <header className="trip-details__header">
         <div className="trip-details__brand">
           <Link to="/" className="trip-details__logo" aria-label="Back to My Trips">
-            <span className="trip-details__logo-letter">H</span>
+            @
           </Link>
           <div className="trip-details__trip-info">
             <button type="button" className="trip-details__title-btn">
@@ -268,14 +271,30 @@ export default function TripDetailsPage({ user, onLogout }) {
         </div>
 
         <div className="trip-details__actions">
-          <button type="button" className="trip-details__icon-btn" aria-label="Redo">
-            <Share2 size={18} aria-hidden />
-          </button>
+          <div className="trip-details__view-toggle" role="group" aria-label="View mode">
+            <button
+              type="button"
+              className={`trip-details__view-toggle-btn ${viewMode === 'kanban' ? 'trip-details__view-toggle-btn--active' : ''}`}
+              onClick={() => setViewMode('kanban')}
+              aria-pressed={viewMode === 'kanban'}
+              aria-label="Kanban board view"
+              title="Board view"
+            >
+              <LayoutGrid size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={`trip-details__view-toggle-btn ${viewMode === 'calendar' ? 'trip-details__view-toggle-btn--active' : ''}`}
+              onClick={() => setViewMode('calendar')}
+              aria-pressed={viewMode === 'calendar'}
+              aria-label="Calendar view"
+              title="Calendar view"
+            >
+              <CalendarIcon size={18} aria-hidden />
+            </button>
+          </div>
           <button type="button" className="trip-details__icon-btn" aria-label="Share">
             <Share2 size={18} aria-hidden />
-          </button>
-          <button type="button" className="trip-details__icon-btn" aria-label="Duplicate trip">
-            <Copy size={18} aria-hidden />
           </button>
           <button type="button" className="trip-details__icon-btn" aria-label="Delete trip">
             <Trash2 size={18} aria-hidden />
@@ -290,42 +309,43 @@ export default function TripDetailsPage({ user, onLogout }) {
       </header>
 
       <div className="trip-details__body">
-        <div className="trip-details__columns">
-          {days.map((day) => (
-            <section key={day.dayNum} className="trip-details__day-col">
-              <div className="trip-details__day-header">
-                <div className="trip-details__day-heading">
-                  <GripVertical size={14} className="trip-details__grip" aria-hidden />
-                  <h2 className="trip-details__day-title">
-                    Day {day.dayNum}: {day.label}
-                  </h2>
+        {viewMode === 'kanban' ? (
+          <div className="trip-details__columns">
+            {days.map((day) => (
+              <section key={day.dayNum} className="trip-details__day-col">
+                <div className="trip-details__day-header">
+                  <div className="trip-details__day-heading">
+                    <GripVertical size={14} className="trip-details__grip" aria-hidden />
+                    <h2 className="trip-details__day-title">
+                      Day {day.dayNum}: {day.label}
+                    </h2>
+                  </div>
+                  <button type="button" className="trip-details__day-menu" aria-label="Day options">
+                    <MoreVertical size={16} aria-hidden />
+                  </button>
                 </div>
-                <button type="button" className="trip-details__day-menu" aria-label="Day options">
-                  <MoreVertical size={16} aria-hidden />
+                <input
+                  type="text"
+                  className="trip-details__day-input"
+                  placeholder="Add day title..."
+                  value={dayTitles[day.dayNum] ?? ''}
+                  onChange={(e) => setDayTitle(day.dayNum, e.target.value)}
+                />
+                <div className="trip-details__day-content">
+                  {/* Placeholder for cards/activities */}
+                </div>
+                <button
+                  type="button"
+                  className="trip-details__add-btn"
+                  onClick={() => { setAddSheetFromCalendar(false); setAddSheetDay(day.dayNum); }}
+                >
+                  <Plus size={16} aria-hidden />
+                  Add things to do, hotels...
                 </button>
-              </div>
-              <input
-                type="text"
-                className="trip-details__day-input"
-                placeholder="Add day title..."
-                value={dayTitles[day.dayNum] ?? ''}
-                onChange={(e) => setDayTitle(day.dayNum, e.target.value)}
-              />
-              <div className="trip-details__day-content">
-                {/* Placeholder for cards/activities */}
-              </div>
-              <button
-                type="button"
-                className="trip-details__add-btn"
-                onClick={() => setAddSheetDay(day.dayNum)}
-              >
-                <Plus size={16} aria-hidden />
-                Add things to do, hotels...
-              </button>
-            </section>
-          ))}
+              </section>
+            ))}
 
-          <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
+            <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
             <div className="trip-details__map-header">
               <div className="trip-details__map-dropdown-wrap">
                 <button
@@ -398,7 +418,93 @@ export default function TripDetailsPage({ user, onLogout }) {
               </button>
             </div>
           </aside>
-        </div>
+          </div>
+        ) : (
+          <div className="trip-details__calendar-view">
+            <div className="trip-details__calendar-content">
+              <div className="trip-details__calendar-day-tabs">
+                {days.map((day) => (
+                  <div key={day.dayNum} className="trip-details__calendar-day-tab">
+                    <span className="trip-details__calendar-day-tab-title">Day {day.dayNum}: {day.label}</span>
+                    <span className="trip-details__calendar-day-tab-city">{trip.destination}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="trip-details__calendar-timeline-wrap">
+                <div className="trip-details__calendar-times">
+                  {Array.from({ length: 12 }, (_, i) => i + 6).map((h) => (
+                    <div key={h} className="trip-details__calendar-time-row">
+                      <span className="trip-details__calendar-time-label">{String(h).padStart(2, '0')}:00</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="trip-details__calendar-grid">
+                  {days.map((day) => (
+                    <div key={day.dayNum} className="trip-details__calendar-day-col">
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <div key={i} className="trip-details__calendar-cell" />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="trip-details__calendar-fab"
+                aria-label="Add to trip"
+                onClick={() => { setAddSheetFromCalendar(true); setAddSheetDay(1); }}
+              >
+                <Plus size={24} aria-hidden />
+              </button>
+            </div>
+            <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
+              <div className="trip-details__map-header">
+                <div className="trip-details__map-dropdown-wrap">
+                  <button
+                    type="button"
+                    className="trip-details__map-expand-btn"
+                    onClick={() => setMapExpandOpen((o) => !o)}
+                    aria-expanded={mapExpandOpen}
+                  >
+                    Expand Map
+                    <ChevronDown size={14} aria-hidden />
+                  </button>
+                  {mapExpandOpen && (
+                    <>
+                      <button type="button" className="trip-details__map-dropdown-backdrop" aria-label="Close" onClick={() => setMapExpandOpen(false)} />
+                      <div className="trip-details__map-dropdown">
+                        {MAP_VIEWS.map((view) => (
+                          <button key={view} type="button" className={`trip-details__map-dropdown-item ${mapView === view ? 'trip-details__map-dropdown-item--active' : ''}`} onClick={() => { setMapView(view); setMapExpandOpen(false); }}>{view}</button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="trip-details__map-filters">
+                  {MAP_FILTERS.map((f) => (
+                    <button key={f} type="button" className={`trip-details__map-filter ${mapFilter === f ? 'trip-details__map-filter--active' : ''}`} onClick={() => setMapFilter(f)}>{f}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="trip-details__map-area">
+                <div className="trip-details__map-placeholder">
+                  <MapPin size={48} aria-hidden />
+                  <p>Map</p>
+                  <span className="trip-details__map-hint">Add a map provider (e.g. Leaflet) for pins</span>
+                </div>
+              </div>
+              <div className="trip-details__map-controls">
+                <button type="button" className="trip-details__map-ctrl"><ZoomIn size={14} aria-hidden /> Zoom into...</button>
+                <button type="button" className="trip-details__map-ctrl"><Filter size={14} aria-hidden /> Filter days</button>
+                <div className="trip-details__map-zoom">
+                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom in">+</button>
+                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom out">−</button>
+                </div>
+                <button type="button" className="trip-details__map-info" aria-label="Map info"><Info size={16} aria-hidden /></button>
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
 
       {dateModalOpen && (
@@ -511,11 +617,11 @@ export default function TripDetailsPage({ user, onLogout }) {
             type="button"
             className="trip-details__add-sheet-backdrop"
             aria-label="Close menu"
-            onClick={() => setAddSheetDay(null)}
+            onClick={() => { setAddSheetDay(null); setAddSheetFromCalendar(false); }}
           />
           <div className="trip-details__add-sheet" role="dialog" aria-labelledby="add-to-trip-title" aria-modal="true">
             <h2 id="add-to-trip-title" className="trip-details__add-sheet-title">Add to trip</h2>
-            <p className="trip-details__add-sheet-subtitle">Day {addSheetDay}</p>
+            {!addSheetFromCalendar && <p className="trip-details__add-sheet-subtitle">Day {addSheetDay}</p>}
             <ul className="trip-details__add-sheet-list">
               {ADD_TO_TRIP_OPTIONS.map(({ id, label, description, Icon, color }) => (
                 <li key={id}>
@@ -525,6 +631,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                     onClick={() => {
                       /* TODO: open flow for this category */
                       setAddSheetDay(null);
+                      setAddSheetFromCalendar(false);
                     }}
                   >
                     <span className="trip-details__add-sheet-icon" style={{ backgroundColor: color }}>
