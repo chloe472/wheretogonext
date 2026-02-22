@@ -19,9 +19,110 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loginEmailOrUsername, setLoginEmailOrUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) onClose();
+  };
+
+  const parseRes = async (res) => {
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(res.ok ? 'Invalid response from server' : 'Something went wrong.');
+    }
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+    return data;
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!loginEmailOrUsername.trim()) {
+      setError('Enter your email or username.');
+      return;
+    }
+    if (!loginPassword) {
+      setError('Enter your password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailOrUsername: loginEmailOrUsername.trim(),
+          password: loginPassword,
+        }),
+      });
+      const data = await parseRes(res);
+      if (onLoginSuccess && data.user && data.token) {
+        onLoginSuccess(data.user, data.token);
+      }
+    } catch (err) {
+      setError(err.message || 'Log in failed. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!signupEmail.trim()) {
+      setError('Enter your email.');
+      return;
+    }
+    if (!signupPassword) {
+      setError('Enter a password.');
+      return;
+    }
+    if (signupPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!/\d/.test(signupPassword)) {
+      setError('Password must contain at least one number.');
+      return;
+    }
+    if (!/[\W_]/.test(signupPassword)) {
+      setError('Password must contain at least one symbol.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: signupEmail.trim(),
+          password: signupPassword,
+          name: signupName.trim() || undefined,
+          username: signupUsername.trim() || undefined,
+        }),
+      });
+      const data = await parseRes(res);
+      if (onLoginSuccess && data.user && data.token) {
+        onLoginSuccess(data.user, data.token);
+      }
+    } catch (err) {
+      setError(err.message || 'Sign up failed. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchTab = (newTab) => {
+    setTab(newTab);
+    setError('');
   };
 
   const googleLogin = useGoogleLogin({
@@ -76,14 +177,14 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
           <button
             type="button"
             className={`auth-modal__tab ${tab === 'login' ? 'auth-modal__tab--active' : ''}`}
-            onClick={() => setTab('login')}
+            onClick={() => switchTab('login')}
           >
             Login
           </button>
           <button
             type="button"
             className={`auth-modal__tab ${tab === 'signup' ? 'auth-modal__tab--active' : ''}`}
-            onClick={() => setTab('signup')}
+            onClick={() => switchTab('signup')}
           >
             Sign Up
           </button>
@@ -112,39 +213,53 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
 
             <div className="auth-modal__divider">or</div>
 
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <Mail size={18} className="auth-modal__input-icon" aria-hidden />
-                <input type="text" placeholder="Enter your email or username" className="auth-modal__input" />
-              </span>
-            </label>
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <Lock size={18} className="auth-modal__input-icon" aria-hidden />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  className="auth-modal__input"
-                />
-                <button
-                  type="button"
-                  className="auth-modal__toggle-pw"
-                  onClick={() => setShowPassword((p) => !p)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
-                </button>
-              </span>
-            </label>
-            <div className="auth-modal__forgot">
-              <a href="#forgot">Forgot password?</a>
-            </div>
+            <form onSubmit={handleLoginSubmit} noValidate>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <Mail size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type="text"
+                    placeholder="Enter your email or username"
+                    className="auth-modal__input"
+                    value={loginEmailOrUsername}
+                    onChange={(e) => setLoginEmailOrUsername(e.target.value)}
+                    autoComplete="username"
+                  />
+                </span>
+              </label>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <Lock size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    className="auth-modal__input"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="auth-modal__toggle-pw"
+                    onClick={() => setShowPassword((p) => !p)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+                  </button>
+                </span>
+              </label>
+              <div className="auth-modal__forgot">
+                <a href="#forgot">Forgot password?</a>
+              </div>
 
-            <button type="button" className="auth-modal__submit">Log In <ArrowRight size={18} className="auth-modal__submit-icon" aria-hidden /></button>
+              <button type="submit" className="auth-modal__submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Log In'} <ArrowRight size={18} className="auth-modal__submit-icon" aria-hidden />
+              </button>
+            </form>
 
             <p className="auth-modal__switch">
               Don&apos;t have an account?{' '}
-              <button type="button" className="auth-modal__link" onClick={() => setTab('signup')}>
+              <button type="button" className="auth-modal__link" onClick={() => switchTab('signup')}>
                 Sign up
               </button>
             </p>
@@ -170,49 +285,77 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
 
             <div className="auth-modal__divider">or</div>
 
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <User size={18} className="auth-modal__input-icon" aria-hidden />
-                <input type="text" placeholder="Enter your name" className="auth-modal__input" />
-              </span>
-            </label>
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <User size={18} className="auth-modal__input-icon" aria-hidden />
-                <input type="text" placeholder="Enter your username" className="auth-modal__input" />
-              </span>
-            </label>
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <Mail size={18} className="auth-modal__input-icon" aria-hidden />
-                <input type="email" placeholder="Enter your email" className="auth-modal__input" />
-              </span>
-            </label>
-            <label className="auth-modal__label">
-              <span className="auth-modal__input-wrap">
-                <Lock size={18} className="auth-modal__input-icon" aria-hidden />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  className="auth-modal__input"
-                />
-                <button
-                  type="button"
-                  className="auth-modal__toggle-pw"
-                  onClick={() => setShowPassword((p) => !p)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
-                </button>
-              </span>
-            </label>
-            <p className="auth-modal__hint">Must be 8+ characters and contain a number and a symbol</p>
+            <form onSubmit={handleSignupSubmit} noValidate>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <User size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type="text"
+                    placeholder="Enter your name"
+                    className="auth-modal__input"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    autoComplete="name"
+                  />
+                </span>
+              </label>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <User size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type="text"
+                    placeholder="Enter your username"
+                    className="auth-modal__input"
+                    value={signupUsername}
+                    onChange={(e) => setSignupUsername(e.target.value)}
+                    autoComplete="username"
+                  />
+                </span>
+              </label>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <Mail size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    className="auth-modal__input"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    autoComplete="email"
+                  />
+                </span>
+              </label>
+              <label className="auth-modal__label">
+                <span className="auth-modal__input-wrap">
+                  <Lock size={18} className="auth-modal__input-icon" aria-hidden />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    className="auth-modal__input"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="auth-modal__toggle-pw"
+                    onClick={() => setShowPassword((p) => !p)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+                  </button>
+                </span>
+              </label>
+              <p className="auth-modal__hint">Must be 8+ characters and contain a number and a symbol</p>
 
-            <button type="button" className="auth-modal__submit">Create Account <ArrowRight size={18} className="auth-modal__submit-icon" aria-hidden /></button>
+              <button type="submit" className="auth-modal__submit" disabled={loading}>
+                {loading ? 'Creating account…' : 'Create Account'} <ArrowRight size={18} className="auth-modal__submit-icon" aria-hidden />
+              </button>
+            </form>
 
             <p className="auth-modal__switch">
               Already have an account?{' '}
-              <button type="button" className="auth-modal__link" onClick={() => setTab('login')}>
+              <button type="button" className="auth-modal__link" onClick={() => switchTab('login')}>
                 Log in
               </button>
             </p>
