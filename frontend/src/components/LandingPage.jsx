@@ -4,7 +4,7 @@ import {
   Wallet,
   Mail,
   Users,
-  Shirt,
+  Route,
   Star,
   Zap,
   MapPin,
@@ -40,9 +40,9 @@ const FEATURES = [
     description: 'Real-time editing with your travel crew',
   },
   {
-    Icon: Shirt,
-    title: 'Virtual Wardrobe & Outfit Planner',
-    description: 'Visualize outfits and pack smarter with AI-powered suggestions',
+    Icon: Route,
+    title: 'Community Itineraries',
+    description: 'Discover and reuse trip plans from other travellers for your next destination',
   },
 ];
 
