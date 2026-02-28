@@ -1,43 +1,55 @@
 /**
- * Mock geographic locations for "Where to?" autocomplete.
- * Each has a name and type (City, Country, Province) so users can disambiguate.
- * In production this would come from a places/geocoding API.
+ * Location data for "Where to?" autocomplete.
+ * Countries: exhaustive list (250). Cities: major world cities.
+ * In production you could also call a places/geocoding API for more coverage.
  */
-export const MOCK_LOCATIONS = [
-  { id: 'paris-fr', name: 'Paris', type: 'City', country: 'France' },
-  { id: 'paris-on', name: 'Paris', type: 'Province', country: 'Canada' },
-  { id: 'paris-tx', name: 'Paris', type: 'City', country: 'United States' },
-  { id: 'france', name: 'France', type: 'Country' },
-  { id: 'hawaii', name: 'Hawaii', type: 'Province', country: 'United States' },
-  { id: 'japan', name: 'Japan', type: 'Country' },
-  { id: 'tokyo', name: 'Tokyo', type: 'City', country: 'Japan' },
-  { id: 'london', name: 'London', type: 'City', country: 'United Kingdom' },
-  { id: 'london-on', name: 'London', type: 'City', country: 'Canada' },
-  { id: 'ontario', name: 'Ontario', type: 'Province', country: 'Canada' },
-  { id: 'california', name: 'California', type: 'Province', country: 'United States' },
-  { id: 'seattle', name: 'Seattle', type: 'City', country: 'United States' },
-  { id: 'vancouver', name: 'Vancouver', type: 'City', country: 'Canada' },
-  { id: 'british-columbia', name: 'British Columbia', type: 'Province', country: 'Canada' },
-  { id: 'italy', name: 'Italy', type: 'Country' },
-  { id: 'rome', name: 'Rome', type: 'City', country: 'Italy' },
-  { id: 'barcelona', name: 'Barcelona', type: 'City', country: 'Spain' },
-  { id: 'spain', name: 'Spain', type: 'Country' },
-  { id: 'bali', name: 'Bali', type: 'Province', country: 'Indonesia' },
-  { id: 'indonesia', name: 'Indonesia', type: 'Country' },
-  { id: 'sydney', name: 'Sydney', type: 'City', country: 'Australia' },
-  { id: 'australia', name: 'Australia', type: 'Country' },
-  { id: 'new-york', name: 'New York', type: 'City', country: 'United States' },
-  { id: 'new-york-state', name: 'New York', type: 'Province', country: 'United States' },
-  { id: 'calgary', name: 'Calgary', type: 'City', country: 'Canada' },
-  { id: 'alberta', name: 'Alberta', type: 'Province', country: 'Canada' },
+import countriesData from './countries.json';
+import { CITIES } from './cities.js';
+
+const COUNTRIES = countriesData.map((c) => ({
+  ...c,
+  country: undefined,
+}));
+
+const PROVINCES = [
+  { id: 'california-us', name: 'California', type: 'Province', country: 'United States' },
+  { id: 'new-york-state-us', name: 'New York', type: 'Province', country: 'United States' },
+  { id: 'hawaii-us', name: 'Hawaii', type: 'Province', country: 'United States' },
+  { id: 'florida-us', name: 'Florida', type: 'Province', country: 'United States' },
+  { id: 'texas-us', name: 'Texas', type: 'Province', country: 'United States' },
+  { id: 'ontario-ca', name: 'Ontario', type: 'Province', country: 'Canada' },
+  { id: 'british-columbia-ca', name: 'British Columbia', type: 'Province', country: 'Canada' },
+  { id: 'quebec-ca', name: 'Quebec', type: 'Province', country: 'Canada' },
+  { id: 'alberta-ca', name: 'Alberta', type: 'Province', country: 'Canada' },
+  { id: 'new-south-wales-au', name: 'New South Wales', type: 'Province', country: 'Australia' },
+  { id: 'queensland-au', name: 'Queensland', type: 'Province', country: 'Australia' },
+  { id: 'victoria-au', name: 'Victoria', type: 'Province', country: 'Australia' },
+  { id: 'bali-province-id', name: 'Bali', type: 'Province', country: 'Indonesia' },
+  { id: 'tuscany-it', name: 'Tuscany', type: 'Province', country: 'Italy' },
+  { id: 'provence-fr', name: 'Provence', type: 'Province', country: 'France' },
+  { id: 'cote-azur-fr', name: 'French Riviera', type: 'Province', country: 'France' },
 ];
 
+const ALL_LOCATIONS = [...COUNTRIES, ...CITIES, ...PROVINCES];
+
+/**
+ * Search locations by name or country. Matches query against name and country (case-insensitive).
+ * Returns up to 12 results: countries first, then cities/provinces.
+ */
 export function searchLocations(query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
-  return MOCK_LOCATIONS.filter(
+
+  const matches = ALL_LOCATIONS.filter(
     (loc) =>
       loc.name.toLowerCase().includes(q) ||
       (loc.country && loc.country.toLowerCase().includes(q))
-  ).slice(0, 8);
+  );
+
+  const countriesFirst = matches.filter((l) => l.type === 'Country');
+  const rest = matches.filter((l) => l.type !== 'Country');
+  return [...countriesFirst, ...rest].slice(0, 12);
 }
+
+/** @deprecated Use searchLocations; kept for any legacy imports of the raw list */
+export const MOCK_LOCATIONS = ALL_LOCATIONS;

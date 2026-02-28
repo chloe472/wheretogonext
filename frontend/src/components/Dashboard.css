@@ -2,7 +2,17 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  /* Beige / brown / taupe palette */
+  --dash-bg: #f2ebe3;
+  --dash-surface: #faf8f5;
+  --dash-border: #d4c4b0;
+  --dash-text: #3d3428;
+  --dash-text-muted: #6b5d4f;
+  --dash-accent: #7d6b5a;
+  --dash-primary: #5c4a3d;
+  --dash-hover: #e8e0d5;
+  --dash-input-bg: #ebe5dc;
+  background: var(--dash-bg);
 }
 
 /* Header */
@@ -11,8 +21,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-  background: #fff;
+  border-bottom: 1px solid var(--dash-border);
+  background: var(--dash-surface);
 }
 
 .dashboard__brand {
@@ -27,8 +37,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--dash-primary);
+  color: #faf8f5;
   font-size: 1.25rem;
   font-weight: 600;
   border-radius: 50%;
@@ -38,13 +48,100 @@
   display: block;
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--dash-text);
 }
 
 .dashboard__tagline {
   display: block;
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
+}
+
+.dashboard__search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 320px;
+  margin: 0 1.5rem;
+}
+
+.dashboard__search-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dashboard__search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--dash-text-muted);
+  pointer-events: none;
+}
+
+.dashboard__search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  font-size: 0.9375rem;
+  color: var(--dash-text);
+  background: var(--dash-input-bg);
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dashboard__search-input::placeholder {
+  color: var(--dash-text-muted);
+}
+
+.dashboard__search-input:hover {
+  background: var(--dash-surface);
+  border-color: #c4b8a8;
+}
+
+.dashboard__search-input:focus {
+  background: var(--dash-surface);
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.2);
+}
+
+.dashboard__search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(61, 52, 40, 0.12);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.dashboard__search-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: var(--dash-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.dashboard__search-suggestion:hover {
+  background: var(--dash-hover);
+}
+
+.dashboard__search-suggestion-meta {
+  font-size: 0.8125rem;
+  color: var(--dash-text-muted);
 }
 
 .dashboard__nav {
@@ -57,13 +154,13 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--dash-text);
   text-decoration: none;
   border-radius: 6px;
 }
 
 .dashboard__nav-link:hover {
-  background: #f5f5f5;
+  background: var(--dash-hover);
   text-decoration: none;
 }
 
@@ -76,17 +173,18 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--color-text);
+  color: var(--dash-text);
   border-radius: 50%;
   cursor: pointer;
 }
 
 .dashboard__icon-btn:hover {
-  background: #f5f5f5;
+  background: var(--dash-hover);
 }
 
 .dashboard__icon-btn--avatar {
-  background: #e5e5e5;
+  background: var(--dash-accent);
+  color: var(--dash-surface);
 }
 
 .dashboard__profile-wrap {
@@ -110,18 +208,18 @@
   margin-top: 0.25rem;
   min-width: 160px;
   padding: 0.5rem;
-  background: #fff;
-  border: 1px solid var(--color-border);
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(61, 52, 40, 0.12);
 }
 
 .dashboard__profile-name {
   display: block;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--color-border);
+  color: var(--dash-text-muted);
+  border-bottom: 1px solid var(--dash-border);
   margin-bottom: 0.25rem;
 }
 
@@ -131,7 +229,7 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   text-align: left;
-  color: var(--color-text);
+  color: var(--dash-text);
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -139,7 +237,7 @@
 }
 
 .dashboard__profile-logout:hover {
-  background: #f5f5f5;
+  background: var(--dash-hover);
 }
 
 /* Body: main + sidebar */
@@ -176,14 +274,28 @@
   margin: 0 0 0.35rem;
   font-size: clamp(1.75rem, 3vw, 2.25rem);
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--dash-text);
   letter-spacing: -0.02em;
+}
+
+.dashboard__title-highlight {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.08em;
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 182, 193, 0.95),
+    rgba(255, 182, 193, 0.5)
+  );
+  background-size: 100% 55%;
+  background-repeat: no-repeat;
+  background-position: 0 92%;
 }
 
 .dashboard__greeting {
   margin: 0 0 1.25rem;
   font-size: 1rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
 }
 
 .dashboard__new-trip {
@@ -193,8 +305,8 @@
   padding: 0.75rem 1.25rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #fff;
-  background: #1a1a1a;
+  color: #faf8f5;
+  background: var(--dash-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -203,7 +315,7 @@
 }
 
 .dashboard__new-trip:hover {
-  background: #333;
+  background: #6b5344;
 }
 
 /* Your Trips */
@@ -215,7 +327,7 @@
   margin: 0 0 1rem;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--dash-text);
 }
 
 .dashboard__filters {
@@ -228,23 +340,23 @@
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
   background: transparent;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--dash-border);
   border-radius: 999px;
   cursor: pointer;
   transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
 
 .dashboard__filter:hover {
-  color: var(--color-text);
-  border-color: #ccc;
+  color: var(--dash-text);
+  border-color: #c4b8a8;
 }
 
 .dashboard__filter--active {
-  color: #fff;
-  background: #1a1a1a;
-  border-color: #1a1a1a;
+  color: #faf8f5;
+  background: var(--dash-primary);
+  border-color: var(--dash-primary);
 }
 
 .dashboard__trip-list {
@@ -261,15 +373,16 @@
   display: flex;
   gap: 1.25rem;
   padding: 0;
-  background: #fff;
-  border: 1px solid var(--color-border);
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
   border-radius: 12px;
   overflow: hidden;
   transition: box-shadow 0.2s;
+  cursor: pointer;
 }
 
 .trip-card:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 20px rgba(61, 52, 40, 0.08);
 }
 
 .trip-card__image-wrap {
@@ -287,29 +400,97 @@
   display: block;
 }
 
-.trip-card__status {
+.trip-card__status-wrap {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  padding: 0.25rem 0.6rem;
+  z-index: 2;
+}
+
+.trip-card__status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
+  border: none;
   border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.15s;
+}
+
+.trip-card__status-btn:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.trip-card__status-btn-text {
+  line-height: 1;
+}
+
+.trip-card__status-chevron {
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .trip-card__status--planning {
-  background: #fef3c7;
-  color: #92400e;
+  background-color: #d4c4a8;
+  color: var(--dash-primary);
 }
 
 .trip-card__status--upcoming {
-  background: #dbeafe;
-  color: #1e40af;
+  background-color: #a89f91;
+  color: var(--dash-surface);
 }
 
 .trip-card__status--dreaming {
-  background: #fce7f3;
-  color: #9d174d;
+  background-color: #c4b8a8;
+  color: var(--dash-primary);
+}
+
+.trip-card__status-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 140px;
+  padding: 0.5rem 0;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(61, 52, 40, 0.12);
+  list-style: none;
+}
+
+.trip-card__status-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--dash-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.trip-card__status-option:hover {
+  background: var(--dash-hover);
+}
+
+.trip-card__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.trip-card__status-option-text {
+  line-height: 1.3;
 }
 
 .trip-card__content {
@@ -325,13 +506,13 @@
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--dash-text);
 }
 
 .trip-card__meta {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -339,7 +520,7 @@
 
 .trip-card__meta-icon {
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
 }
 
 .trip-card__stats {
@@ -348,7 +529,12 @@
   gap: 1rem;
   margin-top: 0.5rem;
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
+}
+
+.trip-card__stat strong {
+  color: var(--dash-text);
+  font-weight: 600;
 }
 
 .trip-card__stat {
@@ -357,17 +543,12 @@
   gap: 0.35rem;
 }
 
-.trip-card__stat strong {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
 .trip-card__link {
   margin-top: auto;
   padding-top: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-accent);
+  color: var(--dash-accent);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -380,8 +561,8 @@
 
 /* Sidebar */
 .sidebar-block {
-  background: #fff;
-  border: 1px solid var(--color-border);
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
   border-radius: 12px;
   padding: 1.25rem;
 }
@@ -390,7 +571,7 @@
   margin: 0 0 1rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--dash-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -398,7 +579,7 @@
 
 .sidebar-block__title svg {
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
 }
 
 .sidebar-block__list {
@@ -412,7 +593,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--dash-border);
 }
 
 .coming-up-item:last-child {
@@ -428,21 +609,21 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
+  background: var(--dash-hover);
   border-radius: 8px;
 }
 
 .coming-up-item__day {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--dash-text);
   line-height: 1.1;
 }
 
 .coming-up-item__month {
   font-size: 0.65rem;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
   letter-spacing: 0.02em;
 }
 
@@ -456,17 +637,17 @@
 .coming-up-item__name {
   font-size: 0.9375rem;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--dash-text);
 }
 
 .coming-up-item__label {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
 }
 
 .activity-item {
   padding: 0.6rem 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--dash-border);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -479,12 +660,12 @@
 
 .activity-item__text {
   font-size: 0.875rem;
-  color: var(--color-text);
+  color: var(--dash-text);
 }
 
 .activity-item__time {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--dash-text-muted);
 }
 
 @media (max-width: 900px) {

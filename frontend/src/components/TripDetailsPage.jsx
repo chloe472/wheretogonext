@@ -2,8 +2,6 @@ import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Share2,
   Trash2,
   ShoppingCart,
@@ -25,49 +23,19 @@ import {
   Check,
   LayoutGrid,
   Calendar as CalendarIcon,
+  Wallet,
+  Search,
+  PlusCircle,
+  Paperclip,
+  Clock,
 } from 'lucide-react';
 import { getTripById, getTripDays } from '../data/mockTrips';
+import { getPlacesForDestination, PLACE_FILTER_TAGS, PLACE_SORT_OPTIONS } from '../data/mockPlaces';
+import DateRangePickerModal from './DateRangePickerModal';
 import './TripDetailsPage.css';
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function formatDateRangeLabel(startDate, endDate) {
-  if (!startDate || !endDate) return '';
-  const s = new Date(startDate);
-  const e = new Date(endDate);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const days = Math.round((e - s) / (24 * 60 * 60 * 1000)) + 1;
-  return `${dayNames[s.getDay()]}, ${s.getDate()} ${MONTH_SHORT[s.getMonth()]} - ${dayNames[e.getDay()]}, ${e.getDate()} ${MONTH_SHORT[e.getMonth()]} - ${days} days`;
-}
-
-function getCalendarCells(year, month, rangeStart, rangeEnd) {
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  const startDow = first.getDay();
-  const startOffset = startDow === 0 ? 6 : startDow - 1;
-  const cells = [];
-  const prevMonth = new Date(year, month, 0);
-  const prevCount = prevMonth.getDate();
-  for (let i = 0; i < startOffset; i++) {
-    const d = prevCount - startOffset + i + 1;
-    const date = new Date(year, month - 1, d);
-    const dateStr = date.toISOString().slice(0, 10);
-    cells.push({ dateStr, day: d, currentMonth: false, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
-  }
-  for (let d = 1; d <= last.getDate(); d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    cells.push({ dateStr, day: d, currentMonth: true, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
-  }
-  const remaining = 42 - cells.length;
-  for (let d = 1; d <= remaining; d++) {
-    const date = new Date(year, month + 1, d);
-    const dateStr = date.toISOString().slice(0, 10);
-    cells.push({ dateStr, day: d, currentMonth: false, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
-  }
-  return cells;
-}
 
 const CURRENCY_LIST = [
   { code: 'USD', name: 'United States dollar' },
@@ -90,6 +58,45 @@ const CURRENCY_LIST = [
 ];
 const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
 const MAP_FILTERS = ['Default', 'Days', 'Food & Beverages', 'Experiences'];
+
+const EXPENSE_CATEGORIES = [
+  { id: 'stays', label: 'Stays', color: '#2563eb' },
+  { id: 'food', label: 'Food & Beverages', color: '#dc2626' },
+  { id: 'transportations', label: 'Transportations', color: '#ea580c' },
+  { id: 'places', label: 'Places', color: '#16a34a' },
+  { id: 'experiences', label: 'Experiences', color: '#7c3aed' },
+];
+
+/** Mock budget breakdown for the trip (in production would come from API). extraItems merged into items and added to places total. */
+function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) {
+  const prefix = currencyCode === 'USD' ? 'US' : currencyCode;
+  const symbol = currencyCode === 'USD' ? 'US$' : `${currencyCode} `;
+  const byCategory = [
+    { id: 'stays', label: 'Stays', amount: 842, color: '#2563eb' },
+    { id: 'food', label: 'Food & Beverages', amount: 0, color: '#dc2626' },
+    { id: 'transportations', label: 'Transportations', amount: 0, color: '#ea580c' },
+    { id: 'places', label: 'Places', amount: 0, color: '#16a34a' },
+    { id: 'experiences', label: 'Experiences', amount: 65.14, color: '#7c3aed' },
+  ];
+  const items = [
+    { id: '1', name: 'The Belltown Inn', category: 'Stays', categoryId: 'stays', startDate: trip?.startDate || '2026-03-23', endDate: trip?.endDate || '2026-03-29', detail: '140.33 × 6 nights x 1 room', total: 842, Icon: Building2 },
+    { id: '2', name: 'Seattle Sky View Observatory tickets', category: 'Experience', categoryId: 'experiences', date: '2026-03-24', detail: '17.16 × 1 pax', total: 17.16, Icon: Ticket },
+    { id: '3', name: 'Seattle: Space Needle & Chihuly Garden and Glass Ticket', category: 'Experience', categoryId: 'experiences', date: '2026-03-27', detail: '47.97 × 1 pax', total: 47.97, Icon: Ticket },
+  ];
+  const placesExtra = extraItems.filter((i) => (i.categoryId || i.category) === 'places');
+  const placesAmount = placesExtra.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
+  const merged = [...items, ...extraItems.map((i, idx) => ({ ...i, id: i.id || `extra-${idx}` }))];
+  const catPlaces = byCategory.find((c) => c.id === 'places');
+  if (catPlaces) catPlaces.amount = placesAmount;
+  const total = byCategory.reduce((sum, c) => sum + c.amount, 0);
+  return { total, byCategory, items: merged, symbol, prefix };
+}
+
+function formatExpenseDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\//g, ' ');
+}
 
 const ADD_TO_TRIP_OPTIONS = [
   {
@@ -153,14 +160,34 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [dayTitles, setDayTitles] = useState({});
   const [addSheetDay, setAddSheetDay] = useState(null);
   const [addSheetFromCalendar, setAddSheetFromCalendar] = useState(false);
+  /** When set, the add sheet is positioned just above this rect (from "Add things to do" button); null when opened from calendar FAB. */
+  const [addSheetAnchor, setAddSheetAnchor] = useState(null);
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [expenseSortBy, setExpenseSortBy] = useState('category');
   const [viewMode, setViewMode] = useState('kanban');
   const [dateRange, setDateRange] = useState(null);
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [modalCurrency, setModalCurrency] = useState('USD');
-  const [modalDateStart, setModalDateStart] = useState(null);
-  const [modalDateEnd, setModalDateEnd] = useState(null);
-  const [modalCalendarOffset, setModalCalendarOffset] = useState(0);
+  const [addPlacesOpen, setAddPlacesOpen] = useState(false);
+  const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
+  const [addPlacesDay, setAddPlacesDay] = useState(1);
+  const [placeSearchQuery, setPlaceSearchQuery] = useState('');
+  const [placeFilterTag, setPlaceFilterTag] = useState('');
+  const [placeSortBy, setPlaceSortBy] = useState('Recommended');
+  const [tripExpenseItems, setTripExpenseItems] = useState([]);
+  const [customPlaceName, setCustomPlaceName] = useState('');
+  const [customPlaceAddress, setCustomPlaceAddress] = useState('');
+  const [customPlaceDateKey, setCustomPlaceDateKey] = useState('');
+  const [customPlaceStartTime, setCustomPlaceStartTime] = useState('07:00');
+  const [customPlaceDurationHrs, setCustomPlaceDurationHrs] = useState(1);
+  const [customPlaceDurationMins, setCustomPlaceDurationMins] = useState(0);
+  const [customPlaceNote, setCustomPlaceNote] = useState('');
+  const [customPlaceCost, setCustomPlaceCost] = useState('');
+  const [customPlaceImage, setCustomPlaceImage] = useState(null);
+  const [customPlaceTravelDocs, setCustomPlaceTravelDocs] = useState([]);
+  const [mapDayFilterOpen, setMapDayFilterOpen] = useState(false);
+  const [mapDayFilterSelected, setMapDayFilterSelected] = useState([]);
 
   if (!trip) {
     return (
@@ -183,6 +210,10 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const displayStart = dateRange?.startDate ?? trip.startDate;
   const displayEnd = dateRange?.endDate ?? trip.endDate;
+  const allDayNums = days.map((d) => d.dayNum);
+  const activeDayNums = (mapDayFilterSelected.length ? mapDayFilterSelected : allDayNums).filter((n) =>
+    allDayNums.includes(n),
+  );
   const displayDatesLabel = displayStart && displayEnd
     ? (() => {
         const s = new Date(displayStart);
@@ -191,12 +222,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       })()
     : trip.dates;
 
-  const openDateModal = () => {
-    setModalDateStart(displayStart);
-    setModalDateEnd(displayEnd);
-    setModalCalendarOffset(0);
-    setDateModalOpen(true);
-  };
+  const openDateModal = () => setDateModalOpen(true);
 
   const applyDateRange = (start, end) => {
     if (start && end && start <= end) {
@@ -204,26 +230,34 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
   };
 
-  const handleCalendarDateClick = (dateStr) => {
-    if (modalDateStart && modalDateEnd) {
-      setModalDateStart(dateStr);
-      setModalDateEnd(null);
-      return;
-    }
-    if (!modalDateStart) {
-      setModalDateStart(dateStr);
-      return;
-    }
-    if (dateStr < modalDateStart) {
-      setModalDateEnd(modalDateStart);
-      setModalDateStart(dateStr);
-    } else {
-      setModalDateEnd(dateStr);
-    }
-  };
-
   const setDayTitle = (dayNum, value) => {
     setDayTitles((prev) => ({ ...prev, [dayNum]: value }));
+  };
+
+  const visibleDays = useMemo(() => {
+    if (!days || days.length === 0) return [];
+    if (mapView === 'Expand half') {
+      return days.slice(0, 2);
+    }
+    if (mapView === 'Expand full') {
+      return days.slice(0, 1);
+    }
+    return days;
+  }, [days, mapView]);
+
+  const toggleMapDay = (dayNum) => {
+    setMapDayFilterSelected((prev) => {
+      const base = prev.length ? prev : allDayNums;
+      if (base.includes(dayNum)) {
+        return base.filter((n) => n !== dayNum);
+      }
+      const next = [...base, dayNum].sort((a, b) => a - b);
+      return next;
+    });
+  };
+
+  const resetMapDays = () => {
+    setMapDayFilterSelected(allDayNums);
   };
 
   return (
@@ -239,7 +273,8 @@ export default function TripDetailsPage({ user, onLogout }) {
               <ChevronDown size={16} aria-hidden />
             </button>
             <p className="trip-details__spent">
-              Spent: {currency} ${spent.toFixed(2)} <a href="#details">Details</a>
+              Spent: {currency} ${spent.toFixed(2)}{' '}
+              <button type="button" className="trip-details__details-link" onClick={() => setBudgetModalOpen(true)}>Details</button>
             </p>
           </div>
         </div>
@@ -311,7 +346,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       <div className="trip-details__body">
         {viewMode === 'kanban' ? (
           <div className="trip-details__columns">
-            {days.map((day) => (
+            {visibleDays.map((day) => (
               <section key={day.dayNum} className="trip-details__day-col">
                 <div className="trip-details__day-header">
                   <div className="trip-details__day-heading">
@@ -337,7 +372,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <button
                   type="button"
                   className="trip-details__add-btn"
-                  onClick={() => { setAddSheetFromCalendar(false); setAddSheetDay(day.dayNum); }}
+                  onClick={(e) => {
+                    setAddSheetFromCalendar(false);
+                    setAddSheetDay(day.dayNum);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setAddSheetAnchor({ top: rect.top, left: rect.left, width: rect.width });
+                  }}
                 >
                   <Plus size={16} aria-hidden />
                   Add things to do, hotels...
@@ -395,6 +435,27 @@ export default function TripDetailsPage({ user, onLogout }) {
             </div>
             <div className="trip-details__map-area">
               <div className="trip-details__map-placeholder">
+                <div className="trip-details__map-markers">
+                  {days.map((day, idx) => {
+                    if (!activeDayNums.includes(day.dayNum)) return null;
+                    const col = idx % 3;
+                    const row = Math.floor(idx / 3);
+                    const left = 18 + col * 22;
+                    const top = 22 + row * 18;
+                    const colorIndex = (day.dayNum % 5) || 5;
+                    return (
+                      <button
+                        key={day.dayNum}
+                        type="button"
+                        className={`trip-details__map-marker trip-details__map-marker--day${colorIndex}`}
+                        style={{ left: `${left}%`, top: `${top}%` }}
+                        aria-label={`Day ${day.dayNum}`}
+                      >
+                        <MapPin size={14} aria-hidden />
+                      </button>
+                    );
+                  })}
+                </div>
                 <MapPin size={48} aria-hidden />
                 <p>Map</p>
                 <span className="trip-details__map-hint">Add a map provider (e.g. Leaflet) for pins</span>
@@ -405,7 +466,14 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <ZoomIn size={14} aria-hidden />
                 Zoom into...
               </button>
-              <button type="button" className="trip-details__map-ctrl">
+              <button
+                type="button"
+                className="trip-details__map-ctrl"
+                onClick={() => {
+                  resetMapDays();
+                  setMapDayFilterOpen(true);
+                }}
+              >
                 <Filter size={14} aria-hidden />
                 Filter days
               </button>
@@ -452,7 +520,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 type="button"
                 className="trip-details__calendar-fab"
                 aria-label="Add to trip"
-                onClick={() => { setAddSheetFromCalendar(true); setAddSheetDay(1); }}
+                onClick={() => { setAddSheetFromCalendar(true); setAddSheetDay(1); setAddSheetAnchor(null); }}
               >
                 <Plus size={24} aria-hidden />
               </button>
@@ -488,6 +556,27 @@ export default function TripDetailsPage({ user, onLogout }) {
               </div>
               <div className="trip-details__map-area">
                 <div className="trip-details__map-placeholder">
+                  <div className="trip-details__map-markers">
+                    {days.map((day, idx) => {
+                      if (!activeDayNums.includes(day.dayNum)) return null;
+                      const col = idx % 3;
+                      const row = Math.floor(idx / 3);
+                      const left = 18 + col * 22;
+                      const top = 22 + row * 18;
+                      const colorIndex = (day.dayNum % 5) || 5;
+                      return (
+                        <button
+                          key={day.dayNum}
+                          type="button"
+                          className={`trip-details__map-marker trip-details__map-marker--day${colorIndex}`}
+                          style={{ left: `${left}%`, top: `${top}%` }}
+                          aria-label={`Day ${day.dayNum}`}
+                        >
+                          <MapPin size={14} aria-hidden />
+                        </button>
+                      );
+                    })}
+                  </div>
                   <MapPin size={48} aria-hidden />
                   <p>Map</p>
                   <span className="trip-details__map-hint">Add a map provider (e.g. Leaflet) for pins</span>
@@ -495,7 +584,16 @@ export default function TripDetailsPage({ user, onLogout }) {
               </div>
               <div className="trip-details__map-controls">
                 <button type="button" className="trip-details__map-ctrl"><ZoomIn size={14} aria-hidden /> Zoom into...</button>
-                <button type="button" className="trip-details__map-ctrl"><Filter size={14} aria-hidden /> Filter days</button>
+                <button
+                  type="button"
+                  className="trip-details__map-ctrl"
+                  onClick={() => {
+                    resetMapDays();
+                    setMapDayFilterOpen(true);
+                  }}
+                >
+                  <Filter size={14} aria-hidden /> Filter days
+                </button>
                 <div className="trip-details__map-zoom">
                   <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom in">+</button>
                   <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom out">−</button>
@@ -507,72 +605,15 @@ export default function TripDetailsPage({ user, onLogout }) {
         )}
       </div>
 
-      {dateModalOpen && (
-        <>
-          <button
-            type="button"
-            className="trip-details__modal-backdrop"
-            aria-label="Close"
-            onClick={() => setDateModalOpen(false)}
-          />
-          <div className="trip-details__when-modal" role="dialog" aria-labelledby="when-modal-title" aria-modal="true">
-            <div className="trip-details__when-modal-head">
-              <div>
-                <h2 id="when-modal-title" className="trip-details__when-modal-title">When</h2>
-                <p className="trip-details__when-modal-subtitle">
-                  {formatDateRangeLabel(modalDateStart, modalDateEnd || modalDateStart)}
-                </p>
-              </div>
-              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setDateModalOpen(false)}>
-                <X size={20} aria-hidden />
-              </button>
-            </div>
-            <div className="trip-details__when-calendars">
-              {[0, 1].map((i) => {
-                const base = displayStart ? new Date(displayStart) : new Date();
-                const d = new Date(base.getFullYear(), base.getMonth() + modalCalendarOffset + i, 1);
-                const y = d.getFullYear();
-                const m = d.getMonth();
-                const cells = getCalendarCells(y, m, modalDateStart, modalDateEnd || modalDateStart);
-                return (
-                  <div key={i} className="trip-details__calendar">
-                    <div className="trip-details__calendar-head">
-                      <button type="button" className="trip-details__calendar-nav" aria-label="Previous month" onClick={() => setModalCalendarOffset((o) => o - 1)}>
-                        <ChevronLeft size={18} aria-hidden />
-                      </button>
-                      <span className="trip-details__calendar-month">{MONTH_NAMES[m]} {y}</span>
-                      <button type="button" className="trip-details__calendar-nav" aria-label="Next month" onClick={() => setModalCalendarOffset((o) => o + 1)}>
-                        <ChevronRight size={18} aria-hidden />
-                      </button>
-                    </div>
-                    <div className="trip-details__calendar-weekdays">
-                      {DAY_LABELS.map((l) => (
-                        <span key={l} className="trip-details__calendar-wd">{l}</span>
-                      ))}
-                    </div>
-                    <div className="trip-details__calendar-grid">
-                      {cells.map((cell) => (
-                        <button
-                          key={cell.dateStr}
-                          type="button"
-                          className={`trip-details__calendar-cell ${!cell.currentMonth ? 'trip-details__calendar-cell--other' : ''} ${cell.isStart || cell.isEnd ? 'trip-details__calendar-cell--range-end' : ''} ${cell.inRange ? 'trip-details__calendar-cell--range' : ''}`}
-                          onClick={() => handleCalendarDateClick(cell.dateStr)}
-                        >
-                          {cell.day}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="trip-details__when-modal-actions">
-              <button type="button" className="trip-details__modal-cancel" onClick={() => setDateModalOpen(false)}>Cancel</button>
-              <button type="button" className="trip-details__modal-update" onClick={() => { applyDateRange(modalDateStart, modalDateEnd || modalDateStart); setDateModalOpen(false); }}>Update</button>
-            </div>
-          </div>
-        </>
-      )}
+      <DateRangePickerModal
+        open={dateModalOpen}
+        start={displayStart}
+        end={displayEnd}
+        displayStartForMonth={displayStart}
+        onApply={applyDateRange}
+        onClose={() => setDateModalOpen(false)}
+        title="When"
+      />
 
       {currencyModalOpen && (
         <>
@@ -611,15 +652,394 @@ export default function TripDetailsPage({ user, onLogout }) {
         </>
       )}
 
+      {addPlacesOpen && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddPlacesOpen(false)} />
+          <div className="trip-details__add-places-modal" role="dialog" aria-labelledby="add-places-title" aria-modal="true">
+            <div className="trip-details__add-places-head">
+              <h2 id="add-places-title" className="trip-details__add-places-title">Add Places</h2>
+              <div className="trip-details__add-places-location">
+                <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
+                <span>{trip.locations || trip.destination}</span>
+              </div>
+              <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => setAddPlacesOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <div className="trip-details__add-places-body">
+              <div className="trip-details__add-places-list-panel">
+                <div className="trip-details__add-places-search-wrap">
+                  <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
+                  <input
+                    type="text"
+                    className="trip-details__add-places-search-input"
+                    placeholder="Search by place name..."
+                    value={placeSearchQuery}
+                    onChange={(e) => setPlaceSearchQuery(e.target.value)}
+                    aria-label="Search places"
+                  />
+                </div>
+                {(() => {
+                  const places = getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
+                  return (
+                    <>
+                      <p className="trip-details__add-places-results">{places.length} results found</p>
+                      <div className="trip-details__add-places-filters">
+                        {PLACE_FILTER_TAGS.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`trip-details__add-places-tag ${placeFilterTag === tag ? 'trip-details__add-places-tag--active' : ''}`}
+                            onClick={() => setPlaceFilterTag(placeFilterTag === tag ? '' : tag)}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                        <div className="trip-details__add-places-sort">
+                          <label htmlFor="add-places-sort">Sort by:</label>
+                          <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
+                            {PLACE_SORT_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="trip-details__add-places-grid">
+                        <button
+                          type="button"
+                          className="trip-details__add-places-card trip-details__add-places-card--manual"
+                          onClick={() => {
+                            const day = days.find((d) => d.dayNum === addPlacesDay);
+                            setCustomPlaceDateKey(day?.date || days[0]?.date || '');
+                            setAddCustomPlaceOpen(true);
+                          }}
+                        >
+                          <div className="trip-details__add-places-card-manual-icon">
+                            <Camera size={24} aria-hidden />
+                          </div>
+                          <span className="trip-details__add-places-card-manual-text">Can&apos;t find what you need? Add manually.</span>
+                        </button>
+                        {places.map((place) => (
+                          <div key={place.id} className="trip-details__add-places-card">
+                            <img src={place.image} alt="" className="trip-details__add-places-card-img" />
+                            <button type="button" className="trip-details__add-places-card-heart" aria-label={place.saved ? 'Unsave' : 'Save'}>
+                              <Heart size={18} fill={place.saved ? 'currentColor' : 'none'} aria-hidden />
+                            </button>
+                            <button type="button" className="trip-details__add-places-card-add" aria-label="Add to trip">
+                              <Plus size={18} aria-hidden />
+                            </button>
+                            <div className="trip-details__add-places-card-info">
+                              <span className="trip-details__add-places-card-name">{place.name}</span>
+                              <span className="trip-details__add-places-card-rating">{place.rating} ({place.reviewCount.toLocaleString()})</span>
+                              {place.tags.length > 0 && (
+                                <div className="trip-details__add-places-card-tags">
+                                  {place.tags.map((t) => (
+                                    <span key={t} className="trip-details__add-places-card-tag" data-tag={t}>{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="trip-details__add-places-map-panel">
+                {(() => {
+                  const mapPlaces = getPlacesForDestination(trip.destination || trip.locations, {
+                    searchQuery: placeSearchQuery,
+                    filterTag: placeFilterTag,
+                    sortBy: placeSortBy,
+                  });
+                  const dayCount = Math.max(days.length, 1);
+                  return (
+                    <div className="trip-details__add-places-map">
+                      <div className="trip-details__add-places-map-base">
+                        <span className="trip-details__add-places-map-label">Map preview</span>
+                      </div>
+                      {mapPlaces.map((p, idx) => {
+                        const dayNum = (idx % dayCount) + 1;
+                        if (!activeDayNums.includes(dayNum)) return null;
+                        const col = idx % 3;
+                        const row = Math.floor(idx / 3);
+                        const left = 12 + col * 28;
+                        const top = 18 + row * 20;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className="trip-details__add-places-map-marker"
+                            style={{ left: `${left}%`, top: `${top}%` }}
+                            aria-label={p.name}
+                          >
+                            <MapPin size={16} aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <button
+                  type="button"
+                  className="trip-details__add-places-filter-days"
+                  onClick={() => {
+                    resetMapDays();
+                    setMapDayFilterOpen(true);
+                  }}
+                >
+                  <CalendarIcon size={16} aria-hidden /> Filter days
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {addCustomPlaceOpen && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddCustomPlaceOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="custom-place-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="custom-place-title" className="trip-details__custom-place-title">Add Custom Place</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddCustomPlaceOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const costNum = parseFloat(customPlaceCost) || 0;
+                if (costNum > 0) {
+                  setTripExpenseItems((prev) => [...prev, {
+                    id: `place-${Date.now()}`,
+                    name: customPlaceName,
+                    total: costNum,
+                    categoryId: 'places',
+                    category: 'Places',
+                    date: customPlaceDateKey,
+                    detail: customPlaceAddress || 'Custom place',
+                    Icon: Camera,
+                  }]);
+                }
+                setAddCustomPlaceOpen(false);
+                setCustomPlaceName('');
+                setCustomPlaceAddress('');
+                setCustomPlaceCost('');
+                setCustomPlaceNote('');
+                setCustomPlaceImage(null);
+                setCustomPlaceTravelDocs([]);
+                setCustomPlaceStartTime('07:00');
+                setCustomPlaceDurationHrs(1);
+                setCustomPlaceDurationMins(0);
+              }}
+            >
+              <div className="trip-details__custom-place-upload">
+                <input
+                  type="file"
+                  id="custom-place-image"
+                  accept=".svg,.png,.jpg,.jpeg,.webp,.gif"
+                  className="trip-details__custom-place-file-input"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setCustomPlaceImage(f);
+                  }}
+                />
+                <label htmlFor="custom-place-image" className="trip-details__custom-place-upload-label">
+                  {customPlaceImage ? (
+                    <span className="trip-details__custom-place-upload-preview">Image selected: {(customPlaceImage instanceof File) ? customPlaceImage.name : 'Preview'}</span>
+                  ) : (
+                    <>
+                      <PlusCircle size={32} aria-hidden />
+                      <span>Click to upload image or drag and drop</span>
+                      <span className="trip-details__custom-place-upload-hint">SVG, PNG, JPG, WEBP or GIF (max. 800×400px)</span>
+                    </>
+                  )}
+                </label>
+              </div>
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Place name <span className="trip-details__custom-place-required">*</span>
+                  <input type="text" className="trip-details__custom-place-input" placeholder="Enter the place name" value={customPlaceName} onChange={(e) => setCustomPlaceName(e.target.value)} required />
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Address <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-input-wrap">
+                    <MapPin size={18} className="trip-details__custom-place-input-icon" aria-hidden />
+                    <input type="text" className="trip-details__custom-place-input" placeholder="Search by landmark or address" value={customPlaceAddress} onChange={(e) => setCustomPlaceAddress(e.target.value)} required />
+                  </span>
+                </label>
+              </div>
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Date <span className="trip-details__custom-place-required">*</span>
+                  <select
+                    className="trip-details__custom-place-select"
+                    value={customPlaceDateKey}
+                    onChange={(e) => setCustomPlaceDateKey(e.target.value)}
+                    required
+                  >
+                    <option value="">Select day</option>
+                    {days.map((d) => (
+                      <option key={d.date} value={d.date}>Day {d.dayNum}: {d.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Start time <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-input-wrap">
+                    <Clock size={18} className="trip-details__custom-place-input-icon" aria-hidden />
+                    <input type="time" className="trip-details__custom-place-input" value={customPlaceStartTime} onChange={(e) => setCustomPlaceStartTime(e.target.value)} required />
+                  </span>
+                </label>
+              </div>
+              <label className="trip-details__custom-place-label">
+                Duration <span className="trip-details__custom-place-required">*</span>
+                <div className="trip-details__custom-place-duration">
+                  <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customPlaceDurationHrs} onChange={(e) => setCustomPlaceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
+                  <span> hr </span>
+                  <input type="number" min={0} max={59} className="trip-details__custom-place-duration-input" value={customPlaceDurationMins} onChange={(e) => setCustomPlaceDurationMins(Number(e.target.value) || 0)} aria-label="Minutes" />
+                  <span> mins</span>
+                </div>
+              </label>
+              <label className="trip-details__custom-place-label">
+                Note (Optional)
+                <textarea className="trip-details__custom-place-textarea" placeholder="Enter your note..." value={customPlaceNote} onChange={(e) => setCustomPlaceNote(e.target.value)} rows={3} />
+              </label>
+              <label className="trip-details__custom-place-label">
+                Cost (Optional)
+                <input type="number" step="0.01" min={0} className="trip-details__custom-place-input" placeholder="0" value={customPlaceCost} onChange={(e) => setCustomPlaceCost(e.target.value)} />
+                <span className="trip-details__custom-place-currency-hint">{currency} — adds to trip budget</span>
+              </label>
+              <label className="trip-details__custom-place-label">
+                Travel Documents
+                <p className="trip-details__custom-place-docs-hint">Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.</p>
+                <input
+                  id="custom-place-docs"
+                  type="file"
+                  multiple
+                  accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
+                  className="trip-details__custom-place-file-input"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []).slice(0, 3);
+                    setCustomPlaceTravelDocs(files);
+                  }}
+                />
+                <button type="button" className="trip-details__custom-place-attach" onClick={() => document.getElementById('custom-place-docs')?.click()}>
+                  <Paperclip size={18} aria-hidden /> Attach files
+                  {customPlaceTravelDocs.length > 0 && <span className="trip-details__custom-place-attach-count"> ({customPlaceTravelDocs.length})</span>}
+                </button>
+              </label>
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__modal-cancel" onClick={() => setAddCustomPlaceOpen(false)}>Cancel</button>
+                <button type="submit" className="trip-details__custom-place-submit">Add to trip</button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {budgetModalOpen && (() => {
+        const breakdown = getBudgetBreakdown(trip, currency, tripExpenseItems);
+        const total = breakdown.total;
+        const withAmount = breakdown.byCategory.filter((c) => c.amount > 0);
+        const pieStyle = total > 0 && withAmount.length > 0 ? {
+          background: `conic-gradient(${withAmount.map((c, i) => {
+            const start = withAmount.slice(0, i).reduce((s, x) => s + x.amount, 0) / total * 100;
+            const end = start + (c.amount / total * 100);
+            return `${c.color} ${start}% ${end}%`;
+          }).join(', ')})`,
+        } : { background: '#e5e7eb' };
+        const sortedItems = [...breakdown.items].sort((a, b) => expenseSortBy === 'category' ? (a.category.localeCompare(b.category) || a.name.localeCompare(b.name)) : (b.total - a.total));
+        return (
+          <>
+            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setBudgetModalOpen(false)} />
+            <div className="trip-details__budget-modal" role="dialog" aria-labelledby="budget-modal-title" aria-modal="true">
+              <div className="trip-details__budget-modal-head">
+                <h2 id="budget-modal-title" className="trip-details__budget-modal-title">Estimated expenses</h2>
+                <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setBudgetModalOpen(false)}>
+                  <X size={20} aria-hidden />
+                </button>
+              </div>
+              <div className="trip-details__budget-your-expenses">
+                <span className="trip-details__budget-your-label">Your expenses</span>
+                <span className="trip-details__budget-total">{breakdown.prefix}$ {total.toFixed(2)}</span>
+                <Wallet size={24} className="trip-details__budget-wallet-icon" aria-hidden />
+              </div>
+              <div className="trip-details__budget-summary">
+                <div className="trip-details__budget-pie" style={pieStyle} aria-hidden />
+                <div className="trip-details__budget-details">
+                  <h3 className="trip-details__budget-details-title">
+                    Details <Info size={14} className="trip-details__budget-info-icon" aria-hidden />
+                  </h3>
+                  <ul className="trip-details__budget-category-list">
+                    {breakdown.byCategory.map((c) => (
+                      <li key={c.id} className="trip-details__budget-category-item">
+                        <span className="trip-details__budget-category-dot" style={{ backgroundColor: c.color }} aria-hidden />
+                        <span className="trip-details__budget-category-label">{c.label}</span>
+                        <span className="trip-details__budget-category-amount">{breakdown.symbol}{c.amount.toFixed(2)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="trip-details__budget-details-total">
+                    <strong>Total</strong> {breakdown.symbol}{total.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div className="trip-details__budget-breakdown">
+                <h3 className="trip-details__budget-breakdown-title">Expenses breakdown</h3>
+                <div className="trip-details__budget-sort">
+                  <label htmlFor="expense-sort">Sort by:</label>
+                  <select id="expense-sort" className="trip-details__budget-sort-select" value={expenseSortBy} onChange={(e) => setExpenseSortBy(e.target.value)}>
+                    <option value="category">Category</option>
+                    <option value="amount">Amount</option>
+                  </select>
+                </div>
+                <ul className="trip-details__budget-item-list">
+                  {sortedItems.map((item) => (
+                    <li key={item.id} className="trip-details__budget-item">
+                      <span className="trip-details__budget-item-icon">
+                        <item.Icon size={20} aria-hidden />
+                      </span>
+                      <div className="trip-details__budget-item-body">
+                        <span className="trip-details__budget-item-name">{item.name}</span>
+                        <span className="trip-details__budget-item-meta">{item.category}</span>
+                        <span className="trip-details__budget-item-dates">
+                          {item.endDate ? `${formatExpenseDate(item.startDate)} - ${formatExpenseDate(item.endDate)}` : formatExpenseDate(item.date)}
+                        </span>
+                        <span className="trip-details__budget-item-detail">{breakdown.symbol}{item.detail}</span>
+                        <span className="trip-details__budget-item-total">{breakdown.symbol}{item.total.toFixed(2)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
       {addSheetDay !== null && (
         <>
           <button
             type="button"
             className="trip-details__add-sheet-backdrop"
             aria-label="Close menu"
-            onClick={() => { setAddSheetDay(null); setAddSheetFromCalendar(false); }}
+            onClick={() => { setAddSheetDay(null); setAddSheetFromCalendar(false); setAddSheetAnchor(null); }}
           />
-          <div className="trip-details__add-sheet" role="dialog" aria-labelledby="add-to-trip-title" aria-modal="true">
+          <div
+            className={`trip-details__add-sheet ${addSheetAnchor ? 'trip-details__add-sheet--anchored' : ''}`}
+            role="dialog"
+            aria-labelledby="add-to-trip-title"
+            aria-modal="true"
+            style={addSheetAnchor ? {
+              left: Math.max(16, Math.min(addSheetAnchor.left, typeof window !== 'undefined' ? window.innerWidth - 436 : addSheetAnchor.left)),
+              bottom: `calc(100vh - ${addSheetAnchor.top}px + 8px)`,
+              transform: 'none',
+            } : undefined}
+          >
             <h2 id="add-to-trip-title" className="trip-details__add-sheet-title">Add to trip</h2>
             {!addSheetFromCalendar && <p className="trip-details__add-sheet-subtitle">Day {addSheetDay}</p>}
             <ul className="trip-details__add-sheet-list">
@@ -629,9 +1049,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                     type="button"
                     className="trip-details__add-sheet-option"
                     onClick={() => {
-                      /* TODO: open flow for this category */
+                      if (id === 'place') {
+                        setAddPlacesDay(addSheetDay ?? 1);
+                        setAddPlacesOpen(true);
+                      }
                       setAddSheetDay(null);
                       setAddSheetFromCalendar(false);
+                      setAddSheetAnchor(null);
                     }}
                   >
                     <span className="trip-details__add-sheet-icon" style={{ backgroundColor: color }}>

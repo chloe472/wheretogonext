@@ -67,10 +67,39 @@ export const MOCK_TRIPS = [
     statusClass: 'trip-card__status--dreaming',
     image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400&h=240&fit=crop',
   },
+  {
+    id: '5',
+    title: 'New Year in Paris',
+    destination: 'Paris',
+    dates: 'Dec 28, 2024 - Jan 4, 2025',
+    startDate: '2024-12-28',
+    endDate: '2025-01-04',
+    locations: 'Paris',
+    placesSaved: 8,
+    budget: '$2k',
+    budgetSpent: 1850,
+    travelers: 2,
+    status: 'Planning',
+    statusClass: 'trip-card__status--planning',
+    image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&h=240&fit=crop',
+  },
 ];
 
+/** User-created trips (from "Start planning"); merged with MOCK_TRIPS for dashboard and getTripById */
+const userTrips = [];
+
+export function getAllTrips() {
+  return [...MOCK_TRIPS, ...userTrips];
+}
+
 export function getTripById(id) {
-  return MOCK_TRIPS.find((t) => t.id === id) ?? null;
+  return userTrips.find((t) => t.id === id) ?? MOCK_TRIPS.find((t) => t.id === id) ?? null;
+}
+
+/** Add a newly created trip (from New Trip flow) and return it. */
+export function addTrip(trip) {
+  userTrips.push(trip);
+  return trip;
 }
 
 /** Get array of day labels for a trip (e.g. [{ dayNum: 1, label: 'Mon, Mar 23' }, ...]) */

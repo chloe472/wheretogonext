@@ -74,9 +74,17 @@ export default function LandingPage({ onStartPlanning }) {
       <header className="hero">
         <div className="hero__bg" aria-hidden="true" />
         <div className="hero__content">
-          <h1 className="hero__title">where to go next?</h1>
+          <h1 className="hero__title">
+            where to go{' '}
+            <span className="hero__title-highlight">
+              next?
+            </span>
+          </h1>
           <p className="hero__tagline">
-            The only travel planner that turns your messy group chats into organized trips.
+            The only travel planner that turns your{' '}
+            <span className="hero__tagline-highlight hero__tagline-highlight--yellow">messy</span>{' '}
+            group chats into{' '}
+            <span className="hero__tagline-highlight hero__tagline-highlight--blue">organized trips</span>.
           </p>
           <button type="button" className="hero__cta" onClick={onStartPlanning}>
             Start Planning <ArrowRight size={18} className="hero__cta-icon" />

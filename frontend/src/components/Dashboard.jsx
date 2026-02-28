@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
 import {
   Bell,
   User,
@@ -12,8 +12,11 @@ import {
   Clock,
   FileText,
   ChevronRight,
+  ChevronDown,
+  Search,
 } from 'lucide-react';
-import { MOCK_TRIPS } from '../data/mockTrips';
+import { getAllTrips } from '../data/mockTrips';
+import { searchLocations } from '../data/mockLocations';
 import './Dashboard.css';
 
 const MOCK_COMING_UP = [
@@ -30,14 +33,69 @@ const MOCK_ACTIVITY = [
 
 const TRIP_FILTERS = ['All', 'Upcoming', 'Past'];
 
+const TRIP_STATUS_OPTIONS = [
+  { value: 'Planning', class: 'trip-card__status--planning', dotColor: '#d4c4a8' },
+  { value: 'Upcoming', class: 'trip-card__status--upcoming', dotColor: '#a89f91' },
+  { value: 'Dreaming', class: 'trip-card__status--dreaming', dotColor: '#c4b8a8' },
+];
+
+function getStatusClass(status) {
+  const opt = TRIP_STATUS_OPTIONS.find((o) => o.value === status);
+  return opt ? opt.class : 'trip-card__status--planning';
+}
+
 export default function Dashboard({ user, onLogout }) {
+  const navigate = useNavigate();
   const [tripFilter, setTripFilter] = useState('All');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+  const trips = getAllTrips();
+  const searchSuggestions = searchLocations(searchQuery);
+  const [tripStatuses, setTripStatuses] = useState(() => {
+    const map = {};
+    trips.forEach((t) => {
+      map[t.id] = t.status;
+    });
+    return map;
+  });
+  const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
+  const statusDropdownRef = useRef(null);
 
-  const filteredTrips =
-    tripFilter === 'All'
-      ? MOCK_TRIPS
-      : MOCK_TRIPS.filter((t) => t.status.toLowerCase() === tripFilter.toLowerCase());
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+        setOpenStatusDropdownId(null);
+      }
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const setTripStatus = (tripId, status) => {
+    setTripStatuses((prev) => ({ ...prev, [tripId]: status }));
+    setOpenStatusDropdownId(null);
+  };
+
+  const todayStr = (() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const filteredTrips = (() => {
+    if (tripFilter === 'All') return trips;
+    if (tripFilter === 'Upcoming') {
+      return trips.filter((t) => t.endDate && t.endDate >= todayStr);
+    }
+    if (tripFilter === 'Past') {
+      return trips.filter((t) => t.endDate && t.endDate < todayStr);
+    }
+    return trips;
+  })();
 
   return (
     <div className="dashboard">
@@ -51,9 +109,57 @@ export default function Dashboard({ user, onLogout }) {
             <span className="dashboard__tagline">Your travel companion</span>
           </div>
         </div>
+        <div className="dashboard__search-wrap" ref={searchRef}>
+          <form
+            className="dashboard__search-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const term = searchQuery.trim();
+              if (term) {
+                navigate(`/search?q=${encodeURIComponent(term)}`);
+                setSearchOpen(false);
+              }
+            }}
+          >
+            <Search size={18} className="dashboard__search-icon" aria-hidden />
+            <input
+              type="text"
+              className="dashboard__search-input"
+              placeholder="Search for destination / itineraries"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              aria-label="Search destinations or itineraries"
+              aria-expanded={searchOpen && searchSuggestions.length > 0}
+              aria-autocomplete="list"
+            />
+          </form>
+          {searchOpen && searchSuggestions.length > 0 && (
+            <ul className="dashboard__search-suggestions" role="listbox">
+              {searchSuggestions.slice(0, 8).map((loc) => (
+                <li key={loc.id}>
+                  <button
+                    type="button"
+                    className="dashboard__search-suggestion"
+                    role="option"
+                    onClick={() => {
+                      const term = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
+                      navigate(`/search?q=${encodeURIComponent(term)}`);
+                      setSearchQuery(term);
+                      setSearchOpen(false);
+                    }}
+                  >
+                    {loc.name}
+                    {loc.country && <span className="dashboard__search-suggestion-meta">{loc.country}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <nav className="dashboard__nav">
           <a href="#my-trips" className="dashboard__nav-link">My Trips</a>
-          <a href="#wardrobe" className="dashboard__nav-link">Wardrobe</a>
+          <Link to="/search" className="dashboard__nav-link">Explore</Link>
           <button type="button" className="dashboard__icon-btn" aria-label="Notifications">
             <Bell size={20} aria-hidden />
           </button>
@@ -90,7 +196,13 @@ export default function Dashboard({ user, onLogout }) {
       <div className="dashboard__body">
         <main className="dashboard__main">
           <section className="dashboard__welcome">
-            <h1 className="dashboard__title">your adventures await</h1>
+            <h1 className="dashboard__title">
+              your{' '}
+              <span className="dashboard__title-highlight">
+                adventures
+              </span>{' '}
+              await
+            </h1>
             <p className="dashboard__greeting">
               Welcome back! Let&apos;s continue planning your perfect trips.
             </p>
@@ -116,14 +228,61 @@ export default function Dashboard({ user, onLogout }) {
             </div>
             <ul className="dashboard__trip-list">
               {filteredTrips.map((trip) => (
-                <li key={trip.id} className="trip-card">
+                <li
+                  key={trip.id}
+                  className="trip-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/trip/${trip.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/trip/${trip.id}`);
+                    }
+                  }}
+                >
                   <div className="trip-card__image-wrap">
                     <img
                       src={trip.image}
                       alt=""
                       className="trip-card__image"
                     />
-                    <span className={`trip-card__status ${trip.statusClass}`}>{trip.status}</span>
+                    <div className="trip-card__status-wrap" ref={openStatusDropdownId === trip.id ? statusDropdownRef : null}>
+                      <button
+                        type="button"
+                        className={`trip-card__status-btn ${getStatusClass(tripStatuses[trip.id] ?? trip.status)}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenStatusDropdownId((id) => (id === trip.id ? null : trip.id));
+                        }}
+                        aria-expanded={openStatusDropdownId === trip.id}
+                        aria-haspopup="listbox"
+                        aria-label={`Trip status: ${trip.title}, ${tripStatuses[trip.id] ?? trip.status}`}
+                      >
+                        <span className="trip-card__status-btn-text">{tripStatuses[trip.id] ?? trip.status}</span>
+                        <ChevronDown size={14} className="trip-card__status-chevron" aria-hidden />
+                      </button>
+                      {openStatusDropdownId === trip.id && (
+                        <div className="trip-card__status-dropdown" role="listbox">
+                          {TRIP_STATUS_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="option"
+                              aria-selected={(tripStatuses[trip.id] ?? trip.status) === opt.value}
+                              className="trip-card__status-option"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTripStatus(trip.id, opt.value);
+                              }}
+                            >
+                              <span className="trip-card__status-dot" style={{ backgroundColor: opt.dotColor }} aria-hidden />
+                              <span className="trip-card__status-option-text">{opt.value}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="trip-card__content">
                     <h3 className="trip-card__title">{trip.title}</h3>
@@ -149,7 +308,11 @@ export default function Dashboard({ user, onLogout }) {
                         <strong>{trip.travelers}</strong> Travelers
                       </span>
                     </div>
-                    <Link to={`/trip/${trip.id}`} className="trip-card__link">
+                    <Link
+                      to={`/trip/${trip.id}`}
+                      className="trip-card__link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       View Trip Details <ChevronRight size={16} aria-hidden />
                     </Link>
                   </div>
