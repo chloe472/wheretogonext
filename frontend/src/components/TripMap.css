@@ -4,7 +4,7 @@
   min-height: 200px;
   border-radius: 8px;
   overflow: hidden;
-  background: #e5e7eb;
+  background: var(--wtg-border);
 }
 
 .trip-map__container {

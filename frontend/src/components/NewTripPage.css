@@ -1,22 +1,23 @@
 .new-trip {
   min-height: 100vh;
-  background: #fff;
+  background: var(--wtg-bg);
 }
 
 .new-trip__header {
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
 }
 
 .new-trip__back {
   font-size: 0.9375rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--wtg-text);
   text-decoration: none;
 }
 
 .new-trip__back:hover {
-  color: #111;
+  color: var(--wtg-primary);
   text-decoration: underline;
 }
 
@@ -30,7 +31,7 @@
   margin: 0 0 2rem;
   font-size: 1.75rem;
   font-weight: 700;
-  color: #111;
+  color: var(--wtg-text);
   text-align: center;
 }
 
@@ -45,28 +46,28 @@
   margin-bottom: 0.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #111;
+  color: var(--wtg-text);
 }
 
 .new-trip__input {
   width: 100%;
   padding: 0.875rem 1rem;
   font-size: 1rem;
-  color: #111;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
   border-radius: 12px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .new-trip__input:hover {
-  border-color: #d1d5db;
+  border-color: var(--wtg-accent);
 }
 
 .new-trip__input:focus {
-  border-color: #ea580c;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+  border-color: var(--wtg-primary);
+  box-shadow: 0 0 0 3px rgba(92, 74, 61, 0.2);
 }
 
 .new-trip__input--where {
@@ -90,10 +91,10 @@
   margin: 4px 0 0;
   padding: 6px 0;
   list-style: none;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 30px rgba(61, 52, 40, 0.12);
   max-height: 280px;
   overflow-y: auto;
   z-index: 20;
@@ -107,7 +108,7 @@
   padding: 0.625rem 1rem;
   font-size: 0.9375rem;
   text-align: left;
-  color: #374151;
+  color: var(--wtg-text);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -115,11 +116,11 @@
 }
 
 .new-trip__suggestion:hover {
-  background: #f9fafb;
+  background: var(--wtg-hover);
 }
 
 .new-trip__suggestion--empty {
-  color: #9ca3af;
+  color: var(--wtg-text-muted);
   cursor: default;
 }
 
@@ -130,7 +131,7 @@
 
 .new-trip__suggestion-meta {
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--wtg-text-muted);
 }
 
 .new-trip__type-badge {
@@ -167,8 +168,8 @@
   width: 100%;
   padding: 0.875rem 1rem;
   font-size: 1rem;
-  color: #374151;
-  background: #fff;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   cursor: pointer;
@@ -177,13 +178,13 @@
 }
 
 .new-trip__date-btn:hover {
-  border-color: #d1d5db;
+  border-color: var(--wtg-border);
 }
 
 .new-trip__date-btn:focus {
   outline: none;
-  border-color: #ea580c;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+  border-color: var(--wtg-primary);
+  box-shadow: 0 0 0 3px rgba(92, 74, 61, 0.2);
 }
 
 .new-trip__date-btn--error {
@@ -197,7 +198,7 @@
 
 .new-trip__date-icon {
   flex-shrink: 0;
-  color: #9ca3af;
+  color: var(--wtg-text-muted);
 }
 
 .new-trip__error {
@@ -233,7 +234,7 @@
 
 .new-trip__invite-panel {
   padding: 1rem;
-  background: #f9fafb;
+  background: var(--wtg-hover);
   border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
@@ -253,8 +254,8 @@
   padding: 0.875rem 1rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #fff;
-  background: #1a1a1a;
+  color: var(--wtg-surface);
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -285,14 +286,14 @@
 
 .new-trip__invited-email {
   font-size: 0.9375rem;
-  color: #374151;
+  color: var(--wtg-text);
 }
 
 .new-trip__invited-remove {
   padding: 0.25rem 0.5rem;
   font-size: 1.25rem;
   line-height: 1;
-  color: #6b7280;
+  color: var(--wtg-text-muted);
   background: none;
   border: none;
   border-radius: 4px;
@@ -336,16 +337,16 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: #374151;
-  background: #fff;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   cursor: pointer;
 }
 
 .new-trip__friends-btn:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
+  border-color: var(--wtg-border);
+  background: var(--wtg-hover);
 }
 
 .new-trip__friends-dropdown {
@@ -355,7 +356,7 @@
   margin-top: 4px;
   min-width: 220px;
   padding: 0.75rem;
-  background: #fff;
+  background: var(--wtg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -365,7 +366,7 @@
 .new-trip__friends-hint {
   margin: 0;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--wtg-text-muted);
 }
 
 .new-trip__submit {
@@ -374,8 +375,8 @@
   padding: 0.875rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
-  background: #1a1a1a;
+  color: var(--wtg-surface);
+  background: var(--wtg-primary);
   border: none;
   border-radius: 12px;
   cursor: pointer;

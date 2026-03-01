@@ -2,8 +2,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f5f7;
-  color: #15161a;
+  background: var(--wtg-bg);
+  color: var(--wtg-text);
 }
 
 .profile-page__app-header {
@@ -60,7 +60,7 @@
 
 .profile-page__app-tagline {
   font-size: 0.75rem;
-  color: #6b6f7b;
+  color: var(--wtg-text-muted);
 }
 
 .profile-page__header-right {
@@ -74,7 +74,7 @@
   height: 34px;
   border-radius: 999px;
   border: none;
-  background: #f3f4f6;
+  background: var(--wtg-hover);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -2,17 +2,17 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* Beige / brown / taupe palette */
-  --dash-bg: #f2ebe3;
-  --dash-surface: #faf8f5;
-  --dash-border: #d4c4b0;
-  --dash-text: #3d3428;
-  --dash-text-muted: #6b5d4f;
-  --dash-accent: #7d6b5a;
-  --dash-primary: #5c4a3d;
-  --dash-hover: #e8e0d5;
-  --dash-input-bg: #ebe5dc;
-  background: var(--dash-bg);
+  /* Use global theme (--wtg-* from index.css) */
+  --dash-bg: var(--wtg-bg);
+  --dash-surface: var(--wtg-surface);
+  --dash-border: var(--wtg-border);
+  --dash-text: var(--wtg-text);
+  --dash-text-muted: var(--wtg-text-muted);
+  --dash-accent: var(--wtg-accent);
+  --dash-primary: var(--wtg-primary);
+  --dash-hover: var(--wtg-hover);
+  --dash-input-bg: var(--wtg-input-bg);
+  background: var(--wtg-bg);
 }
 
 /* Header */

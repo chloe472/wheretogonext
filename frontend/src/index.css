@@ -4,15 +4,26 @@
   box-sizing: border-box;
 }
 
+/* App-wide theme (beige / brown / taupe – same as dashboard) */
 :root {
-  --color-bg: #ffffff;
-  --color-text: #1a1a1a;
-  --color-text-muted: #6b6b6b;
-  --color-border: #e5e5e5;
+  --wtg-bg: #f2ebe3;
+  --wtg-surface: #faf8f5;
+  --wtg-border: #d4c4b0;
+  --wtg-text: #3d3428;
+  --wtg-text-muted: #6b5d4f;
+  --wtg-accent: #7d6b5a;
+  --wtg-primary: #5c4a3d;
+  --wtg-hover: #e8e0d5;
+  --wtg-input-bg: #ebe5dc;
+  --wtg-primary-contrast: #faf8f5;
+  --color-bg: var(--wtg-bg);
+  --color-text: var(--wtg-text);
+  --color-text-muted: var(--wtg-text-muted);
+  --color-border: var(--wtg-border);
   --color-hero-bg: #2d2d2d;
-  --color-cta-bg: #1a1a1a;
-  --color-accent: #c41e3a;
-  --color-link: #2563eb;
+  --color-cta-bg: var(--wtg-primary);
+  --color-accent: var(--wtg-accent);
+  --color-link: var(--wtg-primary);
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -21,12 +32,13 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--wtg-text);
+  background: var(--wtg-bg);
 }
 
 #root {
   min-height: 100vh;
+  background: var(--wtg-bg);
 }
 
 button {
