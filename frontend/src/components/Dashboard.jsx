@@ -183,6 +183,9 @@ export default function Dashboard({ user, onLogout }) {
                 />
                 <div className="dashboard__profile-menu">
                   {user?.name && <span className="dashboard__profile-name">{user.name}</span>}
+                  <Link to="/profile" className="dashboard__profile-link" onClick={() => setProfileOpen(false)}>
+                    Profile
+                  </Link>
                   <button type="button" className="dashboard__profile-logout" onClick={() => { setProfileOpen(false); onLogout?.(); }}>
                     Log out
                   </button>

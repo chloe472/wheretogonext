@@ -26,3 +26,6 @@ Thumbs.db
 
 # Optional
 *.tgz
+
+.history
+backend/.env

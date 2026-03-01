@@ -5,6 +5,7 @@ import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
 import TripDetailsPage from './components/TripDetailsPage';
 import NewTripPage from './components/NewTripPage';
+import ProfilePage from './components/ProfilePage';
 import SearchResultsPage from './components/SearchResultsPage';
 
 function App() {
@@ -68,6 +69,10 @@ function App() {
           }
         />
         <Route
+          path="/profile"
+          element={
+            user ? (
+              <ProfilePage user={user} onLogout={handleLogout} />
           path="/search"
           element={
             user ? (
