@@ -73,6 +73,12 @@ function App() {
           element={
             user ? (
               <ProfilePage user={user} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
           path="/search"
           element={
             user ? (
