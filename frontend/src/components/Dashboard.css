@@ -125,6 +125,20 @@
   margin-bottom: 0.25rem;
 }
 
+.dashboard__profile-link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--color-text);
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.dashboard__profile-link:hover {
+  background: #f5f5f5;
+}
+
 .dashboard__profile-logout {
   display: block;
   width: 100%;

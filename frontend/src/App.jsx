@@ -5,6 +5,7 @@ import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
 import TripDetailsPage from './components/TripDetailsPage';
 import NewTripPage from './components/NewTripPage';
+import ProfilePage from './components/ProfilePage';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -61,6 +62,16 @@ function App() {
           element={
             user ? (
               <TripDetailsPage user={user} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            user ? (
+              <ProfilePage user={user} onLogout={handleLogout} />
             ) : (
               <Navigate to="/" replace />
             )
