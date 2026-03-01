@@ -1,6 +1,7 @@
 /**
  * Mock places by destination for "Add Places" flow.
  * In production this would be an API (e.g. Google Places / custom backend).
+ * See docs/PLACES_INTEGRATION.md for how to switch to real places.
  */
 
 /** Default map center [lat, lng] per destination (for map and custom places without coords). */
@@ -92,6 +93,94 @@ export function getPlacesForDestination(destinationOrLocations, options = {}) {
 export function getMapCenterForDestination(destinationOrLocations) {
   const key = normalizeDestination(destinationOrLocations);
   return DEFAULT_MAP_CENTERS[key] || DEFAULT_MAP_CENTERS.Paris;
+}
+
+/**
+ * Full details per place id (overview, address, hours, website, etc.).
+ * In production would come from Places API or backend.
+ */
+const PLACE_DETAILS = {
+  s1: {
+    overview: 'The Space Needle is an observation tower in Seattle, Washington. Built for the 1962 World\'s Fair, it offers stunning 360° views of the city, Puget Sound, and mountains.',
+    address: '400 Broad St, Seattle, WA 98109, United States',
+    hours: { Monday: '10 AM–9 PM', Tuesday: '10 AM–9 PM', Wednesday: '10 AM–9 PM', Thursday: '10 AM–9 PM', Friday: '10 AM–9 PM', Saturday: '9 AM–10 PM', Sunday: '9 AM–9 PM' },
+    isOpenNow: true,
+    website: 'https://www.spaceneedle.com/',
+    googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Space+Needle+Seattle',
+    nearbyPlaceIds: ['s2', 's3'],
+  },
+  s2: {
+    overview: 'Pike Place Market is a public market in Seattle. It opened in 1907 and is one of the oldest continuously operated public farmers\' markets in the United States.',
+    address: '85 Pike St, Seattle, WA 98101, United States',
+    hours: { Monday: '9 AM–6 PM', Tuesday: '9 AM–6 PM', Wednesday: '9 AM–6 PM', Thursday: '9 AM–6 PM', Friday: '9 AM–6 PM', Saturday: '9 AM–6 PM', Sunday: '9 AM–5 PM' },
+    isOpenNow: false,
+    website: 'https://www.pikeplacemarket.org/',
+    googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Pike+Place+Market+Seattle',
+    nearbyPlaceIds: ['s1', 's3'],
+  },
+  s3: {
+    overview: 'Chihuly Garden and Glass is a breathtaking exhibition located in the heart of Seattle, showcasing the extraordinary glass art of Dale Chihuly. This stunning venue combines a lush garden with intricate glass sculptures, offering visitors a unique blend of nature and artistry.',
+    address: '305 Harrison St, Seattle, WA 98109, United States',
+    hours: { Monday: '11 AM–5 PM', Tuesday: '11 AM–5 PM', Wednesday: '11 AM–5 PM', Thursday: '11 AM–5 PM', Friday: '11 AM–6 PM', Saturday: '10 AM–5 PM', Sunday: '10 AM–5:30 PM' },
+    isOpenNow: false,
+    website: 'https://www.chihulygardenandglass.com/',
+    googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Chihuly+Garden+and+Glass+Seattle',
+    nearbyPlaceIds: ['s1', 's2', 's4'],
+  },
+  s4: {
+    overview: 'Discovery Park is a 534-acre park on the shores of Puget Sound. It is the largest city park in Seattle and offers miles of trails, beaches, and stunning views.',
+    address: '3801 Discovery Park Blvd, Seattle, WA 98199, United States',
+    hours: { Monday: '4 AM–11:30 PM', Tuesday: '4 AM–11:30 PM', Wednesday: '4 AM–11:30 PM', Thursday: '4 AM–11:30 PM', Friday: '4 AM–11:30 PM', Saturday: '4 AM–11:30 PM', Sunday: '4 AM–11:30 PM' },
+    isOpenNow: true,
+    website: 'https://www.seattle.gov/parks/find/parks/discovery-park',
+    googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Discovery+Park+Seattle',
+    nearbyPlaceIds: ['s1', 's2', 's3'],
+  },
+  p1: { overview: 'The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris. It is named after engineer Gustave Eiffel.', address: 'Champ de Mars, 5 Avenue Anatole France, 75007 Paris, France', hours: { Monday: '9:30 AM–11:45 PM', Tuesday: '9:30 AM–11:45 PM', Wednesday: '9:30 AM–11:45 PM', Thursday: '9:30 AM–11:45 PM', Friday: '9:30 AM–11:45 PM', Saturday: '9:30 AM–11:45 PM', Sunday: '9:30 AM–11:45 PM' }, isOpenNow: true, website: 'https://www.toureiffel.paris/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Eiffel+Tower+Paris', nearbyPlaceIds: ['p2', 'p3'] },
+  p2: { overview: 'The Louvre is the world\'s largest art museum and a historic monument in Paris.', address: 'Rue de Rivoli, 75001 Paris, France', hours: { Monday: 'Closed', Tuesday: '9 AM–6 PM', Wednesday: '9 AM–9:45 PM', Thursday: '9 AM–6 PM', Friday: '9 AM–9:45 PM', Saturday: '9 AM–6 PM', Sunday: '9 AM–6 PM' }, isOpenNow: false, website: 'https://www.louvre.fr/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Louvre+Museum+Paris', nearbyPlaceIds: ['p1', 'p4'] },
+  p3: { overview: 'Montmartre is a large hill in Paris\'s north and the name of the surrounding district.', address: 'Montmartre, 75018 Paris, France', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Montmartre+Paris', nearbyPlaceIds: ['p1', 'p5'] },
+  p4: { overview: 'Sainte-Chapelle is a royal chapel in the Gothic style, within the Palais de la Cité in Paris.', address: '8 Boulevard du Palais, 75001 Paris, France', hours: { Monday: '9 AM–5 PM', Tuesday: '9 AM–5 PM', Wednesday: '9 AM–5 PM', Thursday: '9 AM–5 PM', Friday: '9 AM–5 PM', Saturday: '9 AM–5 PM', Sunday: '9 AM–5 PM' }, isOpenNow: false, website: 'https://www.sainte-chapelle.fr/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Sainte-Chapelle+Paris', nearbyPlaceIds: ['p2', 'p1'] },
+  p5: { overview: 'Canal Saint-Martin is a 4.5 km canal in Paris, connecting the Canal de l\'Ourcq to the Seine.', address: 'Quai de Valmy, 75010 Paris, France', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Canal+Saint-Martin+Paris', nearbyPlaceIds: ['p3', 'p4'] },
+  t1: { overview: 'Senso-ji is an ancient Buddhist temple in Asakusa, Tokyo, and one of the city\'s most significant temples.', address: '2 Chome-3-1 Asakusa, Taito City, Tokyo, Japan', hours: { Monday: '6 AM–5 PM', Tuesday: '6 AM–5 PM', Wednesday: '6 AM–5 PM', Thursday: '6 AM–5 PM', Friday: '6 AM–5 PM', Saturday: '6 AM–5 PM', Sunday: '6 AM–5 PM' }, isOpenNow: false, website: 'https://www.senso-ji.jp/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Senso-ji+Tokyo', nearbyPlaceIds: ['t2', 't3'] },
+  t2: { overview: 'Shibuya Crossing is one of the busiest pedestrian crossings in the world, in front of Shibuya Station.', address: 'Shibuya City, Tokyo, Japan', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Shibuya+Crossing+Tokyo', nearbyPlaceIds: ['t1', 't4'] },
+  t3: { overview: 'teamLab Borderless is a group of artworks that form one borderless world.', address: '1-3-8 Aomi, Koto City, Tokyo, Japan', hours: { Monday: '10 AM–7 PM', Tuesday: '10 AM–7 PM', Wednesday: '10 AM–7 PM', Thursday: '10 AM–7 PM', Friday: '10 AM–7 PM', Saturday: '10 AM–7 PM', Sunday: '10 AM–7 PM' }, isOpenNow: false, website: 'https://borderless.teamlab.art/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=teamLab+Borderless+Tokyo', nearbyPlaceIds: ['t1', 't2'] },
+  t4: { overview: 'Yoyogi Park is one of Tokyo\'s largest parks, adjacent to Harajuku and Meiji Shrine.', address: '2-1 Yoyogikamizonocho, Shibuya City, Tokyo, Japan', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Yoyogi+Park+Tokyo', nearbyPlaceIds: ['t2', 't3'] },
+  b1: { overview: 'Tegallalang Rice Terraces are iconic rice paddies in Ubud, Bali, with stunning tiered landscapes.', address: 'Tegallalang, Gianyar, Bali, Indonesia', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Tegallalang+Rice+Terraces+Bali', nearbyPlaceIds: ['b3', 'b4'] },
+  b2: { overview: 'Tanah Lot is a famous sea temple and one of Bali\'s most important landmarks.', address: 'Beraban, Kediri, Tabanan, Bali, Indonesia', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Tanah+Lot+Bali', nearbyPlaceIds: ['b1', 'b3'] },
+  b3: { overview: 'Ubud Monkey Forest is a nature reserve and temple complex in Ubud, home to the Balinese long-tailed macaque.', address: 'Jl. Monkey Forest, Ubud, Bali, Indonesia', hours: { Monday: '9 AM–6 PM', Tuesday: '9 AM–6 PM', Wednesday: '9 AM–6 PM', Thursday: '9 AM–6 PM', Friday: '9 AM–6 PM', Saturday: '9 AM–6 PM', Sunday: '9 AM–6 PM' }, isOpenNow: false, website: 'https://monkeyforestubud.com/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Ubud+Monkey+Forest+Bali', nearbyPlaceIds: ['b1', 'b4'] },
+  b4: { overview: 'Campuhan Ridge Walk is a scenic trail in Ubud with lush greenery and valley views.', address: 'Keliki, Tegallalang, Gianyar, Bali, Indonesia', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Campuhan+Ridge+Walk+Bali', nearbyPlaceIds: ['b1', 'b3'] },
+  c1: { overview: 'Heritage Park is a living history museum in Calgary featuring historical buildings and exhibits.', address: '1900 Heritage Dr SW, Calgary, AB, Canada', hours: { Monday: '10 AM–5 PM', Tuesday: '10 AM–5 PM', Wednesday: '10 AM–5 PM', Thursday: '10 AM–5 PM', Friday: '10 AM–5 PM', Saturday: '10 AM–5 PM', Sunday: '10 AM–5 PM' }, isOpenNow: false, website: 'https://www.heritagepark.ca/', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Heritage+Park+Calgary', nearbyPlaceIds: ['c2', 'c3'] },
+  c2: { overview: 'The Peace Bridge is a pedestrian and cycle bridge across the Bow River in Calgary.', address: 'Peace Bridge, Calgary, AB, Canada', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Peace+Bridge+Calgary', nearbyPlaceIds: ['c3', 'c4'] },
+  c3: { overview: 'Olympic Plaza is a public square in downtown Calgary, built for the 1988 Winter Olympics.', address: '228 8 Ave SE, Calgary, AB, Canada', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Olympic+Plaza+Calgary', nearbyPlaceIds: ['c2', 'c4'] },
+  c4: { overview: 'Devonian Gardens is an indoor public park and botanical garden in downtown Calgary.', address: '317 7 Ave SW, Calgary, AB, Canada', hours: { Monday: '9 AM–9 PM', Tuesday: '9 AM–9 PM', Wednesday: '9 AM–9 PM', Thursday: '9 AM–9 PM', Friday: '9 AM–9 PM', Saturday: '9 AM–6 PM', Sunday: '11 AM–6 PM' }, isOpenNow: false, website: 'https://www.calgary.ca/parks/devonian-gardens.html', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Devonian+Gardens+Calgary', nearbyPlaceIds: ['c2', 'c3'] },
+  c5: { overview: 'Prairie Winds Park is a large community park in northeast Calgary with playgrounds and sports facilities.', address: '223 Castleridge Blvd NE, Calgary, AB, Canada', hours: {}, isOpenNow: true, website: '', googleMapsReviewUrl: 'https://www.google.com/maps/search/?api=1&query=Prairie+Winds+Park+Calgary', nearbyPlaceIds: ['c1', 'c3'] },
+};
+
+/** Get full details for a place (merge base place + PLACE_DETAILS). */
+export function getPlaceDetails(place) {
+  if (!place || !place.id) return null;
+  const details = PLACE_DETAILS[place.id] || {};
+  return {
+    ...place,
+    overview: details.overview ?? '',
+    address: details.address ?? '',
+    hours: details.hours ?? {},
+    isOpenNow: details.isOpenNow ?? null,
+    website: details.website ?? '',
+    googleMapsReviewUrl: details.googleMapsReviewUrl ?? '',
+    nearbyPlaceIds: details.nearbyPlaceIds ?? [],
+  };
+}
+
+/** Get nearby places for a place (by id) within the same destination. */
+export function getNearbyPlaces(place, destinationOrLocations) {
+  const key = normalizeDestination(destinationOrLocations);
+  const allPlaces = PLACES_BY_DESTINATION[key] || PLACES_BY_DESTINATION.Paris;
+  const details = place && place.id ? (PLACE_DETAILS[place.id] || {}) : {};
+  const ids = details.nearbyPlaceIds && details.nearbyPlaceIds.length > 0
+    ? details.nearbyPlaceIds
+    : allPlaces.filter((p) => p.id !== (place && place.id)).map((p) => p.id).slice(0, 4);
+  return ids.map((id) => allPlaces.find((p) => p.id === id)).filter(Boolean);
 }
 
 export { PLACE_FILTER_TAGS, PLACE_SORT_OPTIONS, PLACES_BY_DESTINATION, normalizeDestination };

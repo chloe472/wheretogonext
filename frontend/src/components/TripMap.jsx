@@ -21,6 +21,23 @@ function FitBounds({ markers }) {
   return null;
 }
 
+/** Call invalidateSize when the map container is resized (e.g. expand half/full) so the map fills the new size. */
+function MapResizeHandler({ resizeKey }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!resizeKey) return;
+    const t = setTimeout(() => {
+      try {
+        map.invalidateSize();
+      } catch (_) {
+        // ignore
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [map, resizeKey]);
+  return null;
+}
+
 export default function TripMap({
   center = [47.6062, -122.3321],
   zoom = 11,
@@ -28,6 +45,7 @@ export default function TripMap({
   activeDayNums = [],
   className = '',
   fitBounds = true,
+  resizeKey = '',
 }) {
   const visibleMarkers = useMemo(() => {
     if (!activeDayNums || activeDayNums.length === 0) return markers;
@@ -42,6 +60,7 @@ export default function TripMap({
         scrollWheelZoom
         className="trip-map__container"
       >
+        <MapResizeHandler resizeKey={resizeKey} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

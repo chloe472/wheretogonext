@@ -102,6 +102,21 @@ export function addTrip(trip) {
   return trip;
 }
 
+/** Update an existing trip by id. Mutates the trip in place (works for both MOCK_TRIPS and userTrips). */
+export function updateTrip(id, updates) {
+  const t = userTrips.find((x) => x.id === id) ?? MOCK_TRIPS.find((x) => x.id === id);
+  if (t) Object.assign(t, updates);
+  return t;
+}
+
+/** Remove a trip from userTrips by id. Returns true if removed; false if not in userTrips (e.g. seed trip). */
+export function deleteTrip(id) {
+  const i = userTrips.findIndex((x) => x.id === id);
+  if (i === -1) return false;
+  userTrips.splice(i, 1);
+  return true;
+}
+
 /** Get array of day labels for a trip (e.g. [{ dayNum: 1, label: 'Mon, Mar 23' }, ...]) */
 export function getTripDays(trip) {
   if (!trip?.startDate || !trip?.endDate) return [];

@@ -1,10 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   Share2,
   Trash2,
-  ShoppingCart,
   GripVertical,
   MoreVertical,
   MapPin,
@@ -52,9 +51,12 @@ import {
   FileText,
   Palette,
   Route,
+  Star,
+  ArrowLeft,
+  ExternalLink,
 } from 'lucide-react';
-import { getTripById, getTripDays } from '../data/mockTrips';
-import { getPlacesForDestination, getMapCenterForDestination, PLACE_FILTER_TAGS, PLACE_SORT_OPTIONS } from '../data/mockPlaces';
+import { getTripById, getTripDays, updateTrip, deleteTrip } from '../data/mockTrips';
+import { getPlacesForDestination, getPlaceDetails, getNearbyPlaces, getMapCenterForDestination, PLACE_FILTER_TAGS, PLACE_SORT_OPTIONS } from '../data/mockPlaces';
 import { searchLocations } from '../data/mockLocations';
 import countriesData from '../data/countries.json';
 import DateRangePickerModal from './DateRangePickerModal';
@@ -143,6 +145,25 @@ function formatDurationMinutes(totalMins) {
   const h = Math.floor(totalMins / 60);
   const m = totalMins % 60;
   return m > 0 ? `${h} hr ${String(m).padStart(2, '0')} min` : `${h} hr`;
+}
+
+const CALENDAR_START_HOUR = 6;
+const CALENDAR_HOURS = 12;
+const CALENDAR_ROW_HEIGHT = 48;
+
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function getCalendarEventPosition(item) {
+  const startMins = timeToMinutes(item.startTime);
+  const startHour = startMins / 60;
+  const durationHrs = (item.durationHrs ?? 1) + (item.durationMins ?? 0) / 60;
+  const topPx = Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT);
+  const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, durationHrs * CALENDAR_ROW_HEIGHT);
+  return { top: topPx, height: heightPx };
 }
 
 function distanceBetween(a, b) {
@@ -420,8 +441,18 @@ function searchAirlines(query, limit = 8) {
 
 export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
+  const navigate = useNavigate();
   const trip = getTripById(tripId);
   const [currency, setCurrency] = useState('USD');
+  const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleEditValue, setTitleEditValue] = useState('');
+  const [titleDisplay, setTitleDisplay] = useState(() => {
+    const t = getTripById(tripId);
+    if (!t) return '';
+    const d = getTripDays(t);
+    return t.title ?? `${d.length} days to ${t.destination}`;
+  });
   const [mapView, setMapView] = useState('Default');
   const [mapFilter, setMapFilter] = useState('Default');
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
@@ -438,6 +469,8 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [modalCurrency, setModalCurrency] = useState('USD');
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
+  const [placeDetailsView, setPlaceDetailsView] = useState(null);
+  const [placeDetailsTab, setPlaceDetailsTab] = useState('overview');
   const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
   const [addPlacesDay, setAddPlacesDay] = useState(1);
   const [placeSearchQuery, setPlaceSearchQuery] = useState('');
@@ -497,8 +530,10 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [whereModalOpen, setWhereModalOpen] = useState(false);
   const [whereQuery, setWhereQuery] = useState('');
   const [whereSuggestionsOpen, setWhereSuggestionsOpen] = useState(false);
-  const [whereSelectedLocation, setWhereSelectedLocation] = useState(null);
+  const [whereSelectedLocations, setWhereSelectedLocations] = useState([]);
   const whereModalRef = useRef(null);
+  const titleDropdownRef = useRef(null);
+  const titleLastClickRef = useRef(0);
   const [transportModeBySegment, setTransportModeBySegment] = useState({});
   const [openTravelDropdownKey, setOpenTravelDropdownKey] = useState(null);
   const [publicTransportModalOpen, setPublicTransportModalOpen] = useState(false);
@@ -534,6 +569,25 @@ export default function TripDetailsPage({ user, onLogout }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDayMenuKey]);
+
+  useEffect(() => {
+    const t = getTripById(tripId);
+    if (t) {
+      const d = getTripDays(t);
+      setTitleDisplay(t.title ?? `${d.length} days to ${t.destination}`);
+    }
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!titleDropdownOpen) return;
+    function handleClickOutside(e) {
+      if (titleDropdownRef.current && !titleDropdownRef.current.contains(e.target)) {
+        setTitleDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [titleDropdownOpen]);
 
   if (!trip) {
     return (
@@ -632,11 +686,84 @@ export default function TripDetailsPage({ user, onLogout }) {
           <Link to="/" className="trip-details__logo" aria-label="Back to My Trips">
             @
           </Link>
-          <div className="trip-details__trip-info">
-            <button type="button" className="trip-details__title-btn">
-              {days.length} days to {trip.destination}
-              <ChevronDown size={16} aria-hidden />
-            </button>
+          <div className="trip-details__trip-info" ref={titleDropdownRef}>
+            {titleEditing ? (
+              <input
+                type="text"
+                className="trip-details__title-input"
+                value={titleEditValue}
+                onChange={(e) => setTitleEditValue(e.target.value)}
+                onBlur={() => {
+                  const v = titleEditValue.trim();
+                  if (v) {
+                    updateTrip(tripId, { title: v });
+                    setTitleDisplay(v);
+                  }
+                  setTitleEditing(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.target.blur();
+                  }
+                  if (e.key === 'Escape') {
+                    setTitleEditValue(titleDisplay);
+                    setTitleEditing(false);
+                  }
+                }}
+                autoFocus
+                aria-label="Trip title"
+              />
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="trip-details__title-btn"
+                  onClick={() => {
+                    const now = Date.now();
+                    if (now - titleLastClickRef.current < 400) {
+                      setTitleEditValue(titleDisplay);
+                      setTitleEditing(true);
+                      setTitleDropdownOpen(false);
+                    } else {
+                      setTitleDropdownOpen((o) => !o);
+                    }
+                    titleLastClickRef.current = now;
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    setTitleEditValue(titleDisplay);
+                    setTitleEditing(true);
+                    setTitleDropdownOpen(false);
+                  }}
+                  aria-label="Trip name - click for menu, double-click to rename"
+                  aria-expanded={titleDropdownOpen}
+                >
+                  <span className="trip-details__title-text">{titleDisplay || `${days.length} days to ${trip.destination}`}</span>
+                  <ChevronDown size={16} aria-hidden />
+                </button>
+                {titleDropdownOpen && (
+                  <div className="trip-details__title-dropdown" role="menu">
+                    <button type="button" className="trip-details__title-dropdown-item" role="menuitem" onClick={() => { setTitleEditing(true); setTitleEditValue(titleDisplay); setTitleDropdownOpen(false); }}>
+                      Rename trip
+                    </button>
+                    <button
+                      type="button"
+                      className="trip-details__title-dropdown-item trip-details__title-dropdown-item--danger"
+                      role="menuitem"
+                      onClick={() => {
+                        setTitleDropdownOpen(false);
+                        if (!window.confirm('Delete this trip? This cannot be undone.')) return;
+                        const removed = deleteTrip(tripId);
+                        if (removed) navigate('/');
+                        else alert('This is a sample trip and cannot be deleted.');
+                      }}
+                    >
+                      Delete trip
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
             <p className="trip-details__spent">
               Spent: {currency} ${spent.toFixed(2)}{' '}
               <button type="button" className="trip-details__details-link" onClick={() => setBudgetModalOpen(true)}>Details</button>
@@ -649,16 +776,27 @@ export default function TripDetailsPage({ user, onLogout }) {
             type="button"
             className="trip-details__pill trip-details__pill--btn"
             onClick={() => {
-              const dest = trip.destination || '';
-              setWhereQuery(dest);
-              const match = dest.trim() ? searchLocations(dest).find((loc) => loc.name === dest.trim()) : null;
-              setWhereSelectedLocation(match || null);
+              setWhereQuery('');
+              const locationsStr = trip.locations || trip.destination || '';
+              const parts = locationsStr.split(';').map((s) => s.trim()).filter(Boolean);
+              const initial = parts.length > 0 ? parts : (trip.destination ? [trip.destination] : []);
+              const resolved = initial.map((str, i) => {
+                const match = searchLocations(str).find((loc) => loc.name === str || (loc.country && `${loc.name}, ${loc.country}` === str));
+                if (match) return match;
+                const [name, ...rest] = str.split(',').map((s) => s.trim());
+                const locName = name || str;
+                const locCountry = rest.length > 0 ? rest.join(', ') : undefined;
+                const byName = searchLocations(locName).find((loc) => !locCountry || loc.country === locCountry);
+                if (byName) return byName;
+                return { id: `where-${i}-${locName}`, name: locName, country: locCountry };
+              });
+              setWhereSelectedLocations(resolved);
               setWhereModalOpen(true);
               setWhereSuggestionsOpen(false);
             }}
             aria-label="Change destination"
           >
-            {trip.destination}
+            {trip.locations || trip.destination}
             <ChevronDown size={14} aria-hidden />
           </button>
           <button
@@ -719,12 +857,6 @@ export default function TripDetailsPage({ user, onLogout }) {
           <button type="button" className="trip-details__icon-btn" aria-label="Share">
             <Share2 size={18} aria-hidden />
           </button>
-          <button type="button" className="trip-details__icon-btn" aria-label="Delete trip">
-            <Trash2 size={18} aria-hidden />
-          </button>
-          <button type="button" className="trip-details__icon-btn" aria-label="Cart">
-            <ShoppingCart size={18} aria-hidden />
-          </button>
           <button type="button" className="trip-details__save">
             Save
           </button>
@@ -734,6 +866,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       <div className="trip-details__body">
         {viewMode === 'kanban' ? (
           <div className="trip-details__columns">
+            <div className="trip-details__columns-scroll">
             {visibleDays.map((day) => {
               const dayItemsCount = getSortedDayItems(tripExpenseItems, day.date).length;
               const totalMins = getDayTotalDurationMinutes(tripExpenseItems, day.date);
@@ -987,7 +1120,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               </section>
               );
             })}
-
+            </div>
             <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
             <div className="trip-details__map-header">
               <div className="trip-details__map-dropdown-wrap">
@@ -1044,6 +1177,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 activeDayNums={activeDayNums}
                 className="trip-details__trip-map"
                 fitBounds={mapMarkers.length > 0}
+                resizeKey={mapView}
               />
             </div>
             <div className="trip-details__map-controls">
@@ -1095,90 +1229,37 @@ export default function TripDetailsPage({ user, onLogout }) {
                   {days.map((day) => (
                     <div key={day.dayNum} className="trip-details__calendar-day-col">
                       <div className="trip-details__calendar-day-col-content">
-                        {getSortedDayItems(tripExpenseItems, day.date).map((item, idx) => {
-                          const style = getCategoryStyle(item);
-                          const IconComponent = item.Icon || Camera;
-                          const timeRange = formatTimeRange(item);
-                          const segmentKey = `cal-${day.date}-${idx}`;
-                          const mode = transportModeBySegment[segmentKey] || transportModeBySegment[`${day.date}-${idx}`] || 'driving';
-                          const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
-                          const TravelSegmentIcon = travelModeInfo.Icon;
-                          const nextItem = getSortedDayItems(tripExpenseItems, day.date)[idx + 1];
-                          const travelToNext = nextItem ? getTravelBetween(item, nextItem, mode) : null;
-                          const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
-                          return (
-                            <div key={item.id} className="trip-details__itinerary-block">
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className="trip-details__itinerary-card"
+                        {Array.from({ length: CALENDAR_HOURS }, (_, i) => (
+                          <div key={i} className="trip-details__calendar-cell" />
+                        ))}
+                        <div className="trip-details__calendar-events">
+                          {getSortedDayItems(tripExpenseItems, day.date).map((item) => {
+                            const style = getCategoryStyle(item);
+                            const IconComponent = item.Icon || Camera;
+                            const timeRange = formatTimeRange(item);
+                            const { top, height } = getCalendarEventPosition(item);
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="trip-details__calendar-event"
+                                style={{
+                                  top: `${top}px`,
+                                  height: `${height}px`,
+                                  backgroundColor: `${style.color}18`,
+                                  borderLeftColor: style.color,
+                                }}
                                 onClick={() => (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item); } }}
                               >
-                                <span className="trip-details__itinerary-num" aria-hidden>{idx + 1}</span>
-                                <div className="trip-details__itinerary-card-thumb">
-                                  {item.placeImageUrl ? (
-                                    <img src={item.placeImageUrl} alt="" className="trip-details__itinerary-card-img" />
-                                  ) : (
-                                    <span className="trip-details__itinerary-card-icon" style={{ background: `${style.color}22`, color: style.color }}>
-                                      <IconComponent size={20} aria-hidden />
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="trip-details__itinerary-card-body">
-                                  <span className="trip-details__itinerary-category" style={{ color: style.color }}>{style.label}</span>
-                                  <h4 className="trip-details__itinerary-name">{item.name}</h4>
-                                  {timeRange && <span className="trip-details__itinerary-time">{timeRange}</span>}
-                                </div>
-                                <button type="button" className="trip-details__itinerary-edit-btn" aria-label="Edit" onClick={(e) => { e.stopPropagation(); (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item); }}>
-                                  <FileText size={16} aria-hidden />
-                                </button>
-                              </div>
-                              {nextItem && travelToNext && (
-                                <div className="trip-details__travel-segment-wrap">
-                                  <button
-                                    type="button"
-                                    className="trip-details__travel-segment"
-                                    onClick={() => setOpenTravelDropdownKey(isTravelDropdownOpen ? null : segmentKey)}
-                                    aria-expanded={isTravelDropdownOpen}
-                                  >
-                                    <TravelSegmentIcon size={16} className="trip-details__travel-segment-icon" aria-hidden />
-                                    <span>{travelToNext.duration} · {travelToNext.distance}</span>
-                                    <ChevronDown size={14} aria-hidden />
-                                  </button>
-                                  {isTravelDropdownOpen && (
-                                    <>
-                                      <button type="button" className="trip-details__travel-dropdown-backdrop" aria-label="Close" onClick={() => setOpenTravelDropdownKey(null)} />
-                                      <ul className="trip-details__travel-dropdown" role="listbox">
-                                        {TRAVEL_MODES.map((m) => (
-                                          <li key={m.id}>
-                                            <button
-                                              type="button"
-                                              role="option"
-                                              className="trip-details__travel-dropdown-option"
-                                              onClick={() => {
-                                                setTransportModeBySegment((prev) => ({ ...prev, [segmentKey]: m.id, [`${day.date}-${idx}`]: m.id }));
-                                                setOpenTravelDropdownKey(null);
-                                                if (m.id === 'public') {
-                                                  setPublicTransportSegment({ fromName: item.name, toName: nextItem.name });
-                                                  setPublicTransportModalOpen(true);
-                                                }
-                                              }}
-                                            >
-                                              <m.Icon size={18} aria-hidden />
-                                              <span>{m.id === 'public' ? m.label : `${m.label} · ${getTravelBetween(item, nextItem, m.id).duration}`}</span>
-                                              {mode === m.id && <Check size={18} className="trip-details__travel-check" aria-hidden />}
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                                <span className="trip-details__calendar-event-time">{timeRange}</span>
+                                <span className="trip-details__calendar-event-icon" style={{ color: style.color }}>
+                                  <IconComponent size={14} aria-hidden />
+                                </span>
+                                <span className="trip-details__calendar-event-name">{item.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1230,6 +1311,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                   activeDayNums={activeDayNums}
                   className="trip-details__trip-map"
                   fitBounds={mapMarkers.length > 0}
+                  resizeKey={mapView}
                 />
               </div>
               <div className="trip-details__map-controls">
@@ -1329,7 +1411,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                   value={whereQuery}
                   onChange={(e) => {
                     setWhereQuery(e.target.value);
-                    setWhereSelectedLocation(null);
                     setWhereSuggestionsOpen(true);
                   }}
                   onFocus={() => setWhereSuggestionsOpen(true)}
@@ -1352,11 +1433,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                           type="button"
                           className="trip-details__where-suggestion"
                           role="option"
-                          aria-selected={whereSelectedLocation?.id === loc.id}
+                          aria-selected={whereSelectedLocations.some((l) => l.id === loc.id || l.name === loc.name)}
                           onClick={() => {
-                            setWhereSelectedLocation(loc);
-                            setWhereQuery(loc.name);
-                            setWhereSuggestionsOpen(false);
+                            setWhereSelectedLocations((prev) =>
+                              prev.some((l) => l.id === loc.id || l.name === loc.name) ? prev : [...prev, loc]
+                            );
+                            setWhereQuery('');
                           }}
                         >
                           <span className="trip-details__where-suggestion-name">{loc.name}</span>
@@ -1372,33 +1454,41 @@ export default function TripDetailsPage({ user, onLogout }) {
                   )}
                 </ul>
               )}
-              {(whereSelectedLocation || whereQuery.trim()) && (
+              {(whereSelectedLocations.length > 0 || whereQuery.trim()) && (
                 <div className="trip-details__where-chip-wrap">
-                  <span className="trip-details__where-chip">
-                    {whereSelectedLocation ? (() => {
-                      const countryCode = whereSelectedLocation.country
-                        ? (countriesData.find((c) => c.name === whereSelectedLocation.country)?.id ?? (whereSelectedLocation.type === 'Country' ? whereSelectedLocation.id : null))
-                        : (whereSelectedLocation.type === 'Country' ? whereSelectedLocation.id : null);
-                      const flag = countryCode ? countryCodeToFlag(countryCode) : '';
-                      return (
-                        <>
-                          {flag && <span className="trip-details__where-chip-flag" aria-hidden>{flag}</span>}
-                          {whereSelectedLocation.name}
-                        </>
-                      );
-                    })() : whereQuery.trim()}
-                    <button
-                      type="button"
-                      className="trip-details__where-chip-remove"
-                      aria-label="Remove selection"
-                      onClick={() => {
-                        setWhereSelectedLocation(null);
-                        setWhereQuery('');
-                      }}
-                    >
-                      <X size={14} aria-hidden />
-                    </button>
-                  </span>
+                  {whereSelectedLocations.map((loc) => {
+                    const countryCode = loc.country
+                      ? (countriesData.find((c) => c.name === loc.country)?.id ?? (loc.type === 'Country' ? loc.id : null))
+                      : (loc.type === 'Country' ? loc.id : null);
+                    const flag = countryCode ? countryCodeToFlag(countryCode) : '';
+                    return (
+                      <span key={loc.id} className="trip-details__where-chip">
+                        {flag && <span className="trip-details__where-chip-flag" aria-hidden>{flag}</span>}
+                        {loc.name}
+                        <button
+                          type="button"
+                          className="trip-details__where-chip-remove"
+                          aria-label={`Remove ${loc.name}`}
+                          onClick={() => setWhereSelectedLocations((prev) => prev.filter((l) => l.id !== loc.id))}
+                        >
+                          <X size={14} aria-hidden />
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {whereQuery.trim() && (
+                    <span className="trip-details__where-chip trip-details__where-chip--pending">
+                      {whereQuery.trim()}
+                      <button
+                        type="button"
+                        className="trip-details__where-chip-remove"
+                        aria-label="Clear"
+                        onClick={() => setWhereQuery('')}
+                      >
+                        <X size={14} aria-hidden />
+                      </button>
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -1408,12 +1498,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                 type="button"
                 className="trip-details__modal-update"
                 onClick={() => {
-                  const name = whereSelectedLocation?.name ?? (whereQuery.trim() || trip.destination);
-                  const locations = whereSelectedLocation
-                    ? (whereSelectedLocation.country ? `${whereSelectedLocation.name}, ${whereSelectedLocation.country}` : whereSelectedLocation.name)
-                    : (whereQuery.trim() || trip.destination);
-                  trip.destination = name;
-                  trip.locations = locations;
+                  const pending = whereQuery.trim();
+                  const list = pending
+                    ? [...whereSelectedLocations, { id: `where-new-${Date.now()}`, name: pending, country: undefined }]
+                    : whereSelectedLocations;
+                  const locationsStr = list.length > 0
+                    ? list.map((l) => (l.country ? `${l.name}, ${l.country}` : l.name)).join('; ')
+                    : '';
+                  trip.destination = list.length > 0 ? list[0].name : '';
+                  trip.locations = locationsStr;
                   setWhereModalOpen(false);
                 }}
               >
@@ -2415,166 +2508,366 @@ export default function TripDetailsPage({ user, onLogout }) {
         </>
       )}
 
-      {addPlacesOpen && (
-        <>
-          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddPlacesOpen(false)} />
-          <div className="trip-details__add-places-modal" role="dialog" aria-labelledby="add-places-title" aria-modal="true">
-            <div className="trip-details__add-places-head">
-              <h2 id="add-places-title" className="trip-details__add-places-title">Add Places</h2>
-              <div className="trip-details__add-places-location">
-                <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
-                <span>{trip.locations || trip.destination}</span>
-              </div>
-              <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => setAddPlacesOpen(false)}>
-                <X size={20} aria-hidden />
-              </button>
-            </div>
-            <div className="trip-details__add-places-body">
-              <div className="trip-details__add-places-list-panel">
-                <div className="trip-details__add-places-search-wrap">
-                  <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
-                  <input
-                    type="text"
-                    className="trip-details__add-places-search-input"
-                    placeholder="Search by place name..."
-                    value={placeSearchQuery}
-                    onChange={(e) => setPlaceSearchQuery(e.target.value)}
-                    aria-label="Search places"
-                  />
-                </div>
-                {(() => {
-                  const places = getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
-                  return (
-                    <>
-                      <p className="trip-details__add-places-results">{places.length} results found</p>
-                      <div className="trip-details__add-places-filters">
-                        {PLACE_FILTER_TAGS.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            className={`trip-details__add-places-tag ${placeFilterTag === tag ? 'trip-details__add-places-tag--active' : ''}`}
-                            onClick={() => setPlaceFilterTag(placeFilterTag === tag ? '' : tag)}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                        <div className="trip-details__add-places-sort">
-                          <label htmlFor="add-places-sort">Sort by:</label>
-                          <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
-                            {PLACE_SORT_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        </div>
+      {addPlacesOpen && (() => {
+        const showingDetail = placeDetailsView != null;
+        const detailPlace = showingDetail ? getPlaceDetails(placeDetailsView) : null;
+        const nearbyPlaces = detailPlace ? getNearbyPlaces(detailPlace, trip.destination || trip.locations) : [];
+        const mapPlaces = showingDetail && detailPlace
+          ? [detailPlace, ...nearbyPlaces].filter((p) => p && p.lat != null && p.lng != null)
+          : getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
+        const addPlacesMarkers = mapPlaces
+          .filter((p) => p.lat != null && p.lng != null)
+          .map((p, i) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, dayNum: (i % Math.max(days.length, 1)) + 1 }));
+        const mapCenterDetail = detailPlace && detailPlace.lat != null ? [detailPlace.lat, detailPlace.lng] : mapCenter;
+        return (
+          <>
+            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); }} />
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingDetail ? 'place-detail-title' : 'add-places-title'} aria-modal="true">
+              {!showingDetail ? (
+                <>
+                  <div className="trip-details__add-places-head">
+                    <h2 id="add-places-title" className="trip-details__add-places-title">Add Places</h2>
+                    <div className="trip-details__add-places-location">
+                      <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
+                      <span>{trip.locations || trip.destination}</span>
+                    </div>
+                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => setAddPlacesOpen(false)}>
+                      <X size={20} aria-hidden />
+                    </button>
+                  </div>
+                  <div className="trip-details__add-places-body">
+                    <div className="trip-details__add-places-list-panel">
+                      <div className="trip-details__add-places-search-wrap">
+                        <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
+                        <input
+                          type="text"
+                          className="trip-details__add-places-search-input"
+                          placeholder="Search by place name..."
+                          value={placeSearchQuery}
+                          onChange={(e) => setPlaceSearchQuery(e.target.value)}
+                          aria-label="Search places"
+                        />
                       </div>
-                      <div className="trip-details__add-places-grid">
-                        <button
-                          type="button"
-                          className="trip-details__add-places-card trip-details__add-places-card--manual"
-                          onClick={() => {
-                            const day = days.find((d) => d.dayNum === addPlacesDay);
-                            setCustomPlaceDateKey(day?.date || days[0]?.date || '');
-                            setAddCustomPlaceOpen(true);
-                          }}
-                        >
-                          <div className="trip-details__add-places-card-manual-icon">
-                            <Camera size={24} aria-hidden />
-                          </div>
-                          <span className="trip-details__add-places-card-manual-text">Can&apos;t find what you need? Add manually.</span>
+                      {(() => {
+                        const places = getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
+                        return (
+                          <>
+                            <p className="trip-details__add-places-results">{places.length} results found</p>
+                            <div className="trip-details__add-places-filters">
+                              {PLACE_FILTER_TAGS.map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  className={`trip-details__add-places-tag ${placeFilterTag === tag ? 'trip-details__add-places-tag--active' : ''}`}
+                                  onClick={() => setPlaceFilterTag(placeFilterTag === tag ? '' : tag)}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                              <div className="trip-details__add-places-sort">
+                                <label htmlFor="add-places-sort">Sort by:</label>
+                                <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
+                                  {PLACE_SORT_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="trip-details__add-places-grid">
+                              <button
+                                type="button"
+                                className="trip-details__add-places-card trip-details__add-places-card--manual"
+                                onClick={() => {
+                                  const day = days.find((d) => d.dayNum === addPlacesDay);
+                                  setCustomPlaceDateKey(day?.date || days[0]?.date || '');
+                                  setAddCustomPlaceOpen(true);
+                                }}
+                              >
+                                <div className="trip-details__add-places-card-manual-icon">
+                                  <Camera size={24} aria-hidden />
+                                </div>
+                                <span className="trip-details__add-places-card-manual-text">Can&apos;t find what you need? Add manually.</span>
+                              </button>
+                              {places.map((place) => (
+                                <div
+                                  key={place.id}
+                                  role="button"
+                                  tabIndex={0}
+                                  className="trip-details__add-places-card"
+                                  onClick={() => setPlaceDetailsView(place)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPlaceDetailsView(place); } }}
+                                >
+                                  <img src={place.image} alt="" className="trip-details__add-places-card-img" />
+                                  <button type="button" className="trip-details__add-places-card-heart" aria-label={place.saved ? 'Unsave' : 'Save'} onClick={(e) => e.stopPropagation()}>
+                                    <Heart size={18} fill={place.saved ? 'currentColor' : 'none'} aria-hidden />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="trip-details__add-places-card-add"
+                                    aria-label="Add to trip"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const day = days.find((d) => d.dayNum === addPlacesDay);
+                                      setTripExpenseItems((prev) => [...prev, {
+                                        id: `place-${place.id}-${Date.now()}`,
+                                        name: place.name,
+                                        total: 0,
+                                        categoryId: 'places',
+                                        category: 'Places',
+                                        date: day?.date || days[0]?.date || '',
+                                        detail: place.name,
+                                        Icon: Camera,
+                                        lat: place.lat,
+                                        lng: place.lng,
+                                        notes: '',
+                                        attachments: [],
+                                        startTime: '07:00',
+                                        durationHrs: 1,
+                                        durationMins: 0,
+                                        externalLink: '',
+                                        placeImageUrl: place.image,
+                                        rating: place.rating,
+                                        reviewCount: place.reviewCount,
+                                      }]);
+                                    }}
+                                  >
+                                    <Plus size={18} aria-hidden />
+                                  </button>
+                                  <div className="trip-details__add-places-card-info">
+                                    <span className="trip-details__add-places-card-name">{place.name}</span>
+                                    <span className="trip-details__add-places-card-rating">{place.rating} ({place.reviewCount.toLocaleString()})</span>
+                                    {place.tags && place.tags.length > 0 && (
+                                      <div className="trip-details__add-places-card-tags">
+                                        {place.tags.map((t) => (
+                                          <span key={t} className="trip-details__add-places-card-tag" data-tag={t}>{t}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="trip-details__add-places-map-panel">
+                      <div className="trip-details__add-places-map">
+                        <TripMap
+                          center={mapCenter}
+                          zoom={11}
+                          markers={addPlacesMarkers}
+                          activeDayNums={allDayNums}
+                          className="trip-details__add-places-trip-map"
+                          fitBounds={addPlacesMarkers.length > 0}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="trip-details__add-places-filter-days"
+                        onClick={() => { resetMapDays(); setMapDayFilterOpen(true); }}
+                      >
+                        <CalendarIcon size={16} aria-hidden /> Filter days
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="trip-details__place-detail-panel">
+                    <div className="trip-details__place-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => { setPlaceDetailsView(null); setPlaceDetailsTab('overview'); }} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="place-detail-title" className="trip-details__place-detail-name">{detailPlace.name}</h1>
+                      <div className="trip-details__place-detail-meta">
+                        <span className="trip-details__place-detail-rating">
+                          <Star size={16} fill="currentColor" aria-hidden /> {detailPlace.rating} ({detailPlace.reviewCount?.toLocaleString() ?? '0'})
+                        </span>
+                        {detailPlace.tags && detailPlace.tags[0] && (
+                          <span className="trip-details__place-detail-badge">{detailPlace.tags[0]}</span>
+                        )}
+                        <button type="button" className="trip-details__place-detail-heart" aria-label="Save">
+                          <Heart size={20} aria-hidden />
                         </button>
-                        {places.map((place) => (
-                          <div key={place.id} className="trip-details__add-places-card">
-                            <img src={place.image} alt="" className="trip-details__add-places-card-img" />
-                            <button type="button" className="trip-details__add-places-card-heart" aria-label={place.saved ? 'Unsave' : 'Save'}>
-                              <Heart size={18} fill={place.saved ? 'currentColor' : 'none'} aria-hidden />
-                            </button>
+                      </div>
+                    </div>
+                    <div className="trip-details__place-detail-hero">
+                      <img src={detailPlace.image} alt="" className="trip-details__place-detail-img" />
+                    </div>
+                    <div className="trip-details__place-detail-tabs">
+                      <button type="button" className={`trip-details__place-detail-tab ${placeDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setPlaceDetailsTab('overview')}>Overview</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${placeDetailsTab === 'nearby' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setPlaceDetailsTab('nearby')}>Nearby Places</button>
+                    </div>
+                    <div className="trip-details__place-detail-content">
+                      {placeDetailsTab === 'overview' ? (
+                        <>
+                          {detailPlace.overview && (
+                            <p className="trip-details__place-detail-overview">{detailPlace.overview}<span className="trip-details__place-detail-read-more"> Read more</span></p>
+                          )}
+                          <div className="trip-details__place-detail-add-wrap">
                             <button
                               type="button"
-                              className="trip-details__add-places-card-add"
-                              aria-label="Add to trip"
+                              className="trip-details__place-detail-add-btn"
                               onClick={() => {
                                 const day = days.find((d) => d.dayNum === addPlacesDay);
                                 setTripExpenseItems((prev) => [...prev, {
-                                  id: `place-${place.id}-${Date.now()}`,
-                                  name: place.name,
+                                  id: `place-${detailPlace.id}-${Date.now()}`,
+                                  name: detailPlace.name,
                                   total: 0,
                                   categoryId: 'places',
                                   category: 'Places',
                                   date: day?.date || days[0]?.date || '',
-                                  detail: place.name,
+                                  detail: detailPlace.address || detailPlace.name,
                                   Icon: Camera,
-                                  lat: place.lat,
-                                  lng: place.lng,
+                                  lat: detailPlace.lat,
+                                  lng: detailPlace.lng,
                                   notes: '',
                                   attachments: [],
                                   startTime: '07:00',
                                   durationHrs: 1,
                                   durationMins: 0,
-                                  externalLink: '',
-                                  placeImageUrl: place.image,
-                                  rating: place.rating,
-                                  reviewCount: place.reviewCount,
+                                  externalLink: detailPlace.website || '',
+                                  placeImageUrl: detailPlace.image,
+                                  rating: detailPlace.rating,
+                                  reviewCount: detailPlace.reviewCount,
                                 }]);
+                                setPlaceDetailsView(null);
                               }}
                             >
-                              <Plus size={18} aria-hidden />
+                              Add to trip
                             </button>
-                            <div className="trip-details__add-places-card-info">
-                              <span className="trip-details__add-places-card-name">{place.name}</span>
-                              <span className="trip-details__add-places-card-rating">{place.rating} ({place.reviewCount.toLocaleString()})</span>
-                              {place.tags.length > 0 && (
-                                <div className="trip-details__add-places-card-tags">
-                                  {place.tags.map((t) => (
-                                    <span key={t} className="trip-details__add-places-card-tag" data-tag={t}>{t}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              <div className="trip-details__add-places-map-panel">
-                {(() => {
-                  const mapPlaces = getPlacesForDestination(trip.destination || trip.locations, {
-                    searchQuery: placeSearchQuery,
-                    filterTag: placeFilterTag,
-                    sortBy: placeSortBy,
-                  });
-                  const addPlacesMarkers = mapPlaces
-                    .filter((p) => p.lat != null && p.lng != null)
-                    .map((p, i) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, dayNum: (i % Math.max(days.length, 1)) + 1 }));
-                  return (
+                          {detailPlace.address && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Address</h3>
+                              <p className="trip-details__place-detail-section-text">{detailPlace.address}</p>
+                            </div>
+                          )}
+                          {(detailPlace.hours && Object.keys(detailPlace.hours).length > 0) && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Hours of operation</h3>
+                              {detailPlace.isOpenNow != null && (
+                                <p className={`trip-details__place-detail-status ${detailPlace.isOpenNow ? 'trip-details__place-detail-status--open' : 'trip-details__place-detail-status--closed'}`}>
+                                  {detailPlace.isOpenNow ? 'Open Now' : 'Closed Now'}
+                                </p>
+                              )}
+                              <ul className="trip-details__place-detail-hours">
+                                {Object.entries(detailPlace.hours).map(([day, hrs]) => (
+                                  <li key={day}>{day}: {hrs}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {detailPlace.website && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Website</h3>
+                              <a href={detailPlace.website} target="_blank" rel="noopener noreferrer" className="trip-details__place-detail-link">
+                                {detailPlace.website.replace(/^https?:\/\//, '')} <ExternalLink size={14} aria-hidden />
+                              </a>
+                            </div>
+                          )}
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Review</h3>
+                            <p className="trip-details__place-detail-section-text">
+                              <Star size={14} fill="currentColor" aria-hidden /> {detailPlace.rating} ({detailPlace.reviewCount?.toLocaleString() ?? '0'} reviews)
+                              {detailPlace.googleMapsReviewUrl && (
+                                <>
+                                  {' · '}
+                                  <a href={detailPlace.googleMapsReviewUrl} target="_blank" rel="noopener noreferrer" className="trip-details__place-detail-link">
+                                    Leave a review / Google Maps reviews
+                                  </a>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="trip-details__place-detail-nearby">
+                          <p className="trip-details__place-detail-nearby-title">Nearby Places</p>
+                          <div className="trip-details__place-detail-nearby-grid">
+                            {nearbyPlaces.map((near) => (
+                              <button
+                                key={near.id}
+                                type="button"
+                                className="trip-details__place-detail-nearby-card"
+                                onClick={() => setPlaceDetailsView(near)}
+                              >
+                                <img src={near.image} alt="" className="trip-details__place-detail-nearby-img" />
+                                <button type="button" className="trip-details__place-detail-nearby-heart" aria-label="Save" onClick={(e) => e.stopPropagation()}>
+                                  <Heart size={16} aria-hidden />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="trip-details__place-detail-nearby-plus"
+                                  aria-label="Add to trip"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const day = days.find((d) => d.dayNum === addPlacesDay);
+                                    setTripExpenseItems((prev) => [...prev, {
+                                      id: `place-${near.id}-${Date.now()}`,
+                                      name: near.name,
+                                      total: 0,
+                                      categoryId: 'places',
+                                      category: 'Places',
+                                      date: day?.date || days[0]?.date || '',
+                                      detail: near.address || near.name,
+                                      Icon: Camera,
+                                      lat: near.lat,
+                                      lng: near.lng,
+                                      notes: '',
+                                      attachments: [],
+                                      startTime: '07:00',
+                                      durationHrs: 1,
+                                      durationMins: 0,
+                                      externalLink: near.website || '',
+                                      placeImageUrl: near.image,
+                                      rating: near.rating,
+                                      reviewCount: near.reviewCount,
+                                    }]);
+                                  }}
+                                >
+                                  <Plus size={16} aria-hidden />
+                                </button>
+                                <div className="trip-details__place-detail-nearby-info">
+                                  <span className="trip-details__place-detail-nearby-name">{near.name}</span>
+                                  <span className="trip-details__place-detail-nearby-rating">{near.rating} ({near.reviewCount?.toLocaleString() ?? '0'})</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="trip-details__add-places-map-panel">
                     <div className="trip-details__add-places-map">
                       <TripMap
-                        center={mapCenter}
-                        zoom={11}
+                        center={mapCenterDetail}
+                        zoom={14}
                         markers={addPlacesMarkers}
                         activeDayNums={allDayNums}
                         className="trip-details__add-places-trip-map"
                         fitBounds={addPlacesMarkers.length > 0}
                       />
                     </div>
-                  );
-                })()}
-                <button
-                  type="button"
-                  className="trip-details__add-places-filter-days"
-                  onClick={() => {
-                    resetMapDays();
-                    setMapDayFilterOpen(true);
-                  }}
-                >
-                  <CalendarIcon size={16} aria-hidden /> Filter days
-                </button>
-              </div>
+                    <button
+                      type="button"
+                      className="trip-details__add-places-filter-days"
+                      onClick={() => { resetMapDays(); setMapDayFilterOpen(true); }}
+                    >
+                      <CalendarIcon size={16} aria-hidden /> Filter days
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
 
       {addCustomPlaceOpen && (
         <>
