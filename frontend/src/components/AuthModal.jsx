@@ -7,7 +7,6 @@ import {
   User,
   Eye,
   EyeOff,
-  Apple,
   ArrowRight,
 } from 'lucide-react';
 import './AuthModal.css';
@@ -206,10 +205,6 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
               <span className="auth-modal__social-icon">G</span>
               {loading ? 'Signing in…' : 'Continue with Google'}
             </button>
-            <button type="button" className="auth-modal__social auth-modal__social--apple">
-              <Apple size={18} className="auth-modal__social-icon auth-modal__social-icon--apple" aria-hidden />
-              Continue with Apple
-            </button>
 
             <div className="auth-modal__divider">or</div>
 
@@ -277,10 +272,6 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
             >
               <span className="auth-modal__social-icon">G</span>
               {loading ? 'Signing in…' : 'Continue with Google'}
-            </button>
-            <button type="button" className="auth-modal__social auth-modal__social--apple">
-              <Apple size={18} className="auth-modal__social-icon auth-modal__social-icon--apple" aria-hidden />
-              Continue with Apple
             </button>
 
             <div className="auth-modal__divider">or</div>

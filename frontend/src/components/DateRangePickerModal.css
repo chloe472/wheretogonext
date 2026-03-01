@@ -1,0 +1,204 @@
+.date-range-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  cursor: default;
+}
+
+.date-range-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 600px;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12);
+}
+
+.date-range-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.date-range-modal__title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.date-range-modal__subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.date-range-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-range-modal__close:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.date-range-modal__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.date-range-modal__nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #374151;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-range-modal__nav-btn:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.date-range-modal__nav-months {
+  display: flex;
+  gap: 2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.date-range-modal__calendars {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.date-range-modal__calendar {
+  flex: 1;
+  min-width: 0;
+}
+
+.date-range-modal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  margin-bottom: 0.5rem;
+}
+
+.date-range-modal__weekday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-align: center;
+}
+
+.date-range-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.date-range-modal__cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  background: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-range-modal__cell:hover {
+  background: #f3f4f6;
+}
+
+.date-range-modal__cell--other {
+  color: #9ca3af;
+}
+
+.date-range-modal__cell--range {
+  background: #fecaca;
+  color: #374151;
+}
+
+.date-range-modal__cell--range:hover {
+  background: #fca5a5;
+}
+
+.date-range-modal__cell--end {
+  background: #dc2626;
+  color: #fff;
+}
+
+.date-range-modal__cell--end:hover {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.date-range-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.date-range-modal__clear {
+  padding: 0.5rem 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.date-range-modal__clear:hover {
+  color: #111;
+}
+
+.date-range-modal__done {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: #0d9488;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-range-modal__done:hover {
+  background: #0f766e;
+}

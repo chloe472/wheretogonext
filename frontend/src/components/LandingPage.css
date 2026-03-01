@@ -42,11 +42,54 @@
   letter-spacing: -0.02em;
 }
 
+.hero__title-highlight {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.15em;
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 182, 193, 0.85),
+    rgba(255, 235, 148, 0.9),
+    rgba(144, 224, 239, 0.9)
+  );
+  background-size: 100% 40%;
+  background-repeat: no-repeat;
+  background-position: 0 80%;
+}
+
 .hero__tagline {
   margin: 0 0 2rem;
   font-size: 1.125rem;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.5;
+}
+
+.hero__tagline-highlight {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.05em;
+}
+
+.hero__tagline-highlight--yellow {
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 235, 148, 0.9),
+    rgba(255, 235, 148, 0.4)
+  );
+  background-size: 100% 45%;
+  background-repeat: no-repeat;
+  background-position: 0 90%;
+}
+
+.hero__tagline-highlight--blue {
+  background-image: linear-gradient(
+    to right,
+    rgba(144, 224, 239, 0.9),
+    rgba(144, 224, 239, 0.4)
+  );
+  background-size: 100% 45%;
+  background-repeat: no-repeat;
+  background-position: 0 90%;
 }
 
 .hero__cta {

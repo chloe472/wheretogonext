@@ -2,9 +2,21 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
+import { addTrip } from '../data/mockTrips';
+import DateRangePickerModal from './DateRangePickerModal';
 import './NewTripPage.css';
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatTripDates(startDate, endDate) {
+  if (!startDate || !endDate) return '';
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  return `${MONTH_SHORT[s.getMonth()]} ${s.getDate()} - ${MONTH_SHORT[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
+}
+
 const TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
+const DEFAULT_TRIP_IMAGE = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
 
 export default function NewTripPage({ user, onLogout }) {
   const navigate = useNavigate();
@@ -13,8 +25,12 @@ export default function NewTripPage({ user, onLogout }) {
   const [whereOpen, setWhereOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [dateModalOpen, setDateModalOpen] = useState(false);
+  const [datesError, setDatesError] = useState('');
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [selectedFriends, setSelectedFriends] = useState([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitedEmails, setInvitedEmails] = useState([]);
   const whereRef = useRef(null);
 
   const suggestions = searchLocations(whereQuery);
@@ -45,10 +61,43 @@ export default function NewTripPage({ user, onLogout }) {
 
   const handleStartPlanning = (e) => {
     e.preventDefault();
-    // In a real app: create trip via API with selectedLocation, startDate, endDate, then navigate to trip details
-    if (selectedLocation) {
-      navigate('/');
+    setDatesError('');
+    if (!selectedLocation) return;
+    if (!startDate || !endDate) {
+      setDatesError('Please select start and end dates for your trip.');
+      return;
     }
+    if (startDate > endDate) {
+      setDatesError('End date must be on or after start date.');
+      return;
+    }
+    const start = startDate;
+    const end = endDate;
+    const tripId = `trip-${Date.now()}`;
+    const title = selectedLocation.country
+      ? `${selectedLocation.name}, ${selectedLocation.country}`
+      : selectedLocation.name;
+    const locations = selectedLocation.country
+      ? `${selectedLocation.name}, ${selectedLocation.country}`
+      : selectedLocation.name;
+    const newTrip = {
+      id: tripId,
+      title: `Trip to ${title}`,
+      destination: selectedLocation.name,
+      dates: formatTripDates(start, end),
+      startDate: start,
+      endDate: end,
+      locations,
+      placesSaved: 0,
+      budget: '$0',
+      budgetSpent: 0,
+      travelers: 1 + (invitedEmails?.length || 0),
+      status: 'Planning',
+      statusClass: 'trip-card__status--planning',
+      image: DEFAULT_TRIP_IMAGE,
+    };
+    addTrip(newTrip);
+    navigate(`/trip/${tripId}`);
   };
 
   return (
@@ -116,55 +165,116 @@ export default function NewTripPage({ user, onLogout }) {
           </div>
 
           <div className="new-trip__field">
-            <label className="new-trip__label">Dates (optional)</label>
-            <div className="new-trip__dates">
-              <span className="new-trip__date-wrap">
-                <CalendarIcon size={18} className="new-trip__date-icon" aria-hidden />
-                <input
-                  type="date"
-                  className="new-trip__input new-trip__input--date"
-                  placeholder="Start date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  aria-label="Start date"
-                />
-              </span>
-              <span className="new-trip__date-wrap">
-                <CalendarIcon size={18} className="new-trip__date-icon" aria-hidden />
-                <input
-                  type="date"
-                  className="new-trip__input new-trip__input--date"
-                  placeholder="End date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  aria-label="End date"
-                />
-              </span>
-            </div>
+            <label className="new-trip__label">Dates</label>
+            <button
+              type="button"
+              className={`new-trip__date-btn ${datesError ? 'new-trip__date-btn--error' : ''}`}
+              onClick={() => setDateModalOpen(true)}
+              aria-label="Select trip dates"
+            >
+              <CalendarIcon size={18} className="new-trip__date-icon" aria-hidden />
+              {startDate && endDate ? formatTripDates(startDate, endDate) : 'Select start and end date'}
+            </button>
+            {datesError && <p className="new-trip__error" role="alert">{datesError}</p>}
+            <DateRangePickerModal
+              open={dateModalOpen}
+              start={startDate || null}
+              end={endDate || null}
+              title="When"
+              onApply={(s, e) => {
+                setStartDate(s);
+                setEndDate(e);
+                setDatesError('');
+              }}
+              onClose={() => setDateModalOpen(false)}
+            />
           </div>
 
-          <div className="new-trip__row">
-            <button type="button" className="new-trip__invite">
-              + Invite tripmates
-            </button>
-            <div className="new-trip__friends-wrap">
+          <div className="new-trip__invite-section">
+            <div className="new-trip__invite-row">
               <button
                 type="button"
-                className="new-trip__friends-btn"
-                onClick={() => setFriendsOpen((o) => !o)}
-                aria-expanded={friendsOpen}
-                aria-haspopup="listbox"
+                className="new-trip__invite"
+                onClick={() => setInviteOpen((o) => !o)}
+                aria-expanded={inviteOpen}
               >
-                <Users size={18} aria-hidden />
-                Friends
-                <ChevronDown size={16} aria-hidden />
+                + Invite tripmates
               </button>
-              {friendsOpen && (
-                <div className="new-trip__friends-dropdown" role="listbox">
-                  <p className="new-trip__friends-hint">No friends added yet. Invite by email or link.</p>
-                </div>
-              )}
+              <div className="new-trip__friends-wrap">
+                <button
+                  type="button"
+                  className="new-trip__friends-btn"
+                  onClick={() => setFriendsOpen((o) => !o)}
+                  aria-expanded={friendsOpen}
+                  aria-haspopup="listbox"
+                >
+                  <Users size={18} aria-hidden />
+                  Friends
+                  <ChevronDown size={16} aria-hidden />
+                </button>
+                {friendsOpen && (
+                  <div className="new-trip__friends-dropdown" role="listbox">
+                    <p className="new-trip__friends-hint">No friends added yet. Use &quot;+ Invite tripmates&quot; to add by email.</p>
+                  </div>
+                )}
+              </div>
             </div>
+            {inviteOpen && (
+              <div className="new-trip__invite-panel">
+                <label htmlFor="invite-email" className="new-trip__label">Invite by email</label>
+                <div className="new-trip__invite-input-row">
+                  <input
+                    id="invite-email"
+                    type="email"
+                    className="new-trip__input"
+                    placeholder="e.g. friend@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const email = inviteEmail.trim().toLowerCase();
+                        if (email && !invitedEmails.includes(email)) {
+                          setInvitedEmails((prev) => [...prev, email]);
+                          setInviteEmail('');
+                        }
+                      }
+                    }}
+                    autoComplete="email"
+                  />
+                  <button
+                    type="button"
+                    className="new-trip__invite-add-btn"
+                    onClick={() => {
+                      const email = inviteEmail.trim().toLowerCase();
+                      if (email && !invitedEmails.includes(email)) {
+                        setInvitedEmails((prev) => [...prev, email]);
+                        setInviteEmail('');
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+                {invitedEmails.length > 0 && (
+                  <ul className="new-trip__invited-list">
+                    {invitedEmails.map((email) => (
+                      <li key={email} className="new-trip__invited-item">
+                        <span className="new-trip__invited-email">{email}</span>
+                        <button
+                          type="button"
+                          className="new-trip__invited-remove"
+                          onClick={() => setInvitedEmails((prev) => prev.filter((e) => e !== email))}
+                          aria-label={`Remove ${email}`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           <button type="submit" className="new-trip__submit">

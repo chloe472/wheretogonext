@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import TripDetailsPage from './components/TripDetailsPage';
 import NewTripPage from './components/NewTripPage';
 import ProfilePage from './components/ProfilePage';
+import SearchResultsPage from './components/SearchResultsPage';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -72,6 +73,10 @@ function App() {
           element={
             user ? (
               <ProfilePage user={user} onLogout={handleLogout} />
+          path="/search"
+          element={
+            user ? (
+              <SearchResultsPage user={user} onLogout={handleLogout} />
             ) : (
               <Navigate to="/" replace />
             )

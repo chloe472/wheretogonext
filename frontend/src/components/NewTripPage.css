@@ -160,6 +160,52 @@
 }
 
 /* Dates row */
+.new-trip__date-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.new-trip__date-btn:hover {
+  border-color: #d1d5db;
+}
+
+.new-trip__date-btn:focus {
+  outline: none;
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+}
+
+.new-trip__date-btn--error {
+  border-color: #dc2626;
+}
+
+.new-trip__date-btn--error:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.new-trip__date-icon {
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.new-trip__error {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: #dc2626;
+}
+
 .new-trip__dates {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -172,11 +218,90 @@
   align-items: center;
 }
 
-.new-trip__date-icon {
-  position: absolute;
-  left: 1rem;
-  color: #9ca3af;
-  pointer-events: none;
+.new-trip__invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.new-trip__invite-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.new-trip__invite-panel {
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.new-trip__invite-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.new-trip__invite-input-row .new-trip__input {
+  flex: 1;
+}
+
+.new-trip__invite-add-btn {
+  flex-shrink: 0;
+  padding: 0.875rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.new-trip__invite-add-btn:hover {
+  background: #333;
+}
+
+.new-trip__invited-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.new-trip__invited-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.new-trip__invited-item:last-child {
+  border-bottom: none;
+}
+
+.new-trip__invited-email {
+  font-size: 0.9375rem;
+  color: #374151;
+}
+
+.new-trip__invited-remove {
+  padding: 0.25rem 0.5rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #6b7280;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.new-trip__invited-remove:hover {
+  color: #111;
+  background: #e5e7eb;
 }
 
 .new-trip__row {
@@ -250,7 +375,7 @@
   font-size: 1rem;
   font-weight: 600;
   color: #fff;
-  background: #ea580c;
+  background: #1a1a1a;
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -258,10 +383,10 @@
 }
 
 .new-trip__submit:hover {
-  background: #c2410c;
+  background: #333;
 }
 
 .new-trip__submit:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.3);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2);
 }
