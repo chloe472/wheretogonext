@@ -56,8 +56,29 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { getTripById, getTripDays, updateTrip, deleteTrip } from '../data/mockTrips';
-import { getPlacesForDestination, getPlaceDetails, getNearbyPlaces, getMapCenterForDestination, PLACE_FILTER_TAGS, PLACE_SORT_OPTIONS } from '../data/mockPlaces';
+import {
+  searchAddressSuggestions,
+  getPlacesForDestination,
+  getMapCenterForDestination,
+  PLACE_FILTER_TAGS,
+  PLACE_SORT_OPTIONS,
+} from '../data/mockPlaces';
+import {
+  searchFoodAddressSuggestions,
+  getFoodAndBeveragesForDestination,
+  FOOD_DIETARY_FILTERS,
+  FOOD_SORT_OPTIONS,
+} from '../data/mockFoodAndBeverages';
+import {
+  getExperiencesForDestination,
+  EXPERIENCE_TYPES,
+  EXPERIENCE_PRICE_RANGES,
+  EXPERIENCE_DURATIONS,
+  EXPERIENCE_SORT_OPTIONS,
+} from '../data/mockExperiences';
+import { getCommunityItineraries } from '../data/mockCommunityItineraries';
 import { searchLocations } from '../data/mockLocations';
+import { fetchDiscoveryData } from '../api/discoveryApi';
 import countriesData from '../data/countries.json';
 import DateRangePickerModal from './DateRangePickerModal';
 import TripMap from './TripMap';
@@ -78,6 +99,12 @@ function countryCodeToFlag(code) {
   const a = code.toUpperCase().charCodeAt(0) - 65 + 0x1F1E6;
   const b = code.toUpperCase().charCodeAt(1) - 65 + 0x1F1E6;
   return String.fromCodePoint(a, b);
+}
+
+function extractPrimaryDestination(destinationOrLocations) {
+  if (!destinationOrLocations) return '';
+  const parts = String(destinationOrLocations).split(',');
+  return parts[0]?.trim() || String(destinationOrLocations).trim();
 }
 
 const WHERE_TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
@@ -156,11 +183,9 @@ function timeToMinutes(timeStr) {
   const [h, m] = timeStr.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
 }
-
 function getCalendarEventPosition(item) {
   const startMins = timeToMinutes(item.startTime);
   const startHour = startMins / 60;
-  const durationHrs = (item.durationHrs ?? 1) + (item.durationMins ?? 0) / 60;
   const topPx = Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT);
   const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, durationHrs * CALENDAR_ROW_HEIGHT);
   return { top: topPx, height: heightPx };
@@ -373,27 +398,150 @@ const ADD_TO_TRIP_OPTIONS = [
 
 /** Mock airports and cities for transport autofill (in production use an API). */
 const AIRPORTS_AND_CITIES = [
-  { id: 'SEA', name: 'Seattle-Tacoma International (SEA)', type: 'Airport' },
-  { id: 'LAX', name: 'Los Angeles International (LAX)', type: 'Airport' },
-  { id: 'JFK', name: 'John F. Kennedy International (JFK)', type: 'Airport' },
-  { id: 'LHR', name: 'London Heathrow (LHR)', type: 'Airport' },
-  { id: 'CDG', name: 'Paris Charles de Gaulle (CDG)', type: 'Airport' },
-  { id: 'NRT', name: 'Tokyo Narita (NRT)', type: 'Airport' },
-  { id: 'HND', name: 'Tokyo Haneda (HND)', type: 'Airport' },
-  { id: 'SIN', name: 'Singapore Changi (SIN)', type: 'Airport' },
-  { id: 'BKK', name: 'Bangkok Suvarnabhumi (BKK)', type: 'Airport' },
-  { id: 'SGN', name: 'Ho Chi Minh City (SGN)', type: 'Airport' },
-  { id: 'DXB', name: 'Dubai International (DXB)', type: 'Airport' },
-  { id: 'FRA', name: 'Frankfurt (FRA)', type: 'Airport' },
-  { id: 'AMS', name: 'Amsterdam Schiphol (AMS)', type: 'Airport' },
-  { id: 'SYD', name: 'Sydney Kingsford Smith (SYD)', type: 'Airport' },
-  { id: 'YYZ', name: 'Toronto Pearson (YYZ)', type: 'Airport' },
-  { id: 'city-seattle', name: 'Seattle', type: 'City' },
-  { id: 'city-paris', name: 'Paris', type: 'City' },
-  { id: 'city-tokyo', name: 'Tokyo', type: 'City' },
-  { id: 'city-london', name: 'London', type: 'City' },
-  { id: 'city-bangkok', name: 'Bangkok', type: 'City' },
+  // Major US Airports
+  { id: 'ATL', name: 'Atlanta Hartsfield-Jackson (ATL)', city: 'Atlanta', country: 'United States', type: 'Airport' },
+  { id: 'LAX', name: 'Los Angeles International (LAX)', city: 'Los Angeles', country: 'United States', type: 'Airport' },
+  { id: 'ORD', name: 'Chicago O\'Hare International (ORD)', city: 'Chicago', country: 'United States', type: 'Airport' },
+  { id: 'DFW', name: 'Dallas/Fort Worth International (DFW)', city: 'Dallas', country: 'United States', type: 'Airport' },
+  { id: 'DEN', name: 'Denver International (DEN)', city: 'Denver', country: 'United States', type: 'Airport' },
+  { id: 'JFK', name: 'John F. Kennedy International (JFK)', city: 'New York', country: 'United States', type: 'Airport' },
+  { id: 'SFO', name: 'San Francisco International (SFO)', city: 'San Francisco', country: 'United States', type: 'Airport' },
+  { id: 'SEA', name: 'Seattle-Tacoma International (SEA)', city: 'Seattle', country: 'United States', type: 'Airport' },
+  { id: 'LAS', name: 'Las Vegas McCarran (LAS)', city: 'Las Vegas', country: 'United States', type: 'Airport' },
+  { id: 'MCO', name: 'Orlando International (MCO)', city: 'Orlando', country: 'United States', type: 'Airport' },
+  { id: 'MIA', name: 'Miami International (MIA)', city: 'Miami', country: 'United States', type: 'Airport' },
+  { id: 'PHX', name: 'Phoenix Sky Harbor (PHX)', city: 'Phoenix', country: 'United States', type: 'Airport' },
+  { id: 'IAH', name: 'Houston George Bush (IAH)', city: 'Houston', country: 'United States', type: 'Airport' },
+  { id: 'BOS', name: 'Boston Logan International (BOS)', city: 'Boston', country: 'United States', type: 'Airport' },
+  { id: 'MSP', name: 'Minneapolis-St Paul (MSP)', city: 'Minneapolis', country: 'United States', type: 'Airport' },
+  { id: 'DTW', name: 'Detroit Metropolitan (DTW)', city: 'Detroit', country: 'United States', type: 'Airport' },
+  { id: 'PHL', name: 'Philadelphia International (PHL)', city: 'Philadelphia', country: 'United States', type: 'Airport' },
+  { id: 'LGA', name: 'LaGuardia Airport (LGA)', city: 'New York', country: 'United States', type: 'Airport' },
+  { id: 'EWR', name: 'Newark Liberty International (EWR)', city: 'Newark', country: 'United States', type: 'Airport' },
+  { id: 'CLT', name: 'Charlotte Douglas (CLT)', city: 'Charlotte', country: 'United States', type: 'Airport' },
+  
+  // Canada
+  { id: 'YYZ', name: 'Toronto Pearson (YYZ)', city: 'Toronto', country: 'Canada', type: 'Airport' },
+  { id: 'YVR', name: 'Vancouver International (YVR)', city: 'Vancouver', country: 'Canada', type: 'Airport' },
+  { id: 'YUL', name: 'Montreal-Pierre Trudeau (YUL)', city: 'Montreal', country: 'Canada', type: 'Airport' },
+  { id: 'YYC', name: 'Calgary International (YYC)', city: 'Calgary', country: 'Canada', type: 'Airport' },
+  
+  // Europe
+  { id: 'LHR', name: 'London Heathrow (LHR)', city: 'London', country: 'United Kingdom', type: 'Airport' },
+  { id: 'LGW', name: 'London Gatwick (LGW)', city: 'London', country: 'United Kingdom', type: 'Airport' },
+  { id: 'CDG', name: 'Paris Charles de Gaulle (CDG)', city: 'Paris', country: 'France', type: 'Airport' },
+  { id: 'ORY', name: 'Paris Orly (ORY)', city: 'Paris', country: 'France', type: 'Airport' },
+  { id: 'FRA', name: 'Frankfurt Airport (FRA)', city: 'Frankfurt', country: 'Germany', type: 'Airport' },
+  { id: 'AMS', name: 'Amsterdam Schiphol (AMS)', city: 'Amsterdam', country: 'Netherlands', type: 'Airport' },
+  { id: 'MAD', name: 'Madrid-Barajas (MAD)', city: 'Madrid', country: 'Spain', type: 'Airport' },
+  { id: 'BCN', name: 'Barcelona-El Prat (BCN)', city: 'Barcelona', country: 'Spain', type: 'Airport' },
+  { id: 'FCO', name: 'Rome Fiumicino (FCO)', city: 'Rome', country: 'Italy', type: 'Airport' },
+  { id: 'MXP', name: 'Milan Malpensa (MXP)', city: 'Milan', country: 'Italy', type: 'Airport' },
+  { id: 'MUC', name: 'Munich Airport (MUC)', city: 'Munich', country: 'Germany', type: 'Airport' },
+  { id: 'ZRH', name: 'Zurich Airport (ZRH)', city: 'Zurich', country: 'Switzerland', type: 'Airport' },
+  { id: 'VIE', name: 'Vienna International (VIE)', city: 'Vienna', country: 'Austria', type: 'Airport' },
+  { id: 'CPH', name: 'Copenhagen Airport (CPH)', city: 'Copenhagen', country: 'Denmark', type: 'Airport' },
+  { id: 'OSL', name: 'Oslo Gardermoen (OSL)', city: 'Oslo', country: 'Norway', type: 'Airport' },
+  { id: 'ARN', name: 'Stockholm Arlanda (ARN)', city: 'Stockholm', country: 'Sweden', type: 'Airport' },
+  { id: 'IST', name: 'Istanbul Airport (IST)', city: 'Istanbul', country: 'Turkey', type: 'Airport' },
+  { id: 'DUB', name: 'Dublin Airport (DUB)', city: 'Dublin', country: 'Ireland', type: 'Airport' },
+  { id: 'LIS', name: 'Lisbon Portela (LIS)', city: 'Lisbon', country: 'Portugal', type: 'Airport' },
+  { id: 'ATH', name: 'Athens International (ATH)', city: 'Athens', country: 'Greece', type: 'Airport' },
+  
+  // Asia
+  { id: 'HND', name: 'Tokyo Haneda (HND)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
+  { id: 'NRT', name: 'Tokyo Narita (NRT)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
+  { id: 'SIN', name: 'Singapore Changi (SIN)', city: 'Singapore', country: 'Singapore', type: 'Airport' },
+  { id: 'HKG', name: 'Hong Kong International (HKG)', city: 'Hong Kong', country: 'Hong Kong', type: 'Airport' },
+  { id: 'ICN', name: 'Seoul Incheon (ICN)', city: 'Seoul', country: 'South Korea', type: 'Airport' },
+  { id: 'PVG', name: 'Shanghai Pudong (PVG)', city: 'Shanghai', country: 'China', type: 'Airport' },
+  { id: 'PEK', name: 'Beijing Capital (PEK)', city: 'Beijing', country: 'China', type: 'Airport' },
+  { id: 'CAN', name: 'Guangzhou Baiyun (CAN)', city: 'Guangzhou', country: 'China', type: 'Airport' },
+  { id: 'BKK', name: 'Bangkok Suvarnabhumi (BKK)', city: 'Bangkok', country: 'Thailand', type: 'Airport' },
+  { id: 'KUL', name: 'Kuala Lumpur International (KUL)', city: 'Kuala Lumpur', country: 'Malaysia', type: 'Airport' },
+  { id: 'CGK', name: 'Jakarta Soekarno-Hatta (CGK)', city: 'Jakarta', country: 'Indonesia', type: 'Airport' },
+  { id: 'DPS', name: 'Bali Ngurah Rai (DPS)', city: 'Bali', country: 'Indonesia', type: 'Airport' },
+  { id: 'MNL', name: 'Manila Ninoy Aquino (MNL)', city: 'Manila', country: 'Philippines', type: 'Airport' },
+  { id: 'HAN', name: 'Hanoi Noi Bai (HAN)', city: 'Hanoi', country: 'Vietnam', type: 'Airport' },
+  { id: 'SGN', name: 'Ho Chi Minh City (SGN)', city: 'Ho Chi Minh City', country: 'Vietnam', type: 'Airport' },
+  { id: 'DEL', name: 'Delhi Indira Gandhi (DEL)', city: 'Delhi', country: 'India', type: 'Airport' },
+  { id: 'BOM', name: 'Mumbai Chhatrapati Shivaji (BOM)', city: 'Mumbai', country: 'India', type: 'Airport' },
+  { id: 'KIX', name: 'Osaka Kansai (KIX)', city: 'Osaka', country: 'Japan', type: 'Airport' },
+  { id: 'TPE', name: 'Taiwan Taoyuan (TPE)', city: 'Taipei', country: 'Taiwan', type: 'Airport' },
+  
+  // Middle East
+  { id: 'DXB', name: 'Dubai International (DXB)', city: 'Dubai', country: 'UAE', type: 'Airport' },
+  { id: 'DOH', name: 'Doha Hamad International (DOH)', city: 'Doha', country: 'Qatar', type: 'Airport' },
+  { id: 'AUH', name: 'Abu Dhabi International (AUH)', city: 'Abu Dhabi', country: 'UAE', type: 'Airport' },
+  { id: 'CAI', name: 'Cairo International (CAI)', city: 'Cairo', country: 'Egypt', type: 'Airport' },
+  { id: 'TLV', name: 'Tel Aviv Ben Gurion (TLV)', city: 'Tel Aviv', country: 'Israel', type: 'Airport' },
+  
+  // Oceania
+  { id: 'SYD', name: 'Sydney Kingsford Smith (SYD)', city: 'Sydney', country: 'Australia', type: 'Airport' },
+  { id: 'MEL', name: 'Melbourne Airport (MEL)', city: 'Melbourne', country: 'Australia', type: 'Airport' },
+  { id: 'BNE', name: 'Brisbane Airport (BNE)', city: 'Brisbane', country: 'Australia', type: 'Airport' },
+  { id: 'AKL', name: 'Auckland Airport (AKL)', city: 'Auckland', country: 'New Zealand', type: 'Airport' },
+  { id: 'PER', name: 'Perth Airport (PER)', city: 'Perth', country: 'Australia', type: 'Airport' },
+  
+  // Latin America
+  { id: 'GRU', name: 'São Paulo Guarulhos (GRU)', city: 'São Paulo', country: 'Brazil', type: 'Airport' },
+  { id: 'GIG', name: 'Rio de Janeiro Galeão (GIG)', city: 'Rio de Janeiro', country: 'Brazil', type: 'Airport' },
+  { id: 'MEX', name: 'Mexico City International (MEX)', city: 'Mexico City', country: 'Mexico', type: 'Airport' },
+  { id: 'BOG', name: 'Bogotá El Dorado (BOG)', city: 'Bogotá', country: 'Colombia', type: 'Airport' },
+  { id: 'EZE', name: 'Buenos Aires Ezeiza (EZE)', city: 'Buenos Aires', country: 'Argentina', type: 'Airport' },
+  { id: 'LIM', name: 'Lima Jorge Chávez (LIM)', city: 'Lima', country: 'Peru', type: 'Airport' },
+  { id: 'SCL', name: 'Santiago Arturo Merino (SCL)', city: 'Santiago', country: 'Chile', type: 'Airport' },
+  
+  // Africa
+  { id: 'JNB', name: 'Johannesburg O.R. Tambo (JNB)', city: 'Johannesburg', country: 'South Africa', type: 'Airport' },
+  { id: 'CPT', name: 'Cape Town International (CPT)', city: 'Cape Town', country: 'South Africa', type: 'Airport' },
+  { id: 'NBO', name: 'Nairobi Jomo Kenyatta (NBO)', city: 'Nairobi', country: 'Kenya', type: 'Airport' },
+  { id: 'LOS', name: 'Lagos Murtala Muhammed (LOS)', city: 'Lagos', country: 'Nigeria', type: 'Airport' },
+  { id: 'ADD', name: 'Addis Ababa Bole (ADD)', city: 'Addis Ababa', country: 'Ethiopia', type: 'Airport' },
+  
+  // Cities and Stations
+  { id: 'city-newyork', name: 'New York, United States', type: 'City' },
+  { id: 'city-london', name: 'London, United Kingdom', type: 'City' },
+  { id: 'city-paris', name: 'Paris, France', type: 'City' },
+  { id: 'city-tokyo', name: 'Tokyo, Japan', type: 'City' },
   { id: 'city-singapore', name: 'Singapore', type: 'City' },
+  { id: 'city-bangkok', name: 'Bangkok, Thailand', type: 'City' },
+  { id: 'city-dubai', name: 'Dubai, UAE', type: 'City' },
+  { id: 'city-hongkong', name: 'Hong Kong', type: 'City' },
+  { id: 'city-seoul', name: 'Seoul, South Korea', type: 'City' },
+  { id: 'city-sydney', name: 'Sydney, Australia', type: 'City' },
+  { id: 'city-losangeles', name: 'Los Angeles, United States', type: 'City' },
+  { id: 'city-sanfrancisco', name: 'San Francisco, United States', type: 'City' },
+  { id: 'city-seattle', name: 'Seattle, United States', type: 'City' },
+  { id: 'city-chicago', name: 'Chicago, United States', type: 'City' },
+  { id: 'city-miami', name: 'Miami, United States', type: 'City' },
+  { id: 'city-toronto', name: 'Toronto, Canada', type: 'City' },
+  { id: 'city-vancouver', name: 'Vancouver, Canada', type: 'City' },
+  { id: 'city-amsterdam', name: 'Amsterdam, Netherlands', type: 'City' },
+  { id: 'city-barcelona', name: 'Barcelona, Spain', type: 'City' },
+  { id: 'city-rome', name: 'Rome, Italy', type: 'City' },
+  { id: 'city-berlin', name: 'Berlin, Germany', type: 'City' },
+  { id: 'city-madrid', name: 'Madrid, Spain', type: 'City' },
+  { id: 'city-istanbul', name: 'Istanbul, Turkey', type: 'City' },
+  { id: 'city-mumbai', name: 'Mumbai, India', type: 'City' },
+  { id: 'city-delhi', name: 'Delhi, India', type: 'City' },
+  { id: 'city-shanghai', name: 'Shanghai, China', type: 'City' },
+  { id: 'city-beijing', name: 'Beijing, China', type: 'City' },
+  { id: 'city-kualalumpur', name: 'Kuala Lumpur, Malaysia', type: 'City' },
+  { id: 'city-bali', name: 'Bali, Indonesia', type: 'City' },
+  { id: 'city-phuket', name: 'Phuket, Thailand', type: 'City' },
+  { id: 'city-hanoi', name: 'Hanoi, Vietnam', type: 'City' },
+  { id: 'city-saigon', name: 'Ho Chi Minh City, Vietnam', type: 'City' },
+  { id: 'city-osaka', name: 'Osaka, Japan', type: 'City' },
+  { id: 'city-kyoto', name: 'Kyoto, Japan', type: 'City' },
+  { id: 'city-melbourne', name: 'Melbourne, Australia', type: 'City' },
+  { id: 'station-penn', name: 'Penn Station, New York', type: 'Station' },
+  { id: 'station-union', name: 'Union Station, Washington DC', type: 'Station' },
+  { id: 'station-gare', name: 'Gare du Nord, Paris', type: 'Station' },
+  { id: 'station-kings', name: 'King\'s Cross, London', type: 'Station' },
+  { id: 'station-chang', name: 'Changi Airport, Singapore', type: 'Station' },
+  { id: 'station-shinjuku', name: 'Shinjuku Station, Tokyo', type: 'Station' },
+  { id: 'station-central', name: 'Central Station, Amsterdam', type: 'Station' },
 ];
 
 const AIRLINES = [
@@ -426,9 +574,16 @@ const VEHICLE_TYPES = [
 function searchAirportsAndCities(query, limit = 8) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
-  return AIRPORTS_AND_CITIES.filter(
-    (a) => a.name.toLowerCase().includes(q)
-  ).slice(0, limit);
+  
+  // Search by airport code, city name, or full name
+  return AIRPORTS_AND_CITIES.filter((a) => {
+    const nameMatch = a.name.toLowerCase().includes(q);
+    const idMatch = a.id && a.id.toLowerCase().includes(q);
+    const cityMatch = a.city && a.city.toLowerCase().includes(q);
+    const countryMatch = a.country && a.country.toLowerCase().includes(q);
+    
+    return nameMatch || idMatch || cityMatch || countryMatch;
+  }).slice(0, limit);
 }
 
 function searchAirlines(query, limit = 8) {
@@ -442,7 +597,38 @@ function searchAirlines(query, limit = 8) {
 export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
   const navigate = useNavigate();
-  const trip = getTripById(tripId);
+  const [locationUpdateKey, setLocationUpdateKey] = useState(0);
+  
+  // Use useMemo to re-fetch trip when location updates
+  const tripData = useMemo(() => getTripById(tripId), [tripId, locationUpdateKey]);
+  
+  // Local state for immediate destination/location updates
+  const [localDestination, setLocalDestination] = useState(null);
+  const [localLocations, setLocalLocations] = useState(null);
+  
+  // Use local state if available, otherwise use trip data
+  const trip = useMemo(() => {
+    if (!tripData) return null;
+    if (localDestination !== null || localLocations !== null) {
+      return {
+        ...tripData,
+        destination: localDestination ?? tripData.destination,
+        locations: localLocations ?? tripData.locations,
+      };
+    }
+    return tripData;
+  }, [tripData, localDestination, localLocations]);
+  
+  // Clear local state after trip data has been updated to match
+  useEffect(() => {
+    if (localDestination !== null && tripData?.destination === localDestination) {
+      setLocalDestination(null);
+    }
+    if (localLocations !== null && tripData?.locations === localLocations) {
+      setLocalLocations(null);
+    }
+  }, [tripData, localDestination, localLocations]);
+  
   const [currency, setCurrency] = useState('USD');
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
@@ -469,24 +655,70 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [modalCurrency, setModalCurrency] = useState('USD');
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
+  const [addFoodOpen, setAddFoodOpen] = useState(false);
+  const [addExperiencesOpen, setAddExperiencesOpen] = useState(false);
   const [placeDetailsView, setPlaceDetailsView] = useState(null);
   const [placeDetailsTab, setPlaceDetailsTab] = useState('overview');
+  const [foodDetailsView, setFoodDetailsView] = useState(null);
+  const [foodDetailsTab, setFoodDetailsTab] = useState('overview');
+  const [experienceDetailsView, setExperienceDetailsView] = useState(null);
+  const [experienceDetailsTab, setExperienceDetailsTab] = useState('overview');
+  const [itineraryDetailsView, setItineraryDetailsView] = useState(null);
   const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
+  const [addCustomFoodOpen, setAddCustomFoodOpen] = useState(false);
   const [addPlacesDay, setAddPlacesDay] = useState(1);
+  const [addFoodDay, setAddFoodDay] = useState(1);
+  const [addToTripModalOpen, setAddToTripModalOpen] = useState(false);
+  const [addToTripItem, setAddToTripItem] = useState(null);
+  const [addToTripDate, setAddToTripDate] = useState('');
+  const [addToTripStartTime, setAddToTripStartTime] = useState('07:00');
+  const [addToTripDurationHrs, setAddToTripDurationHrs] = useState(1);
+  const [addToTripDurationMins, setAddToTripDurationMins] = useState(0);
+  const [addToTripNotes, setAddToTripNotes] = useState('');
+  const [addToTripCost, setAddToTripCost] = useState('');
   const [placeSearchQuery, setPlaceSearchQuery] = useState('');
   const [placeFilterTag, setPlaceFilterTag] = useState('');
   const [placeSortBy, setPlaceSortBy] = useState('Recommended');
+  const [foodSearchQuery, setFoodSearchQuery] = useState('');
+  const [foodDietaryFilter, setFoodDietaryFilter] = useState('All');
+  const [foodSortBy, setFoodSortBy] = useState('Recommended');
+  const [experienceSearchQuery, setExperienceSearchQuery] = useState('');
+  const [experienceTypeFilter, setExperienceTypeFilter] = useState('All');
+  const [experiencePriceRange, setExperiencePriceRange] = useState('All');
+  const [experienceDurationFilter, setExperienceDurationFilter] = useState('All');
+  const [experienceSortBy, setExperienceSortBy] = useState('Recently added');
+  const [experienceBookingModalOpen, setExperienceBookingModalOpen] = useState(false);
+  const [bookingExperience, setBookingExperience] = useState(null);
+  const [bookingOption, setBookingOption] = useState(null);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingStartTime, setBookingStartTime] = useState('07:00');
+  const [bookingTravellers, setBookingTravellers] = useState(2);
+  const [bookingNotes, setBookingNotes] = useState('');
   const [tripExpenseItems, setTripExpenseItems] = useState([]);
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [customPlaceAddress, setCustomPlaceAddress] = useState('');
+  const [customPlaceAddressSelection, setCustomPlaceAddressSelection] = useState(null);
+  const [customPlaceAddressSuggestionsOpen, setCustomPlaceAddressSuggestionsOpen] = useState(false);
+  const [customFoodName, setCustomFoodName] = useState('');
+  const [customFoodAddress, setCustomFoodAddress] = useState('');
+  const [customFoodAddressSelection, setCustomFoodAddressSelection] = useState(null);
+  const [customFoodAddressSuggestionsOpen, setCustomFoodAddressSuggestionsOpen] = useState(false);
   const [customPlaceDateKey, setCustomPlaceDateKey] = useState('');
+  const [customFoodDateKey, setCustomFoodDateKey] = useState('');
   const [customPlaceStartTime, setCustomPlaceStartTime] = useState('07:00');
+  const [customFoodStartTime, setCustomFoodStartTime] = useState('07:00');
   const [customPlaceDurationHrs, setCustomPlaceDurationHrs] = useState(1);
+  const [customFoodDurationHrs, setCustomFoodDurationHrs] = useState(1);
   const [customPlaceDurationMins, setCustomPlaceDurationMins] = useState(0);
+  const [customFoodDurationMins, setCustomFoodDurationMins] = useState(0);
   const [customPlaceNote, setCustomPlaceNote] = useState('');
+  const [customFoodNote, setCustomFoodNote] = useState('');
   const [customPlaceCost, setCustomPlaceCost] = useState('');
+  const [customFoodCost, setCustomFoodCost] = useState('');
   const [customPlaceImage, setCustomPlaceImage] = useState(null);
+  const [customFoodImage, setCustomFoodImage] = useState(null);
   const [customPlaceTravelDocs, setCustomPlaceTravelDocs] = useState([]);
+  const [customFoodTravelDocs, setCustomFoodTravelDocs] = useState([]);
   const [mapDayFilterOpen, setMapDayFilterOpen] = useState(false);
   const [mapDayFilterSelected, setMapDayFilterSelected] = useState([]);
   const [addTransportOpen, setAddTransportOpen] = useState(false);
@@ -500,6 +732,9 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [transferPax, setTransferPax] = useState(2);
   const [flightCode, setFlightCode] = useState('');
   const [flightDepartDate, setFlightDepartDate] = useState('');
+  const [flightSearchResults, setFlightSearchResults] = useState([]);
+  const [flightSearchLoading, setFlightSearchLoading] = useState(false);
+  const [flightSearchError, setFlightSearchError] = useState('');
   const [transportFaqOpen, setTransportFaqOpen] = useState(null);
   const [addCustomTransportOpen, setAddCustomTransportOpen] = useState(false);
   const [customTransportVehicle, setCustomTransportVehicle] = useState('Bus');
@@ -546,6 +781,18 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [optimizeRouteStartId, setOptimizeRouteStartId] = useState('');
   const [optimizeRouteEndId, setOptimizeRouteEndId] = useState('');
   const [optimizationsLeft, setOptimizationsLeft] = useState(3);
+  const [discoveryData, setDiscoveryData] = useState({
+    places: [],
+    foods: [],
+    experiences: [],
+    communityItineraries: [],
+    center: null,
+    warning: '',
+    cached: false,
+    stale: false,
+  });
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState('');
 
   useEffect(() => {
     if (!whereModalOpen) return;
@@ -571,12 +818,100 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [openDayMenuKey]);
 
   useEffect(() => {
-    const t = getTripById(tripId);
-    if (t) {
-      const d = getTripDays(t);
-      setTitleDisplay(t.title ?? `${d.length} days to ${t.destination}`);
+    const targetDestination = extractPrimaryDestination(trip?.destination || trip?.locations);
+    if (!targetDestination) return;
+
+    let cancelled = false;
+    const run = async () => {
+      setDiscoveryLoading(true);
+      setDiscoveryError('');
+      try {
+        const data = await fetchDiscoveryData(targetDestination, 24);
+        if (!cancelled) {
+          setDiscoveryData({
+            places: Array.isArray(data?.places) ? data.places : [],
+            foods: Array.isArray(data?.foods) ? data.foods : [],
+            experiences: Array.isArray(data?.experiences) ? data.experiences : [],
+            communityItineraries: Array.isArray(data?.communityItineraries) ? data.communityItineraries : [],
+            center: Array.isArray(data?.center) ? data.center : null,
+            warning: data?.warning || '',
+            cached: Boolean(data?.cached),
+            stale: Boolean(data?.stale),
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const fallbackPlaces = getPlacesForDestination(targetDestination, {
+            searchQuery: '',
+            filterTag: '',
+            sortBy: 'Recommended',
+          }).map((place) => ({
+            ...place,
+            address: place.address || targetDestination,
+            description: place.overview || `${place.name} in ${targetDestination}`,
+            type: place.type || 'Attraction',
+            tags: Array.isArray(place.tags) ? place.tags : [],
+            openingHours: 'Check official website',
+            estimatedDuration: '2-3 hours',
+            website: '',
+            phone: '',
+          }));
+
+          const fallbackFoods = getFoodAndBeveragesForDestination(targetDestination, {
+            searchQuery: '',
+            dietaryFilter: 'All',
+            sortBy: 'Recommended',
+          }).map((food) => ({
+            ...food,
+            cuisine: food.cuisine || 'Local cuisine',
+            openingHours: 'Check venue listing',
+            description: food.description || `${food.name} in ${targetDestination}`,
+            website: '',
+            phone: '',
+          }));
+
+          const fallbackExperiences = getExperiencesForDestination(targetDestination, {
+            searchQuery: '',
+            typeFilter: 'All',
+            priceRange: 'All',
+            durationFilter: 'All',
+            sortBy: 'Recently added',
+          });
+
+          const fallbackCommunity = getCommunityItineraries(targetDestination, {
+            type: 'All',
+            sort: 'Most Popular',
+          });
+
+          setDiscoveryError(err?.message || 'Failed to load destination data');
+          setDiscoveryData({
+            places: fallbackPlaces,
+            foods: fallbackFoods,
+            experiences: fallbackExperiences,
+            communityItineraries: fallbackCommunity,
+            center: getMapCenterForDestination(targetDestination),
+            warning: 'Showing fallback recommendations while live data reconnects.',
+            cached: false,
+            stale: true,
+          });
+        }
+      } finally {
+        if (!cancelled) setDiscoveryLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.destination, trip?.locations]);
+
+  useEffect(() => {
+    if (trip) {
+      const d = getTripDays(trip);
+      setTitleDisplay(trip.title ?? `${d.length} days to ${trip.destination}`);
     }
-  }, [tripId]);
+  }, [tripId, trip?.destination, locationUpdateKey]);
 
   useEffect(() => {
     if (!titleDropdownOpen) return;
@@ -624,6 +959,150 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const openDateModal = () => setDateModalOpen(true);
 
+  const searchFlights = async () => {
+    if (!flightCode || !flightDepartDate) {
+      setFlightSearchError('Please enter both flight code and departure date');
+      return;
+    }
+
+    setFlightSearchLoading(true);
+    setFlightSearchError('');
+    setFlightSearchResults([]);
+
+    try {
+      // Parse flight code (e.g., "UA1" -> airline: "UA", flight_number: "1")
+      const match = flightCode.trim().toUpperCase().match(/^([A-Z0-9]{2})(\d+)$/);
+      if (!match) {
+        throw new Error('Invalid flight code format. Example: UA1, AA100, DL250');
+      }
+
+      const [, airlineCode, flightNumber] = match;
+
+      // Try real API first (AviationStack)
+      const apiKey = 'YOUR_AVIATIONSTACK_API_KEY'; // You'll need to get this from https://aviationstack.com/
+      
+      // For demo purposes, if no API key, use mock data
+      if (!apiKey || apiKey === 'YOUR_AVIATIONSTACK_API_KEY') {
+        // Generate realistic mock flight data
+        const airline = AIRLINES.find(a => a.id === airlineCode) || { name: `${airlineCode} Airlines` };
+        const departDate = new Date(flightDepartDate);
+        
+        // Mock realistic flights with proper timing
+        const mockFlights = [];
+        
+        // Flight 1 - Morning departure
+        const morningDept = new Date(departDate);
+        morningDept.setHours(8, 30, 0);
+        const morningArr = new Date(morningDept);
+        morningArr.setHours(morningArr.getHours() + 12); // 12 hour flight
+        
+        // Flight 2 - Afternoon departure  
+        const afternoonDept = new Date(departDate);
+        afternoonDept.setHours(14, 45, 0);
+        const afternoonArr = new Date(afternoonDept);
+        afternoonArr.setHours(afternoonArr.getHours() + 12);
+        
+        // Get reasonable airport pairs based on common routes
+        const routes = [
+          { from: 'SFO', to: 'SIN', fromName: 'San Francisco', toName: 'Singapore' },
+          { from: 'JFK', to: 'LHR', fromName: 'New York', toName: 'London' },
+          { from: 'LAX', to: 'NRT', fromName: 'Los Angeles', toName: 'Tokyo' },
+          { from: 'ORD', to: 'CDG', fromName: 'Chicago', toName: 'Paris' },
+          { from: 'SEA', to: 'HND', fromName: 'Seattle', toName: 'Tokyo' },
+        ];
+        
+        const route = routes[Math.floor(Math.random() * routes.length)];
+        
+        mockFlights.push({
+          id: `${airlineCode}${flightNumber}-1`,
+          flight_code: `${airlineCode}${flightNumber}`,
+          airline: airline.name,
+          airline_code: airlineCode,
+          flight_number: flightNumber,
+          departure_airport: route.from,
+          departure_city: route.fromName,
+          arrival_airport: route.to,
+          arrival_city: route.toName,
+          departure_time: morningDept.toISOString(),
+          arrival_time: morningArr.toISOString(),
+          flight_date: flightDepartDate,
+          status: 'scheduled',
+          aircraft: 'Boeing 777-300ER',
+          terminal: '1',
+          gate: 'A15',
+        });
+
+        // Add a second option
+        mockFlights.push({
+          id: `${airlineCode}${flightNumber}-2`,
+          flight_code: `${airlineCode}${flightNumber}`,
+          airline: airline.name,
+          airline_code: airlineCode,
+          flight_number: flightNumber,
+          departure_airport: route.from,
+          departure_city: route.fromName,
+          arrival_airport: route.to,
+          arrival_city: route.toName,
+          departure_time: afternoonDept.toISOString(),
+          arrival_time: afternoonArr.toISOString(),
+          flight_date: flightDepartDate,
+          status: 'scheduled',
+          aircraft: 'Airbus A350-900',
+          terminal: '2',
+          gate: 'B22',
+        });
+
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        setFlightSearchResults(mockFlights);
+        setFlightSearchLoading(false);
+        return;
+      }
+
+      // Real API call (if API key is provided)
+      const response = await fetch(
+        `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${airlineCode}${flightNumber}&flight_date=${flightDepartDate}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch flight data');
+      }
+
+      const data = await response.json();
+      
+      if (data.data && data.data.length > 0) {
+        const flights = data.data.map(flight => ({
+          id: flight.flight.iata || `${flight.airline.iata}${flight.flight.number}`,
+          flight_code: flight.flight.iata || `${flight.airline.iata}${flight.flight.number}`,
+          airline: flight.airline.name,
+          airline_code: flight.airline.iata,
+          flight_number: flight.flight.number,
+          departure_airport: flight.departure.iata,
+          departure_city: flight.departure.timezone?.split('/')[1] || flight.departure.airport,
+          arrival_airport: flight.arrival.iata,
+          arrival_city: flight.arrival.timezone?.split('/')[1] || flight.arrival.airport,
+          departure_time: flight.departure.scheduled,
+          arrival_time: flight.arrival.scheduled,
+          flight_date: flightDepartDate,
+          status: flight.flight_status,
+          aircraft: flight.aircraft?.registration || 'N/A',
+          terminal: flight.departure.terminal || 'N/A',
+          gate: flight.departure.gate || 'N/A',
+        }));
+        
+        setFlightSearchResults(flights);
+      } else {
+        setFlightSearchError('No flights found for this code and date');
+      }
+    } catch (error) {
+      console.error('Flight search error:', error);
+      setFlightSearchError(error.message || 'Failed to search flights. Please try again.');
+    } finally {
+      setFlightSearchLoading(false);
+    }
+  };
+
   const applyDateRange = (start, end) => {
     if (start && end && start <= end) {
       setDateRange({ startDate: start, endDate: end });
@@ -660,10 +1139,118 @@ export default function TripDetailsPage({ user, onLogout }) {
     setMapDayFilterSelected(allDayNums);
   };
 
-  const mapCenter = useMemo(
-    () => getMapCenterForDestination(trip?.destination || trip?.locations),
+  const cityQuery = useMemo(
+    () => extractPrimaryDestination(trip?.destination || trip?.locations),
     [trip?.destination, trip?.locations],
   );
+
+  const filteredPlaces = useMemo(() => {
+    const source = Array.isArray(discoveryData?.places) ? discoveryData.places : [];
+    let results = source;
+    if (placeSearchQuery.trim()) {
+      const q = placeSearchQuery.trim().toLowerCase();
+      results = results.filter((p) =>
+        (p.name || '').toLowerCase().includes(q)
+        || (p.address || '').toLowerCase().includes(q)
+        || (p.description || '').toLowerCase().includes(q),
+      );
+    }
+    if (placeFilterTag) {
+      const tag = placeFilterTag.toLowerCase();
+      results = results.filter((p) =>
+        (p.type || '').toLowerCase().includes(tag)
+        || (Array.isArray(p.tags) && p.tags.some((t) => String(t).toLowerCase().includes(tag))),
+      );
+    }
+    if (placeSortBy === 'Rating') {
+      results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (placeSortBy === 'Most reviewed') {
+      results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+    }
+    return results;
+  }, [discoveryData?.places, placeSearchQuery, placeFilterTag, placeSortBy]);
+
+  const filteredFoods = useMemo(() => {
+    const source = Array.isArray(discoveryData?.foods) ? discoveryData.foods : [];
+    let results = source;
+    if (foodSearchQuery.trim()) {
+      const q = foodSearchQuery.trim().toLowerCase();
+      results = results.filter((f) =>
+        (f.name || '').toLowerCase().includes(q)
+        || (f.address || '').toLowerCase().includes(q)
+        || (f.cuisine || '').toLowerCase().includes(q),
+      );
+    }
+    if (foodDietaryFilter && foodDietaryFilter !== 'All') {
+      const tag = foodDietaryFilter.toLowerCase();
+      results = results.filter((f) => Array.isArray(f.dietaryTags) && f.dietaryTags.some((d) => String(d).toLowerCase().includes(tag)));
+    }
+    if (foodSortBy === 'Rating') {
+      results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (foodSortBy === 'Most reviewed') {
+      results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+    }
+    return results;
+  }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy]);
+
+  const filteredExperiences = useMemo(() => {
+    const source = Array.isArray(discoveryData?.experiences) ? discoveryData.experiences : [];
+    let results = source;
+    if (experienceSearchQuery.trim()) {
+      const q = experienceSearchQuery.trim().toLowerCase();
+      results = results.filter((e) =>
+        (e.name || '').toLowerCase().includes(q)
+        || (e.description || '').toLowerCase().includes(q)
+        || (e.type || '').toLowerCase().includes(q),
+      );
+    }
+    if (experienceTypeFilter && experienceTypeFilter !== 'All') {
+      const type = experienceTypeFilter.toLowerCase();
+      results = results.filter((e) => (e.type || '').toLowerCase().includes(type));
+    }
+    if (experiencePriceRange && experiencePriceRange !== 'All') {
+      results = results.filter((e) => {
+        const price = Number(e.price || 0);
+        if (experiencePriceRange === 'US$0 - US$50') return price < 50;
+        if (experiencePriceRange === 'US$50 - US$100') return price >= 50 && price < 100;
+        if (experiencePriceRange === 'US$100 - US$200') return price >= 100 && price < 200;
+        if (experiencePriceRange === 'US$200+') return price >= 200;
+        return true;
+      });
+    }
+    if (experienceDurationFilter && experienceDurationFilter !== 'All') {
+      results = results.filter((e) => {
+        const hrs = Number(e.durationHours || 0);
+        if (experienceDurationFilter === 'Under 4 hours') return hrs < 4;
+        if (experienceDurationFilter === '4-8 hours') return hrs >= 4 && hrs <= 8;
+        if (experienceDurationFilter === '8-12 hours') return hrs > 8 && hrs <= 12;
+        if (experienceDurationFilter === '12+ hours') return hrs > 12;
+        return true;
+      });
+    }
+    if (experienceSortBy === 'Price: Low to High') {
+      results = [...results].sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (experienceSortBy === 'Price: High to Low') {
+      results = [...results].sort((a, b) => (b.price || 0) - (a.price || 0));
+    } else if (experienceSortBy === 'Highest Rated') {
+      results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+    return results;
+  }, [discoveryData?.experiences, experienceSearchQuery, experienceTypeFilter, experiencePriceRange, experienceDurationFilter, experienceSortBy]);
+
+  const communityItineraries = useMemo(
+    () => (Array.isArray(discoveryData?.communityItineraries) ? discoveryData.communityItineraries : []),
+    [discoveryData?.communityItineraries],
+  );
+
+  const mapCenter = useMemo(() => {
+    if (Array.isArray(discoveryData?.center) && discoveryData.center.length === 2) {
+      return discoveryData.center;
+    }
+    const firstItem = tripExpenseItems.find((i) => i.lat != null && i.lng != null);
+    if (firstItem) return [firstItem.lat, firstItem.lng];
+    return getMapCenterForDestination(trip?.destination || trip?.locations);
+  }, [discoveryData?.center, tripExpenseItems, locationUpdateKey, trip?.destination, trip?.locations]);
 
   const mapMarkers = useMemo(() => {
     const items = tripExpenseItems.filter((i) => i.lat != null && i.lng != null);
@@ -1505,9 +2092,23 @@ export default function TripDetailsPage({ user, onLogout }) {
                   const locationsStr = list.length > 0
                     ? list.map((l) => (l.country ? `${l.name}, ${l.country}` : l.name)).join('; ')
                     : '';
-                  trip.destination = list.length > 0 ? list[0].name : '';
-                  trip.locations = locationsStr;
+                  const newDestination = list.length > 0 ? list[0].name : '';
+                  
+                  // Close modal first for immediate feedback
                   setWhereModalOpen(false);
+                  
+                  // Update local state immediately for instant UI update
+                  setLocalDestination(newDestination);
+                  setLocalLocations(locationsStr);
+                  
+                  // Update the trip data in the store
+                  updateTrip(tripId, { 
+                    destination: newDestination, 
+                    locations: locationsStr 
+                  });
+                  
+                  // Force re-render with updated trip data
+                  setLocationUpdateKey(prev => prev + 1);
                 }}
               >
                 Update
@@ -2140,16 +2741,164 @@ export default function TripDetailsPage({ user, onLogout }) {
                   <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
                     <div className="trip-details__add-transport-field">
                       <label className="trip-details__add-transport-label">Flight code</label>
-                      <input type="text" className="trip-details__add-transport-input" placeholder="eg. UA614" value={flightCode} onChange={(e) => setFlightCode(e.target.value)} />
+                      <input 
+                        type="text" 
+                        className="trip-details__add-transport-input" 
+                        placeholder="eg. UA1, AA100, DL250" 
+                        value={flightCode} 
+                        onChange={(e) => {
+                          setFlightCode(e.target.value);
+                          setFlightSearchError('');
+                          setFlightSearchResults([]);
+                        }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            searchFlights();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="trip-details__add-transport-field">
                       <label className="trip-details__add-transport-label">Depart date</label>
-                      <input type="date" className="trip-details__add-transport-input" value={flightDepartDate} onChange={(e) => setFlightDepartDate(e.target.value)} />
+                      <input 
+                        type="date" 
+                        className="trip-details__add-transport-input" 
+                        value={flightDepartDate} 
+                        onChange={(e) => {
+                          setFlightDepartDate(e.target.value);
+                          setFlightSearchError('');
+                          setFlightSearchResults([]);
+                        }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            searchFlights();
+                          }
+                        }}
+                      />
                     </div>
-                    <button type="button" className="trip-details__add-transport-search" aria-label="Search flight">
+                    <button 
+                      type="button" 
+                      className="trip-details__add-transport-search" 
+                      aria-label="Search flight"
+                      onClick={searchFlights}
+                      disabled={flightSearchLoading}
+                    >
                       <Search size={20} aria-hidden />
                     </button>
                   </div>
+                  
+                  {flightSearchLoading && (
+                    <div className="trip-details__add-transport-loading">
+                      <div className="trip-details__add-transport-spinner" />
+                      <p>Searching for flights...</p>
+                    </div>
+                  )}
+                  
+                  {flightSearchError && (
+                    <div className="trip-details__add-transport-error">
+                      <Info size={18} aria-hidden />
+                      <p>{flightSearchError}</p>
+                    </div>
+                  )}
+                  
+                  {flightSearchResults.length > 0 && (
+                    <div className="trip-details__add-transport-results">
+                      <p className="trip-details__add-transport-results-title">{flightSearchResults.length} result{flightSearchResults.length > 1 ? 's' : ''} found</p>
+                      {flightSearchResults.map((flight) => {
+                        const deptTime = new Date(flight.departure_time);
+                        const arrTime = new Date(flight.arrival_time);
+                        const duration = Math.floor((arrTime - deptTime) / (1000 * 60 * 60));
+                        const durationMins = Math.floor(((arrTime - deptTime) / (1000 * 60)) % 60);
+                        
+                        return (
+                          <div key={flight.id} className="trip-details__add-transport-result-card">
+                            <div className="trip-details__add-transport-result-header">
+                              <div className="trip-details__add-transport-result-airline">
+                                <Plane size={20} aria-hidden />
+                                <div>
+                                  <strong>{flight.airline}</strong>
+                                  <span className="trip-details__add-transport-result-code">{flight.flight_code}</span>
+                                </div>
+                              </div>
+                              <span className={`trip-details__add-transport-result-status trip-details__add-transport-result-status--${flight.status}`}>
+                                {flight.status}
+                              </span>
+                            </div>
+                            
+                            <div className="trip-details__add-transport-result-route">
+                              <div className="trip-details__add-transport-result-location">
+                                <strong className="trip-details__add-transport-result-time">
+                                  {deptTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                </strong>
+                                <span className="trip-details__add-transport-result-airport">{flight.departure_airport}</span>
+                                <span className="trip-details__add-transport-result-city">{flight.departure_city}</span>
+                                {flight.terminal !== 'N/A' && (
+                                  <span className="trip-details__add-transport-result-terminal">Terminal {flight.terminal}{flight.gate !== 'N/A' ? `, Gate ${flight.gate}` : ''}</span>
+                                )}
+                              </div>
+                              
+                              <div className="trip-details__add-transport-result-duration">
+                                <div className="trip-details__add-transport-result-line">
+                                  <Plane size={16} aria-hidden />
+                                </div>
+                                <span className="trip-details__add-transport-result-time-info">
+                                  {duration}h {durationMins}m
+                                </span>
+                              </div>
+                              
+                              <div className="trip-details__add-transport-result-location">
+                                <strong className="trip-details__add-transport-result-time">
+                                  {arrTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                </strong>
+                                <span className="trip-details__add-transport-result-airport">{flight.arrival_airport}</span>
+                                <span className="trip-details__add-transport-result-city">{flight.arrival_city}</span>
+                              </div>
+                            </div>
+                            
+                            {flight.aircraft && (
+                              <div className="trip-details__add-transport-result-aircraft">
+                                <span>Aircraft: {flight.aircraft}</span>
+                              </div>
+                            )}
+                            
+                            <button 
+                              type="button" 
+                              className="trip-details__add-transport-result-add"
+                              onClick={() => {
+                                const name = `${flight.departure_airport} → ${flight.arrival_airport} (${flight.flight_code})`;
+                                const deptTimeStr = deptTime.toTimeString().slice(0, 5);
+                                const arrTimeStr = arrTime.toTimeString().slice(0, 5);
+                                
+                                setTripExpenseItems((prev) => [...prev, {
+                                  id: `flight-${flight.id}-${Date.now()}`,
+                                  name,
+                                  total: 0,
+                                  categoryId: 'transportations',
+                                  category: 'Transportations',
+                                  date: flight.flight_date,
+                                  detail: `${flight.airline} ${flight.flight_code} | Departs ${deptTimeStr}, Arrives ${arrTimeStr}`,
+                                  Icon: Plane,
+                                  notes: `Terminal: ${flight.terminal}, Gate: ${flight.gate}${flight.aircraft ? `, Aircraft: ${flight.aircraft}` : ''}`,
+                                  attachments: [],
+                                  transportType: 'flight',
+                                  flightData: flight,
+                                }]);
+                                
+                                setFlightSearchResults([]);
+                                setFlightCode('');
+                                setFlightDepartDate('');
+                                setAddTransportOpen(false);
+                              }}
+                            >
+                              Add to trip
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </>
               )}
               {(addTransportTab === 'Trains' || addTransportTab === 'Buses') && (
@@ -2258,11 +3007,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                       />
                       {transportFromSuggestionsOpen && customTransportFrom.trim() && (
                         <ul className="trip-details__custom-transport-suggestions">
-                          {searchAirportsAndCities(customTransportFrom).map((a) => (
-                            <li key={a.id}>
-                              <button type="button" className="trip-details__custom-transport-suggestion-item" onMouseDown={() => { setCustomTransportFrom(a.name); setTransportFromSuggestionsOpen(false); }}>{a.name}</button>
+                          {searchAirportsAndCities(customTransportFrom).length > 0 ? (
+                            searchAirportsAndCities(customTransportFrom).map((a) => (
+                              <li key={a.id}>
+                                <button 
+                                  type="button" 
+                                  className="trip-details__custom-transport-suggestion-item" 
+                                  onMouseDown={() => { 
+                                    setCustomTransportFrom(a.name); 
+                                    setTransportFromSuggestionsOpen(false); 
+                                  }}
+                                >
+                                  <MapPin size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{a.name}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">{a.type}</span>
+                                  </div>
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li>
+                              <button 
+                                type="button" 
+                                className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                onMouseDown={() => {
+                                  setTransportFromSuggestionsOpen(false);
+                                }}
+                              >
+                                <MapPin size={16} aria-hidden />
+                                <div className="trip-details__custom-transport-suggestion-text">
+                                  <span className="trip-details__custom-transport-suggestion-name">{customTransportFrom}</span>
+                                  <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                </div>
+                              </button>
                             </li>
-                          ))}
+                          )}
                         </ul>
                       )}
                     </div>
@@ -2283,11 +3063,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                       />
                       {transportToSuggestionsOpen && customTransportTo.trim() && (
                         <ul className="trip-details__custom-transport-suggestions">
-                          {searchAirportsAndCities(customTransportTo).map((a) => (
-                            <li key={a.id}>
-                              <button type="button" className="trip-details__custom-transport-suggestion-item" onMouseDown={() => { setCustomTransportTo(a.name); setTransportToSuggestionsOpen(false); }}>{a.name}</button>
+                          {searchAirportsAndCities(customTransportTo).length > 0 ? (
+                            searchAirportsAndCities(customTransportTo).map((a) => (
+                              <li key={a.id}>
+                                <button 
+                                  type="button" 
+                                  className="trip-details__custom-transport-suggestion-item" 
+                                  onMouseDown={() => { 
+                                    setCustomTransportTo(a.name); 
+                                    setTransportToSuggestionsOpen(false); 
+                                  }}
+                                >
+                                  <MapPin size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{a.name}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">{a.type}</span>
+                                  </div>
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li>
+                              <button 
+                                type="button" 
+                                className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                onMouseDown={() => {
+                                  setTransportToSuggestionsOpen(false);
+                                }}
+                              >
+                                <MapPin size={16} aria-hidden />
+                                <div className="trip-details__custom-transport-suggestion-text">
+                                  <span className="trip-details__custom-transport-suggestion-name">{customTransportTo}</span>
+                                  <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                </div>
+                              </button>
                             </li>
-                          ))}
+                          )}
                         </ul>
                       )}
                     </div>
@@ -2361,11 +3172,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                       />
                       {transportFromSuggestionsOpen && customTransportFrom.trim() && (
                         <ul className="trip-details__custom-transport-suggestions">
-                          {searchAirportsAndCities(customTransportFrom).map((a) => (
-                            <li key={a.id}>
-                              <button type="button" className="trip-details__custom-transport-suggestion-item" onMouseDown={() => { setCustomTransportFrom(a.name); setTransportFromSuggestionsOpen(false); }}>{a.name}</button>
+                          {searchAirportsAndCities(customTransportFrom).length > 0 ? (
+                            searchAirportsAndCities(customTransportFrom).map((a) => (
+                              <li key={a.id}>
+                                <button 
+                                  type="button" 
+                                  className="trip-details__custom-transport-suggestion-item" 
+                                  onMouseDown={() => { 
+                                    setCustomTransportFrom(a.name); 
+                                    setTransportFromSuggestionsOpen(false); 
+                                  }}
+                                >
+                                  <Plane size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{a.name}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">{a.type}</span>
+                                  </div>
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li>
+                              <button 
+                                type="button" 
+                                className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                onMouseDown={() => {
+                                  setTransportFromSuggestionsOpen(false);
+                                }}
+                              >
+                                <MapPin size={16} aria-hidden />
+                                <div className="trip-details__custom-transport-suggestion-text">
+                                  <span className="trip-details__custom-transport-suggestion-name">{customTransportFrom}</span>
+                                  <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                </div>
+                              </button>
                             </li>
-                          ))}
+                          )}
                         </ul>
                       )}
                     </div>
@@ -2386,11 +3228,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                       />
                       {transportToSuggestionsOpen && customTransportTo.trim() && (
                         <ul className="trip-details__custom-transport-suggestions">
-                          {searchAirportsAndCities(customTransportTo).map((a) => (
-                            <li key={a.id}>
-                              <button type="button" className="trip-details__custom-transport-suggestion-item" onMouseDown={() => { setCustomTransportTo(a.name); setTransportToSuggestionsOpen(false); }}>{a.name}</button>
+                          {searchAirportsAndCities(customTransportTo).length > 0 ? (
+                            searchAirportsAndCities(customTransportTo).map((a) => (
+                              <li key={a.id}>
+                                <button 
+                                  type="button" 
+                                  className="trip-details__custom-transport-suggestion-item" 
+                                  onMouseDown={() => { 
+                                    setCustomTransportTo(a.name); 
+                                    setTransportToSuggestionsOpen(false); 
+                                  }}
+                                >
+                                  <Plane size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{a.name}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">{a.type}</span>
+                                  </div>
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li>
+                              <button 
+                                type="button" 
+                                className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                onMouseDown={() => {
+                                  setTransportToSuggestionsOpen(false);
+                                }}
+                              >
+                                <MapPin size={16} aria-hidden />
+                                <div className="trip-details__custom-transport-suggestion-text">
+                                  <span className="trip-details__custom-transport-suggestion-name">{customTransportTo}</span>
+                                  <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                </div>
+                              </button>
                             </li>
-                          ))}
+                          )}
                         </ul>
                       )}
                     </div>
@@ -2509,21 +3382,102 @@ export default function TripDetailsPage({ user, onLogout }) {
       )}
 
       {addPlacesOpen && (() => {
-        const showingDetail = placeDetailsView != null;
-        const detailPlace = showingDetail ? getPlaceDetails(placeDetailsView) : null;
-        const nearbyPlaces = detailPlace ? getNearbyPlaces(detailPlace, trip.destination || trip.locations) : [];
-        const mapPlaces = showingDetail && detailPlace
+        const showingPlaceDetail = placeDetailsView != null;
+        const showingItineraryDetail = itineraryDetailsView != null;
+        const showingAnyDetail = showingPlaceDetail || showingItineraryDetail;
+        const detailPlace = showingPlaceDetail ? placeDetailsView : null;
+        const nearbyPlaces = detailPlace
+          ? filteredPlaces
+              .filter((p) => p.id !== detailPlace.id && p.lat != null && p.lng != null)
+              .map((p) => ({ ...p, dist: distanceBetween(detailPlace, p) }))
+              .sort((a, b) => a.dist - b.dist)
+              .slice(0, 6)
+          : [];
+        const mapPlaces = showingPlaceDetail && detailPlace
           ? [detailPlace, ...nearbyPlaces].filter((p) => p && p.lat != null && p.lng != null)
-          : getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
+          : filteredPlaces;
         const addPlacesMarkers = mapPlaces
           .filter((p) => p.lat != null && p.lng != null)
           .map((p, i) => ({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, dayNum: (i % Math.max(days.length, 1)) + 1 }));
         const mapCenterDetail = detailPlace && detailPlace.lat != null ? [detailPlace.lat, detailPlace.lng] : mapCenter;
         return (
           <>
-            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); }} />
-            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingDetail ? 'place-detail-title' : 'add-places-title'} aria-modal="true">
-              {!showingDetail ? (
+            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); setItineraryDetailsView(null); }} />
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'place-detail-title') : 'add-places-title'} aria-modal="true">
+              {showingItineraryDetail ? (
+                // Itinerary Detail View
+                <>
+                  <div className="trip-details__itinerary-detail-panel">
+                    <div className="trip-details__itinerary-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => setItineraryDetailsView(null)} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setItineraryDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="itinerary-detail-title" className="trip-details__itinerary-detail-name">{itineraryDetailsView.title}</h1>
+                      <div className="trip-details__itinerary-detail-meta">
+                        <span className="trip-details__itinerary-detail-creator">
+                          <Users size={16} aria-hidden /> {itineraryDetailsView.creator}
+                        </span>
+                        <span className="trip-details__itinerary-detail-stat">24,668 views</span>
+                        <span className="trip-details__itinerary-detail-stat">{itineraryDetailsView.duration}</span>
+                        <span className="trip-details__itinerary-detail-stat">1 country</span>
+                        <span className="trip-details__itinerary-detail-stat">21 places</span>
+                      </div>
+                      <div className="trip-details__itinerary-detail-tags">
+                        <span className="trip-details__itinerary-detail-tag">{itineraryDetailsView.type}</span>
+                        <span className="trip-details__itinerary-detail-tag">Landmarks</span>
+                        <span className="trip-details__itinerary-detail-tag">Shopping</span>
+                        <span className="trip-details__itinerary-detail-tag">Other</span>
+                        <span className="trip-details__itinerary-detail-tag">Entertainment</span>
+                      </div>
+                    </div>
+                    <div className="trip-details__itinerary-detail-content">
+                      <div className="trip-details__itinerary-detail-day">
+                        <div className="trip-details__itinerary-detail-day-header">
+                          <span className="trip-details__itinerary-detail-day-badge">Day 1</span>
+                          <span className="trip-details__itinerary-detail-day-title">Exploring Asakusa's Rich Heritage and Charm</span>
+                        </div>
+                        <div className="trip-details__itinerary-detail-places">
+                          <div className="trip-details__itinerary-detail-place">
+                            <div className="trip-details__itinerary-detail-place-img-wrap">
+                              <img src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&h=260&fit=crop" alt="" className="trip-details__itinerary-detail-place-img" />
+                            </div>
+                            <div className="trip-details__itinerary-detail-place-content">
+                              <h3 className="trip-details__itinerary-detail-place-name">Asakusa Shrine</h3>
+                              <div className="trip-details__itinerary-detail-place-rating">
+                                <Star size={14} fill="currentColor" aria-hidden /> 4.4 (3,493) · Place
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-address">
+                                <MapPin size={14} aria-hidden /> 2-chōme-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-duration">
+                                <Clock size={14} aria-hidden /> Duration: 02 hr
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-note">
+                                <strong>Note:</strong> I started my first day in Tokyo by visiting Asakusa, one of the most beautiful and colorful neighborhoods in the city. Asakusa maintains a traditional atmosphere unlike other parts of Tokyo.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="trip-details__add-places-map-panel">
+                    <div className="trip-details__add-places-map">
+                      <TripMap
+                        center={mapCenter}
+                        zoom={11}
+                        markers={addPlacesMarkers}
+                        activeDayNums={allDayNums}
+                        className="trip-details__add-places-trip-map"
+                        fitBounds={false}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : !showingPlaceDetail ? (
                 <>
                   <div className="trip-details__add-places-head">
                     <h2 id="add-places-title" className="trip-details__add-places-title">Add Places</h2>
@@ -2549,9 +3503,61 @@ export default function TripDetailsPage({ user, onLogout }) {
                         />
                       </div>
                       {(() => {
-                        const places = getPlacesForDestination(trip.destination || trip.locations, { searchQuery: placeSearchQuery, filterTag: placeFilterTag, sortBy: placeSortBy });
+                        const places = filteredPlaces;
+                        
                         return (
                           <>
+                            {discoveryError && (
+                              <p className="trip-details__add-places-results">Could not load live data: {discoveryError}</p>
+                            )}
+                            {discoveryLoading && (
+                              <p className="trip-details__add-places-results">Loading live places for {cityQuery}...</p>
+                            )}
+                            {communityItineraries.length > 0 && (
+                              <div className="trip-details__add-places-community-section">
+                                <h3 className="trip-details__add-places-community-title">
+                                  <Users size={20} aria-hidden /> Community Itineraries for {cityQuery}
+                                </h3>
+                                <p className="trip-details__add-places-community-subtitle">
+                                  Explore trip ideas created by other travelers
+                                </p>
+                                <div className="trip-details__add-places-community-grid">
+                                  {communityItineraries.slice(0, 6).map((itinerary) => (
+                                    <div 
+                                      key={itinerary.id} 
+                                      className="trip-details__add-places-community-card"
+                                      onClick={() => setItineraryDetailsView(itinerary)}
+                                      role="button"
+                                      tabIndex={0}
+                                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setItineraryDetailsView(itinerary); } }}
+                                    >
+                                      <div className="trip-details__add-places-community-card-img-wrap">
+                                        <img src={itinerary.image} alt="" className="trip-details__add-places-community-card-img" />
+                                        <span className="trip-details__add-places-community-card-duration">{itinerary.duration}</span>
+                                      </div>
+                                      <div className="trip-details__add-places-community-card-content">
+                                        <h4 className="trip-details__add-places-community-card-title">{itinerary.title}</h4>
+                                        <div className="trip-details__add-places-community-card-meta">
+                                          <span className="trip-details__add-places-community-card-creator">
+                                            <Users size={14} aria-hidden /> {itinerary.creator}
+                                          </span>
+                                          <span className="trip-details__add-places-community-card-type">{itinerary.type}</span>
+                                        </div>
+                                        <div className="trip-details__add-places-community-card-footer">
+                                          <span className="trip-details__add-places-community-card-price">
+                                            {itinerary.price} {itinerary.currency}
+                                          </span>
+                                          <span className="trip-details__add-places-community-card-likes">
+                                            <Heart size={14} aria-hidden /> {itinerary.likes}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
                             <p className="trip-details__add-places-results">{places.length} results found</p>
                             <div className="trip-details__add-places-filters">
                               {PLACE_FILTER_TAGS.map((tag) => (
@@ -2579,6 +3585,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 className="trip-details__add-places-card trip-details__add-places-card--manual"
                                 onClick={() => {
                                   const day = days.find((d) => d.dayNum === addPlacesDay);
+                                  setCustomPlaceName('');
+                                  setCustomPlaceAddress('');
+                                  setCustomPlaceAddressSelection(null);
+                                  setCustomPlaceAddressSuggestionsOpen(false);
                                   setCustomPlaceDateKey(day?.date || days[0]?.date || '');
                                   setAddCustomPlaceOpen(true);
                                 }}
@@ -2600,38 +3610,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <img src={place.image} alt="" className="trip-details__add-places-card-img" />
                                   <button type="button" className="trip-details__add-places-card-heart" aria-label={place.saved ? 'Unsave' : 'Save'} onClick={(e) => e.stopPropagation()}>
                                     <Heart size={18} fill={place.saved ? 'currentColor' : 'none'} aria-hidden />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="trip-details__add-places-card-add"
-                                    aria-label="Add to trip"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const day = days.find((d) => d.dayNum === addPlacesDay);
-                                      setTripExpenseItems((prev) => [...prev, {
-                                        id: `place-${place.id}-${Date.now()}`,
-                                        name: place.name,
-                                        total: 0,
-                                        categoryId: 'places',
-                                        category: 'Places',
-                                        date: day?.date || days[0]?.date || '',
-                                        detail: place.name,
-                                        Icon: Camera,
-                                        lat: place.lat,
-                                        lng: place.lng,
-                                        notes: '',
-                                        attachments: [],
-                                        startTime: '07:00',
-                                        durationHrs: 1,
-                                        durationMins: 0,
-                                        externalLink: '',
-                                        placeImageUrl: place.image,
-                                        rating: place.rating,
-                                        reviewCount: place.reviewCount,
-                                      }]);
-                                    }}
-                                  >
-                                    <Plus size={18} aria-hidden />
                                   </button>
                                   <div className="trip-details__add-places-card-info">
                                     <span className="trip-details__add-places-card-name">{place.name}</span>
@@ -2714,28 +3692,20 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__place-detail-add-btn"
                               onClick={() => {
                                 const day = days.find((d) => d.dayNum === addPlacesDay);
-                                setTripExpenseItems((prev) => [...prev, {
-                                  id: `place-${detailPlace.id}-${Date.now()}`,
-                                  name: detailPlace.name,
-                                  total: 0,
+                                setAddToTripItem({
+                                  type: 'place',
+                                  data: detailPlace,
                                   categoryId: 'places',
                                   category: 'Places',
-                                  date: day?.date || days[0]?.date || '',
-                                  detail: detailPlace.address || detailPlace.name,
                                   Icon: Camera,
-                                  lat: detailPlace.lat,
-                                  lng: detailPlace.lng,
-                                  notes: '',
-                                  attachments: [],
-                                  startTime: '07:00',
-                                  durationHrs: 1,
-                                  durationMins: 0,
-                                  externalLink: detailPlace.website || '',
-                                  placeImageUrl: detailPlace.image,
-                                  rating: detailPlace.rating,
-                                  reviewCount: detailPlace.reviewCount,
-                                }]);
-                                setPlaceDetailsView(null);
+                                });
+                                setAddToTripDate(day?.date || days[0]?.date || '');
+                                setAddToTripStartTime('07:00');
+                                setAddToTripDurationHrs(1);
+                                setAddToTripDurationMins(0);
+                                setAddToTripNotes('');
+                                setAddToTripCost('');
+                                setAddToTripModalOpen(true);
                               }}
                             >
                               Add to trip
@@ -2800,38 +3770,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 <button type="button" className="trip-details__place-detail-nearby-heart" aria-label="Save" onClick={(e) => e.stopPropagation()}>
                                   <Heart size={16} aria-hidden />
                                 </button>
-                                <button
-                                  type="button"
-                                  className="trip-details__place-detail-nearby-plus"
-                                  aria-label="Add to trip"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const day = days.find((d) => d.dayNum === addPlacesDay);
-                                    setTripExpenseItems((prev) => [...prev, {
-                                      id: `place-${near.id}-${Date.now()}`,
-                                      name: near.name,
-                                      total: 0,
-                                      categoryId: 'places',
-                                      category: 'Places',
-                                      date: day?.date || days[0]?.date || '',
-                                      detail: near.address || near.name,
-                                      Icon: Camera,
-                                      lat: near.lat,
-                                      lng: near.lng,
-                                      notes: '',
-                                      attachments: [],
-                                      startTime: '07:00',
-                                      durationHrs: 1,
-                                      durationMins: 0,
-                                      externalLink: near.website || '',
-                                      placeImageUrl: near.image,
-                                      rating: near.rating,
-                                      reviewCount: near.reviewCount,
-                                    }]);
-                                  }}
-                                >
-                                  <Plus size={16} aria-hidden />
-                                </button>
                                 <div className="trip-details__place-detail-nearby-info">
                                   <span className="trip-details__place-detail-nearby-name">{near.name}</span>
                                   <span className="trip-details__place-detail-nearby-rating">{near.rating} ({near.reviewCount?.toLocaleString() ?? '0'})</span>
@@ -2869,6 +3807,658 @@ export default function TripDetailsPage({ user, onLogout }) {
         );
       })()}
 
+      {addFoodOpen && (() => {
+        const showingFoodDetail = foodDetailsView != null;
+        const showingItineraryDetail = itineraryDetailsView != null;
+        const showingAnyDetail = showingFoodDetail || showingItineraryDetail;
+        const foodPlaces = filteredFoods;
+        const foodieItineraries = communityItineraries.filter((it) => String(it.type || '').toLowerCase().includes('food'));
+        const localCommunityItineraries = foodieItineraries.length > 0 ? foodieItineraries : communityItineraries;
+
+        return (
+          <>
+            <button
+              type="button"
+              className="trip-details__modal-backdrop"
+              aria-label="Close"
+              onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); setFoodDetailsView(null); }}
+            />
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'food-detail-title') : 'add-food-title'} aria-modal="true">
+              {showingItineraryDetail ? (
+                // Itinerary Detail View
+                <>
+                  <div className="trip-details__itinerary-detail-panel">
+                    <div className="trip-details__itinerary-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => setItineraryDetailsView(null)} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="itinerary-detail-title" className="trip-details__itinerary-detail-name">{itineraryDetailsView.title}</h1>
+                      <div className="trip-details__itinerary-detail-meta">
+                        <span className="trip-details__itinerary-detail-creator">
+                          <Users size={16} aria-hidden /> {itineraryDetailsView.creator}
+                        </span>
+                        <span className="trip-details__itinerary-detail-stat">24,668 views</span>
+                        <span className="trip-details__itinerary-detail-stat">{itineraryDetailsView.duration}</span>
+                        <span className="trip-details__itinerary-detail-stat">1 country</span>
+                        <span className="trip-details__itinerary-detail-stat">21 places</span>
+                      </div>
+                      <div className="trip-details__itinerary-detail-tags">
+                        <span className="trip-details__itinerary-detail-tag">{itineraryDetailsView.type}</span>
+                        <span className="trip-details__itinerary-detail-tag">Landmarks</span>
+                        <span className="trip-details__itinerary-detail-tag">Shopping</span>
+                        <span className="trip-details__itinerary-detail-tag">Other</span>
+                        <span className="trip-details__itinerary-detail-tag">Entertainment</span>
+                      </div>
+                    </div>
+                    <div className="trip-details__itinerary-detail-content">
+                      <div className="trip-details__itinerary-detail-day">
+                        <div className="trip-details__itinerary-detail-day-header">
+                          <span className="trip-details__itinerary-detail-day-badge">Day 1</span>
+                          <span className="trip-details__itinerary-detail-day-title">Exploring Asakusa's Rich Heritage and Charm</span>
+                        </div>
+                        <div className="trip-details__itinerary-detail-places">
+                          <div className="trip-details__itinerary-detail-place">
+                            <div className="trip-details__itinerary-detail-place-img-wrap">
+                              <img src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&h=260&fit=crop" alt="" className="trip-details__itinerary-detail-place-img" />
+                            </div>
+                            <div className="trip-details__itinerary-detail-place-content">
+                              <h3 className="trip-details__itinerary-detail-place-name">Asakusa Shrine</h3>
+                              <div className="trip-details__itinerary-detail-place-rating">
+                                <Star size={14} fill="currentColor" aria-hidden /> 4.4 (3,493) · Place
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-address">
+                                <MapPin size={14} aria-hidden /> 2-chōme-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-duration">
+                                <Clock size={14} aria-hidden /> Duration: 02 hr
+                              </div>
+                              <div className="trip-details__itinerary-detail-place-note">
+                                <strong>Note:</strong> I started my first day in Tokyo by visiting Asakusa, one of the most beautiful and colorful neighborhoods in the city. Asakusa maintains a traditional atmosphere unlike other parts of Tokyo.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="trip-details__add-places-map-panel">
+                    <div className="trip-details__add-places-map">
+                      <TripMap
+                        center={mapCenter}
+                        zoom={11}
+                        markers={[]}
+                        activeDayNums={allDayNums}
+                        className="trip-details__add-places-trip-map"
+                        fitBounds={false}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : showingFoodDetail ? (
+                // Food Detail View
+                <>
+                  <div className="trip-details__place-detail-panel">
+                    <div className="trip-details__place-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => { setFoodDetailsView(null); setFoodDetailsTab('overview'); }} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); setFoodDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="food-detail-title" className="trip-details__place-detail-name">{foodDetailsView.name}</h1>
+                      <div className="trip-details__place-detail-meta">
+                        <span className="trip-details__place-detail-rating">
+                          <Star size={16} fill="currentColor" aria-hidden /> {foodDetailsView.rating} ({foodDetailsView.reviewCount?.toLocaleString() ?? '0'})
+                        </span>
+                        <span className="trip-details__place-detail-badge">{foodDetailsView.priceLevel}</span>
+                        <button type="button" className="trip-details__place-detail-heart" aria-label="Save">
+                          <Heart size={20} aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="trip-details__place-detail-hero">
+                      <img src={foodDetailsView.image} alt="" className="trip-details__place-detail-img" />
+                    </div>
+                    <div className="trip-details__place-detail-tabs">
+                      <button type="button" className={`trip-details__place-detail-tab ${foodDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setFoodDetailsTab('overview')}>Overview</button>
+                    </div>
+                    <div className="trip-details__place-detail-content">
+                      {foodDetailsTab === 'overview' && (
+                        <>
+                          <div className="trip-details__place-detail-add-wrap">
+                            <button
+                              type="button"
+                              className="trip-details__place-detail-add-btn"
+                              onClick={() => {
+                                const day = days.find((d) => d.dayNum === addFoodDay);
+                                setAddToTripItem({
+                                  type: 'food',
+                                  data: foodDetailsView,
+                                  categoryId: 'food',
+                                  category: 'Food & Beverage',
+                                  Icon: UtensilsCrossed,
+                                });
+                                setAddToTripDate(day?.date || days[0]?.date || '');
+                                setAddToTripStartTime('07:00');
+                                setAddToTripDurationHrs(1);
+                                setAddToTripDurationMins(0);
+                                setAddToTripNotes('');
+                                setAddToTripCost('');
+                                setAddToTripModalOpen(true);
+                              }}
+                            >
+                              Add to trip
+                            </button>
+                          </div>
+                          {foodDetailsView.address && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Address</h3>
+                              <p className="trip-details__place-detail-section-text">{foodDetailsView.address}</p>
+                            </div>
+                          )}
+                          {foodDetailsView.dietaryTags?.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Dietary Options</h3>
+                              <div className="trip-details__add-food-card-badges">
+                                {foodDetailsView.dietaryTags.map((tag) => (
+                                  <span key={tag} className="trip-details__add-food-card-badge">{tag}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Review</h3>
+                            <p className="trip-details__place-detail-section-text">
+                              <Star size={14} fill="currentColor" aria-hidden /> {foodDetailsView.rating} ({foodDetailsView.reviewCount?.toLocaleString() ?? '0'} reviews)
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="trip-details__add-places-map-panel">
+                    <div className="trip-details__add-places-map">
+                      <TripMap
+                        center={foodDetailsView.lat && foodDetailsView.lng ? [foodDetailsView.lat, foodDetailsView.lng] : mapCenter}
+                        zoom={14}
+                        markers={[{ id: foodDetailsView.id, name: foodDetailsView.name, lat: foodDetailsView.lat, lng: foodDetailsView.lng, dayNum: 1 }]}
+                        activeDayNums={allDayNums}
+                        className="trip-details__add-places-trip-map"
+                        fitBounds={false}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+              <div className="trip-details__add-places-head">
+                <h2 id="add-food-title" className="trip-details__add-places-title">Add Food &amp; Beverages</h2>
+                <div className="trip-details__add-places-location">
+                  <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
+                  <span>{trip.locations || trip.destination}</span>
+                </div>
+                <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); }}>
+                  <X size={20} aria-hidden />
+                </button>
+              </div>
+              <div className="trip-details__add-places-body trip-details__add-food-body">
+                <div className="trip-details__add-places-list-panel trip-details__add-food-panel">
+                  {communityItineraries.length > 0 && (
+                    <div className="trip-details__add-places-community-section">
+                      <h3 className="trip-details__add-places-community-title">
+                        <Users size={20} aria-hidden /> Community Itineraries for {cityQuery}
+                      </h3>
+                      <p className="trip-details__add-places-community-subtitle">
+                        Food-focused plans from other travelers in {cityQuery}
+                      </p>
+                      <div className="trip-details__add-places-community-grid">
+                        {communityItineraries.slice(0, 3).map((itinerary) => (
+                          <div 
+                            key={itinerary.id} 
+                            className="trip-details__add-places-community-card"
+                            onClick={() => setItineraryDetailsView(itinerary)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setItineraryDetailsView(itinerary); } }}
+                          >
+                            <img src={itinerary.image} alt={itinerary.title} className="trip-details__add-places-community-image" />
+                            <div className="trip-details__add-places-community-content">
+                              <div className="trip-details__add-places-community-top">
+                                <span className="trip-details__add-places-community-likes">{itinerary.likes?.toLocaleString() ?? 0} liked</span>
+                              </div>
+                              <h4 className="trip-details__add-places-community-card-title">{itinerary.title}</h4>
+                              <div className="trip-details__add-places-community-meta">
+                                <span className="trip-details__add-places-community-creator">
+                                  <Users size={14} aria-hidden /> {itinerary.creator}
+                                </span>
+                                <span className="trip-details__add-places-community-type">{itinerary.duration}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="trip-details__add-places-search-wrap">
+                    <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
+                    <input
+                      type="text"
+                      className="trip-details__add-places-search-input"
+                      placeholder="Search by place name..."
+                      value={foodSearchQuery}
+                      onChange={(e) => setFoodSearchQuery(e.target.value)}
+                      aria-label="Search food and beverage places"
+                    />
+                  </div>
+
+                  <div className="trip-details__add-food-toolbar">
+                    <p className="trip-details__add-places-results">{foodPlaces.length} results found</p>
+                    <div className="trip-details__add-food-toolbar-actions">
+                      <select
+                        className="trip-details__add-places-sort-select"
+                        value={foodDietaryFilter}
+                        onChange={(e) => setFoodDietaryFilter(e.target.value)}
+                        aria-label="Filter by dietary needs"
+                      >
+                        {FOOD_DIETARY_FILTERS.map((filter) => (
+                          <option key={filter} value={filter}>{filter}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="trip-details__add-places-sort-select"
+                        value={foodSortBy}
+                        onChange={(e) => setFoodSortBy(e.target.value)}
+                        aria-label="Sort food and beverage places"
+                      >
+                        {FOOD_SORT_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {discoveryError && (
+                    <p className="trip-details__add-places-results">Could not load live data: {discoveryError}</p>
+                  )}
+                  {discoveryData?.warning && (
+                    <p className="trip-details__add-places-results">{discoveryData.warning}</p>
+                  )}
+                  {discoveryLoading && (
+                    <p className="trip-details__add-places-results">Loading live food places for {cityQuery}...</p>
+                  )}
+
+                  <div className="trip-details__add-places-grid">
+                    <button
+                      type="button"
+                      className="trip-details__add-places-card trip-details__add-places-card--manual"
+                      onClick={() => {
+                        const day = days.find((d) => d.dayNum === addFoodDay);
+                        setCustomFoodName('');
+                        setCustomFoodAddress('');
+                        setCustomFoodAddressSelection(null);
+                        setCustomFoodAddressSuggestionsOpen(false);
+                        setCustomFoodDateKey(day?.date || days[0]?.date || '');
+                        setAddCustomFoodOpen(true);
+                      }}
+                    >
+                      <div className="trip-details__add-places-card-manual-icon">
+                        <UtensilsCrossed size={24} aria-hidden />
+                      </div>
+                      <span className="trip-details__add-places-card-manual-text">Can&apos;t find what you need? Add manually.</span>
+                    </button>
+
+                    {foodPlaces.map((foodPlace) => (
+                      <div 
+                        key={foodPlace.id} 
+                        className="trip-details__add-places-card"
+                        onClick={() => setFoodDetailsView(foodPlace)}
+                        role="button"
+                        tabIndex={0}
+                        style={{ cursor: 'pointer' }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFoodDetailsView(foodPlace); } }}
+                      >
+                        <img src={foodPlace.image} alt={foodPlace.name} className="trip-details__add-places-card-image" />
+                        <button 
+                          type="button" 
+                          className="trip-details__add-places-card-save" 
+                          aria-label="Save to wishlist"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Heart size={18} fill="none" aria-hidden />
+                        </button>
+                        <div className="trip-details__add-places-card-content">
+                          <h3 className="trip-details__add-places-card-title">{foodPlace.name}</h3>
+                          <div className="trip-details__add-food-card-meta">
+                            <span>{foodPlace.rating} ({foodPlace.reviewCount?.toLocaleString() ?? '0'})</span>
+                            <span>{foodPlace.priceLevel}</span>
+                          </div>
+                          {foodPlace.dietaryTags?.length > 0 && (
+                            <div className="trip-details__add-food-card-badges">
+                              {foodPlace.dietaryTags.slice(0, 2).map((tag) => (
+                                <span key={tag} className="trip-details__add-food-card-badge">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                          <p className="trip-details__add-food-card-address">{foodPlace.address}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!discoveryLoading && !discoveryError && foodPlaces.length === 0 && (
+                    <p className="trip-details__add-places-results">No food places found for this destination yet. Try a broader search or add one manually.</p>
+                  )}
+                </div>
+              </div>
+              </>
+              )}
+            </div>
+          </>
+        );
+      })()}
+
+      {addExperiencesOpen && (() => {
+        const showingExperienceDetail = experienceDetailsView != null;
+        const experiences = filteredExperiences;
+
+        return (
+          <>
+            <button
+              type="button"
+              className="trip-details__modal-backdrop"
+              aria-label="Close"
+              onClick={() => { setAddExperiencesOpen(false); setExperienceDetailsView(null); }}
+            />
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingExperienceDetail ? 'experience-detail-title' : 'add-experiences-title'} aria-modal="true">
+              {showingExperienceDetail ? (
+                // Experience Detail View
+                <>
+                  <div className="trip-details__place-detail-panel">
+                    <div className="trip-details__place-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => { setExperienceDetailsView(null); setExperienceDetailsTab('overview'); }} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddExperiencesOpen(false); setExperienceDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="experience-detail-title" className="trip-details__place-detail-name">{experienceDetailsView.name}</h1>
+                      <div className="trip-details__place-detail-meta">
+                        <span className="trip-details__place-detail-rating">
+                          <Star size={16} fill="currentColor" aria-hidden /> {experienceDetailsView.rating} ({experienceDetailsView.reviewCount?.toLocaleString() ?? '0'})
+                        </span>
+                        <span className="trip-details__place-detail-badge">{experienceDetailsView.type}</span>
+                        <span className="trip-details__place-detail-badge">Duration: {experienceDetailsView.duration}</span>
+                        <button type="button" className="trip-details__place-detail-heart" aria-label="Save">
+                          <Heart size={20} aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="trip-details__place-detail-hero">
+                      <img src={experienceDetailsView.image} alt="" className="trip-details__place-detail-img" />
+                    </div>
+                    <div className="trip-details__place-detail-tabs">
+                      <button type="button" className={`trip-details__place-detail-tab ${experienceDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setExperienceDetailsTab('overview')}>Overview</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${experienceDetailsTab === 'booking' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setExperienceDetailsTab('booking')}>Package Options</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${experienceDetailsTab === 'included' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setExperienceDetailsTab('included')}>Included / Excluded</button>
+                    </div>
+                    <div className="trip-details__place-detail-content">
+                      {experienceDetailsTab === 'overview' ? (
+                        <>
+                          {experienceDetailsView.description && (
+                            <>
+                              <h3 className="trip-details__place-detail-section-title">Description</h3>
+                              <p className="trip-details__place-detail-overview">{experienceDetailsView.description}</p>
+                            </>
+                          )}
+                          {experienceDetailsView.highlights && experienceDetailsView.highlights.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Highlights</h3>
+                              <ul className="trip-details__place-detail-hours">
+                                {experienceDetailsView.highlights.map((highlight, idx) => (
+                                  <li key={idx}>{highlight}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {experienceDetailsView.address && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Address</h3>
+                              <p className="trip-details__place-detail-section-text">{experienceDetailsView.address}</p>
+                            </div>
+                          )}
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Review</h3>
+                            <p className="trip-details__place-detail-section-text">
+                              <Star size={14} fill="currentColor" aria-hidden /> {experienceDetailsView.rating} ({experienceDetailsView.reviewCount?.toLocaleString() ?? '0'} reviews)
+                            </p>
+                          </div>
+                        </>
+                      ) : experienceDetailsTab === 'booking' ? (
+                        <>
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Booking Options</h3>
+                            <p className="trip-details__place-detail-section-text">The operator will reach out to you after purchase nearing your dates.</p>
+                            
+                            {experienceDetailsView.bookingOptions && experienceDetailsView.bookingOptions.length > 0 && (
+                              <div style={{ marginTop: '16px' }}>
+                                {experienceDetailsView.bookingOptions.map((option) => (
+                                  <div key={option.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', marginBottom: '12px' }}>
+                                    <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{option.type} - {option.option}</h4>
+                                    <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '12px' }}>{option.description}</p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <div>
+                                        <span style={{ fontSize: '20px', fontWeight: '700' }}>{experienceDetailsView.currency}{option.price.toFixed(2)}</span>
+                                        {option.originalPrice && (
+                                          <span style={{ fontSize: '14px', color: '#9ca3af', textDecoration: 'line-through', marginLeft: '8px' }}>
+                                            {experienceDetailsView.currency}{option.originalPrice.toFixed(2)}
+                                          </span>
+                                        )}
+                                        <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '4px' }}>/ traveller</span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="trip-details__place-detail-add-btn"
+                                        style={{ padding: '8px 16px' }}
+                                        onClick={() => {
+                                          const day = days[0];
+                                          setBookingExperience(experienceDetailsView);
+                                          setBookingOption(option);
+                                          setBookingDate(day?.date || '');
+                                          setBookingStartTime('07:00');
+                                          setBookingTravellers(2);
+                                          setBookingNotes('');
+                                          setExperienceBookingModalOpen(true);
+                                        }}
+                                      >
+                                        Add to Trip
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {experienceDetailsView.importantInfo && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Important Information</h3>
+                              <p className="trip-details__place-detail-section-text">{experienceDetailsView.importantInfo}</p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {experienceDetailsView.included && experienceDetailsView.included.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">What's Included</h3>
+                              <ul className="trip-details__place-detail-hours">
+                                {experienceDetailsView.included.map((item, idx) => (
+                                  <li key={idx} style={{ color: '#059669' }}>✓ {item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {experienceDetailsView.excluded && experienceDetailsView.excluded.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">What's Excluded</h3>
+                              <ul className="trip-details__place-detail-hours">
+                                {experienceDetailsView.excluded.map((item, idx) => (
+                                  <li key={idx} style={{ color: '#dc2626' }}>✗ {item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {experienceDetailsView.cancellationPolicy && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Cancellation Policy</h3>
+                              <p className="trip-details__place-detail-section-text">{experienceDetailsView.cancellationPolicy}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="trip-details__add-places-map-panel">
+                    <div className="trip-details__add-places-map">
+                      <TripMap
+                        center={experienceDetailsView.lat && experienceDetailsView.lng ? [experienceDetailsView.lat, experienceDetailsView.lng] : mapCenter}
+                        zoom={12}
+                        markers={experienceDetailsView.lat && experienceDetailsView.lng ? [{ id: experienceDetailsView.id, name: experienceDetailsView.name, lat: experienceDetailsView.lat, lng: experienceDetailsView.lng, dayNum: 1 }] : []}
+                        activeDayNums={allDayNums}
+                        className="trip-details__add-places-trip-map"
+                        fitBounds={false}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="trip-details__add-places-head">
+                    <h2 id="add-experiences-title" className="trip-details__add-places-title">Add Experiences</h2>
+                    <div className="trip-details__add-places-location">
+                      <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
+                      <span>{trip.locations || trip.destination}</span>
+                    </div>
+                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddExperiencesOpen(false); setExperienceDetailsView(null); }}>
+                      <X size={20} aria-hidden />
+                    </button>
+                  </div>
+                  <div className="trip-details__add-places-body">
+                    <div className="trip-details__add-places-list-panel">
+                      <div className="trip-details__add-places-search-wrap">
+                        <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
+                        <input
+                          type="text"
+                          className="trip-details__add-places-search-input"
+                          placeholder="Search by experience name..."
+                          value={experienceSearchQuery}
+                          onChange={(e) => setExperienceSearchQuery(e.target.value)}
+                          aria-label="Search experiences"
+                        />
+                      </div>
+
+                      <div className="trip-details__add-food-toolbar">
+                        <p className="trip-details__add-places-results">{experiences.length} results found</p>
+                        <div className="trip-details__add-food-toolbar-actions">
+                          <select
+                            className="trip-details__add-places-sort-select"
+                            value={experiencePriceRange}
+                            onChange={(e) => setExperiencePriceRange(e.target.value)}
+                            aria-label="Filter by price range"
+                          >
+                            {EXPERIENCE_PRICE_RANGES.map((range) => (
+                              <option key={range} value={range}>{range}</option>
+                            ))}
+                          </select>
+                          <select
+                            className="trip-details__add-places-sort-select"
+                            value={experienceDurationFilter}
+                            onChange={(e) => setExperienceDurationFilter(e.target.value)}
+                            aria-label="Filter by duration"
+                          >
+                            {EXPERIENCE_DURATIONS.map((duration) => (
+                              <option key={duration} value={duration}>Duration: {duration}</option>
+                            ))}
+                          </select>
+                          <select
+                            className="trip-details__add-places-sort-select"
+                            value={experienceSortBy}
+                            onChange={(e) => setExperienceSortBy(e.target.value)}
+                            aria-label="Sort experiences"
+                          >
+                            {EXPERIENCE_SORT_OPTIONS.map((option) => (
+                              <option key={option} value={option}>Sort by: {option}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {discoveryError && (
+                        <p className="trip-details__add-places-results">Could not load live data: {discoveryError}</p>
+                      )}
+                      {discoveryData?.warning && (
+                        <p className="trip-details__add-places-results">{discoveryData.warning}</p>
+                      )}
+                      {discoveryLoading && (
+                        <p className="trip-details__add-places-results">Loading live experiences for {cityQuery}...</p>
+                      )}
+
+                      <div className="trip-details__add-places-grid">
+                        {experiences.map((experience) => (
+                          <div 
+                            key={experience.id} 
+                            className="trip-details__add-places-card"
+                            onClick={() => setExperienceDetailsView(experience)}
+                            role="button"
+                            tabIndex={0}
+                            style={{ cursor: 'pointer' }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExperienceDetailsView(experience); } }}
+                          >
+                            <img src={experience.image} alt={experience.name} className="trip-details__add-places-card-image" />
+                            <button 
+                              type="button" 
+                              className="trip-details__add-places-card-save" 
+                              aria-label="Save to wishlist"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Heart size={18} fill="none" aria-hidden />
+                            </button>
+                            <div className="trip-details__add-places-card-content">
+                              <span className="trip-details__place-detail-badge" style={{ marginBottom: '4px', display: 'inline-block' }}>{experience.type}</span>
+                              <h3 className="trip-details__add-places-card-title">{experience.name}</h3>
+                              <div className="trip-details__add-food-card-meta">
+                                <span><Star size={14} fill="currentColor" aria-hidden style={{ verticalAlign: 'middle' }} /> {experience.rating} ({experience.reviewCount?.toLocaleString() ?? '0'})</span>
+                                <span><Clock size={14} aria-hidden style={{ verticalAlign: 'middle' }} /> {experience.duration}</span>
+                              </div>
+                              <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <span style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a' }}>{experience.currency}{experience.price.toFixed(2)}</span>
+                                  {experience.originalPrice && (
+                                    <span style={{ fontSize: '12px', color: '#9ca3af', textDecoration: 'line-through', marginLeft: '4px' }}>
+                                      {experience.currency}{experience.originalPrice.toFixed(2)}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: '11px', color: '#6b7280', display: 'block' }}>/ traveller</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {!discoveryLoading && !discoveryError && experiences.length === 0 && (
+                        <p className="trip-details__add-places-results">No experiences found for this destination yet. Try adjusting filters.</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
+
       {addCustomPlaceOpen && (
         <>
           <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddCustomPlaceOpen(false)} />
@@ -2884,6 +4474,8 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const costNum = parseFloat(customPlaceCost) || 0;
+                const resolvedAddress = customPlaceAddressSelection
+                  ?? searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress)[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
                 setTripExpenseItems((prev) => [...prev, {
                   id: `place-${Date.now()}`,
@@ -2892,10 +4484,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                   categoryId: 'places',
                   category: 'Places',
                   date: customPlaceDateKey,
-                  detail: customPlaceAddress || 'Custom place',
+                  detail: resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
+                    ? resolvedAddress.address
+                    : (customPlaceAddress || 'Custom place'),
                   Icon: Camera,
-                  lat: fallbackLat,
-                  lng: fallbackLng,
+                  lat: resolvedAddress?.lat ?? fallbackLat,
+                  lng: resolvedAddress?.lng ?? fallbackLng,
                   notes: customPlaceNote || '',
                   attachments: [],
                   startTime: customPlaceStartTime,
@@ -2909,6 +4503,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setAddCustomPlaceOpen(false);
                 setCustomPlaceName('');
                 setCustomPlaceAddress('');
+                setCustomPlaceAddressSelection(null);
+                setCustomPlaceAddressSuggestionsOpen(false);
                 setCustomPlaceCost('');
                 setCustomPlaceNote('');
                 setCustomPlaceImage(null);
@@ -2948,9 +4544,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </label>
                 <label className="trip-details__custom-place-label">
                   Address <span className="trip-details__custom-place-required">*</span>
-                  <span className="trip-details__custom-place-input-wrap">
+                  <span className="trip-details__custom-place-input-wrap trip-details__custom-transport-autofill-wrap">
                     <MapPin size={18} className="trip-details__custom-place-input-icon" aria-hidden />
-                    <input type="text" className="trip-details__custom-place-input" placeholder="Search by landmark or address" value={customPlaceAddress} onChange={(e) => setCustomPlaceAddress(e.target.value)} required />
+                    <input
+                      type="text"
+                      className="trip-details__custom-place-input"
+                      placeholder="Search by landmark or address"
+                      value={customPlaceAddress}
+                      onChange={(e) => {
+                        setCustomPlaceAddress(e.target.value);
+                        setCustomPlaceAddressSelection(null);
+                        setCustomPlaceAddressSuggestionsOpen(true);
+                      }}
+                      onFocus={() => setCustomPlaceAddressSuggestionsOpen(true)}
+                      onBlur={() => setTimeout(() => setCustomPlaceAddressSuggestionsOpen(false), 200)}
+                      required
+                    />
+                    {customPlaceAddressSuggestionsOpen && customPlaceAddress.trim() && (
+                      <ul className="trip-details__custom-transport-suggestions">
+                        {searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress).map((suggestion) => (
+                          <li key={suggestion.id}>
+                            <button
+                              type="button"
+                              className="trip-details__custom-transport-suggestion"
+                              onClick={() => {
+                                setCustomPlaceAddress(suggestion.name);
+                                setCustomPlaceAddressSelection(suggestion);
+                                setCustomPlaceAddressSuggestionsOpen(false);
+                              }}
+                            >
+                              <strong>{suggestion.name}</strong>
+                              <span>{suggestion.address}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </span>
                 </label>
               </div>
@@ -3016,6 +4645,199 @@ export default function TripDetailsPage({ user, onLogout }) {
               </label>
               <div className="trip-details__custom-place-actions">
                 <button type="button" className="trip-details__modal-cancel" onClick={() => setAddCustomPlaceOpen(false)}>Cancel</button>
+                <button type="submit" className="trip-details__custom-place-submit">Add to trip</button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {addCustomFoodOpen && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddCustomFoodOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="custom-food-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="custom-food-title" className="trip-details__custom-place-title">Add Custom Food &amp; Beverage</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddCustomFoodOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const costNum = parseFloat(customFoodCost) || 0;
+                const resolvedAddress = customFoodAddressSelection
+                  ?? searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress)[0];
+                const [fallbackLat, fallbackLng] = mapCenter;
+                setTripExpenseItems((prev) => [...prev, {
+                  id: `food-${Date.now()}`,
+                  name: customFoodName,
+                  total: costNum,
+                  categoryId: 'food',
+                  category: 'Food & Beverage',
+                  date: customFoodDateKey,
+                  detail: resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
+                    ? resolvedAddress.address
+                    : (customFoodAddress || 'Custom food & beverage'),
+                  Icon: UtensilsCrossed,
+                  lat: resolvedAddress?.lat ?? fallbackLat,
+                  lng: resolvedAddress?.lng ?? fallbackLng,
+                  notes: customFoodNote || '',
+                  attachments: [],
+                  startTime: customFoodStartTime,
+                  durationHrs: customFoodDurationHrs,
+                  durationMins: customFoodDurationMins,
+                  externalLink: '',
+                  placeImageUrl: '',
+                  rating: null,
+                  reviewCount: null,
+                }]);
+                setAddCustomFoodOpen(false);
+                setCustomFoodName('');
+                setCustomFoodAddress('');
+                setCustomFoodAddressSelection(null);
+                setCustomFoodAddressSuggestionsOpen(false);
+                setCustomFoodCost('');
+                setCustomFoodNote('');
+                setCustomFoodImage(null);
+                setCustomFoodTravelDocs([]);
+                setCustomFoodStartTime('07:00');
+                setCustomFoodDurationHrs(1);
+                setCustomFoodDurationMins(0);
+              }}
+            >
+              <div className="trip-details__custom-place-upload">
+                <input
+                  type="file"
+                  id="custom-food-image"
+                  accept=".svg,.png,.jpg,.jpeg,.webp,.gif"
+                  className="trip-details__custom-place-file-input"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setCustomFoodImage(f);
+                  }}
+                />
+                <label htmlFor="custom-food-image" className="trip-details__custom-place-upload-label">
+                  {customFoodImage ? (
+                    <span className="trip-details__custom-place-upload-preview">Image selected: {(customFoodImage instanceof File) ? customFoodImage.name : 'Preview'}</span>
+                  ) : (
+                    <>
+                      <PlusCircle size={32} aria-hidden />
+                      <span>Click to upload image or drag and drop</span>
+                      <span className="trip-details__custom-place-upload-hint">SVG, PNG, JPG, WEBP or GIF (max. 800×400px)</span>
+                    </>
+                  )}
+                </label>
+              </div>
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Food &amp; Beverage name <span className="trip-details__custom-place-required">*</span>
+                  <input type="text" className="trip-details__custom-place-input" placeholder="Enter the place name" value={customFoodName} onChange={(e) => setCustomFoodName(e.target.value)} required />
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Address <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-input-wrap trip-details__custom-transport-autofill-wrap">
+                    <MapPin size={18} className="trip-details__custom-place-input-icon" aria-hidden />
+                    <input
+                      type="text"
+                      className="trip-details__custom-place-input"
+                      placeholder="Search by landmark or address"
+                      value={customFoodAddress}
+                      onChange={(e) => {
+                        setCustomFoodAddress(e.target.value);
+                        setCustomFoodAddressSelection(null);
+                        setCustomFoodAddressSuggestionsOpen(true);
+                      }}
+                      onFocus={() => setCustomFoodAddressSuggestionsOpen(true)}
+                      onBlur={() => setTimeout(() => setCustomFoodAddressSuggestionsOpen(false), 200)}
+                      required
+                    />
+                    {customFoodAddressSuggestionsOpen && customFoodAddress.trim() && (
+                      <ul className="trip-details__custom-transport-suggestions">
+                        {searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress).map((suggestion) => (
+                          <li key={suggestion.id}>
+                            <button
+                              type="button"
+                              className="trip-details__custom-transport-suggestion"
+                              onClick={() => {
+                                setCustomFoodAddress(suggestion.name);
+                                setCustomFoodAddressSelection(suggestion);
+                                setCustomFoodAddressSuggestionsOpen(false);
+                              }}
+                            >
+                              <strong>{suggestion.name}</strong>
+                              <span>{suggestion.address}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </span>
+                </label>
+              </div>
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Date <span className="trip-details__custom-place-required">*</span>
+                  <select
+                    className="trip-details__custom-place-select"
+                    value={customFoodDateKey}
+                    onChange={(e) => setCustomFoodDateKey(e.target.value)}
+                    required
+                  >
+                    <option value="">Select day</option>
+                    {days.map((d) => (
+                      <option key={d.date} value={d.date}>Day {d.dayNum}: {d.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Start time <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-input-wrap">
+                    <Clock size={18} className="trip-details__custom-place-input-icon" aria-hidden />
+                    <input type="time" className="trip-details__custom-place-input" value={customFoodStartTime} onChange={(e) => setCustomFoodStartTime(e.target.value)} required />
+                  </span>
+                </label>
+              </div>
+              <label className="trip-details__custom-place-label">
+                Duration <span className="trip-details__custom-place-required">*</span>
+                <div className="trip-details__custom-place-duration">
+                  <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customFoodDurationHrs} onChange={(e) => setCustomFoodDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
+                  <span> hr </span>
+                  <input type="number" min={0} max={59} className="trip-details__custom-place-duration-input" value={customFoodDurationMins} onChange={(e) => setCustomFoodDurationMins(Number(e.target.value) || 0)} aria-label="Minutes" />
+                  <span> mins</span>
+                </div>
+              </label>
+              <label className="trip-details__custom-place-label">
+                Note (Optional)
+                <textarea className="trip-details__custom-place-textarea" placeholder="Enter your note..." value={customFoodNote} onChange={(e) => setCustomFoodNote(e.target.value)} rows={3} />
+              </label>
+              <label className="trip-details__custom-place-label">
+                Cost (Optional)
+                <input type="number" step="0.01" min={0} className="trip-details__custom-place-input" placeholder="0" value={customFoodCost} onChange={(e) => setCustomFoodCost(e.target.value)} />
+                <span className="trip-details__custom-place-currency-hint">{currency} — adds to trip budget</span>
+              </label>
+              <label className="trip-details__custom-place-label">
+                Travel Documents
+                <p className="trip-details__custom-place-docs-hint">Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.</p>
+                <input
+                  id="custom-food-docs"
+                  type="file"
+                  multiple
+                  accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
+                  className="trip-details__custom-place-file-input"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []).slice(0, 3);
+                    setCustomFoodTravelDocs(files);
+                  }}
+                />
+                <button type="button" className="trip-details__custom-place-attach" onClick={() => document.getElementById('custom-food-docs')?.click()}>
+                  <Paperclip size={18} aria-hidden /> Attach files
+                  {customFoodTravelDocs.length > 0 && <span className="trip-details__custom-place-attach-count"> ({customFoodTravelDocs.length})</span>}
+                </button>
+              </label>
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__modal-cancel" onClick={() => setAddCustomFoodOpen(false)}>Cancel</button>
                 <button type="submit" className="trip-details__custom-place-submit">Add to trip</button>
               </div>
             </form>
@@ -3134,6 +4956,21 @@ export default function TripDetailsPage({ user, onLogout }) {
                       if (id === 'place') {
                         setAddPlacesDay(addSheetDay ?? 1);
                         setAddPlacesOpen(true);
+                      } else if (id === 'food') {
+                        const day = days.find((d) => d.dayNum === (addSheetDay ?? 1));
+                        setAddFoodDay(addSheetDay ?? 1);
+                        setFoodSearchQuery('');
+                        setFoodDietaryFilter('All');
+                        setFoodSortBy('Recommended');
+                        setCustomFoodDateKey(day?.date || days[0]?.date || '');
+                        setAddFoodOpen(true);
+                      } else if (id === 'experience') {
+                        setExperienceSearchQuery('');
+                        setExperienceTypeFilter('All');
+                        setExperiencePriceRange('All');
+                        setExperienceDurationFilter('All');
+                        setExperienceSortBy('Recently added');
+                        setAddExperiencesOpen(true);
                       } else if (id === 'transportation') {
                         setAddTransportDay(addSheetDay ?? 1);
                         setAddTransportOpen(true);
@@ -3154,6 +4991,341 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      )}
+
+      {addToTripModalOpen && addToTripItem && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddToTripModalOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="add-to-trip-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="add-to-trip-title" className="trip-details__custom-place-title">Add {addToTripItem.type === 'place' ? 'Place' : 'Food & Beverage'}</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddToTripModalOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const costNum = parseFloat(addToTripCost) || 0;
+                const data = addToTripItem.data;
+                setTripExpenseItems((prev) => [...prev, {
+                  id: `${addToTripItem.type}-${data.id}-${Date.now()}`,
+                  name: data.name,
+                  total: costNum,
+                  categoryId: addToTripItem.categoryId,
+                  category: addToTripItem.category,
+                  date: addToTripDate,
+                  detail: data.address || data.name,
+                  Icon: addToTripItem.Icon,
+                  lat: data.lat,
+                  lng: data.lng,
+                  notes: addToTripNotes,
+                  attachments: [],
+                  startTime: addToTripStartTime,
+                  durationHrs: addToTripDurationHrs,
+                  durationMins: addToTripDurationMins,
+                  externalLink: data.website || '',
+                  placeImageUrl: data.image,
+                  rating: data.rating,
+                  reviewCount: data.reviewCount,
+                }]);
+                setAddToTripModalOpen(false);
+                if (addToTripItem.type === 'place') {
+                  setPlaceDetailsView(null);
+                  setAddPlacesOpen(false);
+                } else {
+                  setFoodDetailsView(null);
+                  setAddFoodOpen(false);
+                }
+              }}
+            >
+              <div className="trip-details__custom-place-preview">
+                <img src={addToTripItem.data.image} alt={addToTripItem.data.name} className="trip-details__custom-place-preview-img" />
+                <div className="trip-details__custom-place-preview-content">
+                  <span className="trip-details__custom-place-preview-badge">{addToTripItem.type === 'place' ? 'Place' : 'Food & Beverage'}</span>
+                  <h3 className="trip-details__custom-place-preview-name">{addToTripItem.data.name}</h3>
+                  <p className="trip-details__custom-place-preview-rating">
+                    <Star size={14} fill="currentColor" aria-hidden /> {addToTripItem.data.rating} ({addToTripItem.data.reviewCount?.toLocaleString() ?? '0'} reviews)
+                  </p>
+                  <p className="trip-details__custom-place-preview-address">{addToTripItem.data.address}</p>
+                </div>
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="add-to-trip-date" className="trip-details__custom-place-label">
+                  Date <span className="trip-details__custom-place-required">*</span>
+                </label>
+                <select
+                  id="add-to-trip-date"
+                  className="trip-details__custom-place-select"
+                  value={addToTripDate}
+                  onChange={(e) => setAddToTripDate(e.target.value)}
+                  required
+                >
+                  {days.map((day) => (
+                    <option key={day.dayNum} value={day.date}>
+                      Day {day.dayNum}: {day.date}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="trip-details__custom-place-field-row">
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="add-to-trip-start-time" className="trip-details__custom-place-label">
+                    Start time <span className="trip-details__custom-place-required">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    id="add-to-trip-start-time"
+                    className="trip-details__custom-place-input"
+                    value={addToTripStartTime}
+                    onChange={(e) => setAddToTripStartTime(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="add-to-trip-duration" className="trip-details__custom-place-label">
+                    Duration <span className="trip-details__custom-place-required">*</span>
+                  </label>
+                  <div className="trip-details__custom-place-duration-wrap">
+                    <input
+                      type="number"
+                      id="add-to-trip-duration-hrs"
+                      className="trip-details__custom-place-duration-input"
+                      placeholder="hrs"
+                      min="0"
+                      max="24"
+                      value={addToTripDurationHrs}
+                      onChange={(e) => setAddToTripDurationHrs(parseInt(e.target.value) || 0)}
+                    />
+                    <span className="trip-details__custom-place-duration-separator">hr:</span>
+                    <input
+                      type="number"
+                      id="add-to-trip-duration-mins"
+                      className="trip-details__custom-place-duration-input"
+                      placeholder="mins"
+                      min="0"
+                      max="59"
+                      step="5"
+                      value={addToTripDurationMins}
+                      onChange={(e) => setAddToTripDurationMins(parseInt(e.target.value) || 0)}
+                    />
+                    <span className="trip-details__custom-place-duration-separator">mins</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="add-to-trip-note" className="trip-details__custom-place-label">
+                  Note (Optional)
+                </label>
+                <textarea
+                  id="add-to-trip-note"
+                  className="trip-details__custom-place-textarea"
+                  placeholder="Enter your note..."
+                  value={addToTripNotes}
+                  onChange={(e) => setAddToTripNotes(e.target.value)}
+                  rows={4}
+                />
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="add-to-trip-cost" className="trip-details__custom-place-label">
+                  Cost (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="add-to-trip-cost"
+                  className="trip-details__custom-place-input"
+                  placeholder="US$0.00"
+                  value={addToTripCost}
+                  onChange={(e) => setAddToTripCost(e.target.value)}
+                />
+              </div>
+
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__custom-place-cancel" onClick={() => setAddToTripModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="trip-details__custom-place-submit">
+                  Add to trip
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {experienceBookingModalOpen && bookingExperience && bookingOption && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setExperienceBookingModalOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="book-experience-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="book-experience-title" className="trip-details__custom-place-title">Book Experience</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setExperienceBookingModalOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const totalCost = bookingOption.price * bookingTravellers;
+                setTripExpenseItems((prev) => [...prev, {
+                  id: `experience-${bookingExperience.id}-${bookingOption.id}-${Date.now()}`,
+                  name: bookingExperience.name,
+                  total: totalCost,
+                  categoryId: 7,
+                  category: 'Experience',
+                  date: bookingDate,
+                  detail: `${bookingOption.name} - ${bookingTravellers} traveller${bookingTravellers !== 1 ? 's' : ''}`,
+                  Icon: Ticket,
+                  lat: bookingExperience.lat,
+                  lng: bookingExperience.lng,
+                  notes: bookingNotes,
+                  attachments: [],
+                  startTime: bookingStartTime,
+                  durationHrs: Math.floor(bookingExperience.durationHours),
+                  durationMins: Math.round((bookingExperience.durationHours % 1) * 60),
+                  externalLink: '',
+                  placeImageUrl: bookingExperience.image,
+                  rating: bookingExperience.rating,
+                  reviewCount: bookingExperience.reviewCount,
+                  experienceType: bookingExperience.type,
+                  bookingOption: bookingOption.name,
+                  travellers: bookingTravellers,
+                  pricePerTraveller: bookingOption.price,
+                }]);
+                setExperienceBookingModalOpen(false);
+                setExperienceDetailsView(null);
+                setAddExperiencesOpen(false);
+                setBookingExperience(null);
+                setBookingOption(null);
+                setBookingDate('');
+                setBookingStartTime('07:00');
+                setBookingTravellers(2);
+                setBookingNotes('');
+              }}
+            >
+              <div className="trip-details__custom-place-preview">
+                <img src={bookingExperience.image} alt={bookingExperience.name} className="trip-details__custom-place-preview-img" />
+                <div className="trip-details__custom-place-preview-content">
+                  <span className="trip-details__custom-place-preview-badge">{bookingExperience.type}</span>
+                  <h3 className="trip-details__custom-place-preview-name">{bookingExperience.name}</h3>
+                  <p className="trip-details__custom-place-preview-rating">
+                    <Star size={14} fill="currentColor" aria-hidden /> {bookingExperience.rating} ({bookingExperience.reviewCount?.toLocaleString() ?? '0'} reviews)
+                  </p>
+                  <p className="trip-details__custom-place-preview-address">
+                    <Clock size={14} aria-hidden /> {bookingExperience.duration}
+                  </p>
+                  <p className="trip-details__custom-place-preview-address" style={{ marginTop: '4px', fontWeight: 600, color: '#059669' }}>
+                    {bookingOption.name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="booking-date" className="trip-details__custom-place-label">
+                  Date <span className="trip-details__custom-place-required">*</span>
+                </label>
+                <select
+                  id="booking-date"
+                  className="trip-details__custom-place-select"
+                  value={bookingDate}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  required
+                >
+                  {days.map((day) => (
+                    <option key={day.dayNum} value={day.date}>
+                      Day {day.dayNum}: {day.date}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="booking-start-time" className="trip-details__custom-place-label">
+                  Start time <span className="trip-details__custom-place-required">*</span>
+                </label>
+                <input
+                  type="time"
+                  id="booking-start-time"
+                  className="trip-details__custom-place-input"
+                  value={bookingStartTime}
+                  onChange={(e) => setBookingStartTime(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="booking-travellers" className="trip-details__custom-place-label">
+                  Number of travellers <span className="trip-details__custom-place-required">*</span>
+                </label>
+                <input
+                  type="number"
+                  id="booking-travellers"
+                  className="trip-details__custom-place-input"
+                  value={bookingTravellers}
+                  onChange={(e) => setBookingTravellers(Math.max(1, Math.min(bookingOption.maxTravellers || 99, parseInt(e.target.value) || 1)))}
+                  min="1"
+                  max={bookingOption.maxTravellers || 99}
+                  required
+                />
+                {bookingOption.maxTravellers && (
+                  <p className="trip-details__custom-place-helper" style={{ marginTop: '4px', fontSize: '13px', color: '#6b7280' }}>
+                    Maximum {bookingOption.maxTravellers} travellers for this option
+                  </p>
+                )}
+              </div>
+
+              <div className="trip-details__custom-place-field">
+                <label htmlFor="booking-notes" className="trip-details__custom-place-label">
+                  Notes <span style={{ fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                </label>
+                <textarea
+                  id="booking-notes"
+                  className="trip-details__custom-place-textarea"
+                  rows={3}
+                  placeholder="Any special requests or notes for this booking..."
+                  value={bookingNotes}
+                  onChange={(e) => setBookingNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="trip-details__custom-place-field" style={{ 
+                padding: '16px', 
+                background: '#f9fafb', 
+                borderRadius: '8px', 
+                border: '1px solid #e5e7eb',
+                marginTop: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                    {bookingExperience.currency}${bookingOption.price.toFixed(2)} × {bookingTravellers} traveller{bookingTravellers !== 1 ? 's' : ''}
+                  </span>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>
+                    {bookingExperience.currency}${(bookingOption.price * bookingTravellers).toFixed(2)}
+                  </span>
+                </div>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+                  All taxes and fees included
+                </p>
+              </div>
+
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__custom-place-cancel" onClick={() => setExperienceBookingModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="trip-details__custom-place-submit">
+                  Add to trip
+                </button>
+              </div>
+            </form>
           </div>
         </>
       )}

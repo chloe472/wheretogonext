@@ -18,6 +18,27 @@ function formatTripDates(startDate, endDate) {
 const TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
 const DEFAULT_TRIP_IMAGE = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
 
+function resolveTypedLocation(query) {
+  const value = String(query || '').trim();
+  if (!value) return null;
+  const exactMatch = searchLocations(value).find((loc) => {
+    const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
+    return (
+      loc.name.toLowerCase() === value.toLowerCase() ||
+      full.toLowerCase() === value.toLowerCase()
+    );
+  });
+  if (exactMatch) return exactMatch;
+
+  const [name, ...rest] = value.split(',').map((part) => part.trim()).filter(Boolean);
+  return {
+    id: `custom-location-${Date.now()}`,
+    name: name || value,
+    country: rest.join(', ') || undefined,
+    type: 'City',
+  };
+}
+
 export default function NewTripPage({ user, onLogout }) {
   const navigate = useNavigate();
   const [whereQuery, setWhereQuery] = useState('');
@@ -62,7 +83,8 @@ export default function NewTripPage({ user, onLogout }) {
   const handleStartPlanning = (e) => {
     e.preventDefault();
     setDatesError('');
-    if (!selectedLocation) return;
+    const resolvedLocation = selectedLocation ?? resolveTypedLocation(whereQuery);
+    if (!resolvedLocation) return;
     if (!startDate || !endDate) {
       setDatesError('Please select start and end dates for your trip.');
       return;
@@ -74,16 +96,16 @@ export default function NewTripPage({ user, onLogout }) {
     const start = startDate;
     const end = endDate;
     const tripId = `trip-${Date.now()}`;
-    const title = selectedLocation.country
-      ? `${selectedLocation.name}, ${selectedLocation.country}`
-      : selectedLocation.name;
-    const locations = selectedLocation.country
-      ? `${selectedLocation.name}, ${selectedLocation.country}`
-      : selectedLocation.name;
+    const title = resolvedLocation.country
+      ? `${resolvedLocation.name}, ${resolvedLocation.country}`
+      : resolvedLocation.name;
+    const locations = resolvedLocation.country
+      ? `${resolvedLocation.name}, ${resolvedLocation.country}`
+      : resolvedLocation.name;
     const newTrip = {
       id: tripId,
       title: `Trip to ${title}`,
-      destination: selectedLocation.name,
+      destination: resolvedLocation.name,
       dates: formatTripDates(start, end),
       startDate: start,
       endDate: end,

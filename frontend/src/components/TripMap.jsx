@@ -38,6 +38,24 @@ function MapResizeHandler({ resizeKey }) {
   return null;
 }
 
+function MapCenterUpdater({ center }) {
+  const map = useMap();
+  const centerKey = Array.isArray(center) ? `${center[0]},${center[1]}` : '';
+
+  useEffect(() => {
+    if (!Array.isArray(center) || center.length !== 2) return;
+    const [lat, lng] = center;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    try {
+      map.setView([lat, lng], map.getZoom(), { animate: false });
+    } catch (_) {
+      // ignore
+    }
+  }, [map, centerKey]);
+
+  return null;
+}
+
 export default function TripMap({
   center = [47.6062, -122.3321],
   zoom = 11,
@@ -60,6 +78,7 @@ export default function TripMap({
         scrollWheelZoom
         className="trip-map__container"
       >
+        <MapCenterUpdater center={center} />
         <MapResizeHandler resizeKey={resizeKey} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
