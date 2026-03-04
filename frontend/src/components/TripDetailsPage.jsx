@@ -126,9 +126,8 @@ const CURRENCY_LIST = [
   { code: 'ZAR', name: 'South African rand' },
 ];
 const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
-const MAP_FILTERS = ['Default', 'Days', 'Food & Beverages', 'Experiences'];
+const MAP_FILTERS = ['Default', 'Food & Beverages', 'Experiences', 'My Trip'];
 const ADD_PLACES_PAGE_SIZE = 18;
-const COMMUNITY_SORT_OPTIONS = ['Best viewed', 'Recently published', 'Most places'];
 
 /** Category display for day cards */
 const CATEGORY_CARD_STYLES = {
@@ -146,6 +145,62 @@ function getCategoryStyle(item) {
   const raw = (item.categoryId || item.category || 'places').toLowerCase();
   const key = raw === 'place' ? 'places' : raw === 'transportation' ? 'transportations' : raw === 'experience' ? 'experiences' : raw;
   return CATEGORY_CARD_STYLES[key] || CATEGORY_CARD_STYLES.places;
+}
+
+function isEditableItineraryItem(item) {
+  const raw = String(item?.categoryId || item?.category || '').toLowerCase();
+  return raw === 'places' || raw === 'place' || raw === 'food' || raw === 'food & beverage';
+}
+
+function parseFoodHours(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  const text = String(value).trim();
+  if (!text) return {};
+  if (text.toLowerCase() === '24/7') {
+    return {
+      Monday: 'Open 24 hours',
+      Tuesday: 'Open 24 hours',
+      Wednesday: 'Open 24 hours',
+      Thursday: 'Open 24 hours',
+      Friday: 'Open 24 hours',
+      Saturday: 'Open 24 hours',
+      Sunday: 'Open 24 hours',
+    };
+  }
+  return { Hours: text };
+}
+
+function enrichFoodDetails(food, cityQuery) {
+  const openingHoursText = food?.openingHoursRaw || food?.openingHours || '';
+  const hours = parseFoodHours(food?.hours || openingHoursText);
+  const overview = food?.overview
+    || food?.description
+    || `${food?.name || 'This spot'} is a popular food stop in ${cityQuery}.`;
+  const dietary = Array.isArray(food?.dietaryTags) ? food.dietaryTags : [];
+  const visitReasons = Array.isArray(food?.whyVisit) && food.whyVisit.length > 0
+    ? food.whyVisit
+    : [
+      `${food?.name || 'This place'} is well rated by travelers and locals.`,
+      food?.cuisine ? `Known for ${food.cuisine}.` : 'Great option for a meal break during your itinerary.',
+      food?.priceLevel ? `Price level: ${food.priceLevel}.` : 'Fits well into a flexible dining plan.',
+    ];
+  const skipReasons = Array.isArray(food?.whySkip) && food.whySkip.length > 0
+    ? food.whySkip
+    : [
+      Object.keys(hours).length === 0 ? 'Opening hours may vary; verify before visiting.' : null,
+      dietary.length === 0 ? 'Dietary options are not clearly listed; check with the venue.' : null,
+    ].filter(Boolean);
+
+  return {
+    ...food,
+    overview,
+    hours,
+    openingHoursRaw: openingHoursText,
+    isOpenNow: food?.isOpenNow ?? (String(openingHoursText).toLowerCase() === '24/7' ? true : null),
+    whyVisit: visitReasons,
+    whySkip: skipReasons,
+  };
 }
 
 function addDays(dateStr, delta) {
@@ -681,9 +736,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [placeFilterTag, setPlaceFilterTag] = useState('');
   const [placeSortBy, setPlaceSortBy] = useState('Recommended');
   const [addPlacesPage, setAddPlacesPage] = useState(1);
-  const [communityBrowseAllOpen, setCommunityBrowseAllOpen] = useState(false);
-  const [communitySearchQuery, setCommunitySearchQuery] = useState('');
-  const [communitySortBy, setCommunitySortBy] = useState('Best viewed');
   const [selectedPlaceMarkerId, setSelectedPlaceMarkerId] = useState(null);
   const [foodSearchQuery, setFoodSearchQuery] = useState('');
   const [foodDietaryFilter, setFoodDietaryFilter] = useState('All');
@@ -1233,7 +1285,8 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [addPlacesPage, addPlacesTotalPages]);
 
   const filteredFoods = useMemo(() => {
-    const source = Array.isArray(discoveryData?.foods) ? discoveryData.foods : [];
+    const source = (Array.isArray(discoveryData?.foods) ? discoveryData.foods : [])
+      .map((food) => enrichFoodDetails(food, cityQuery));
     let results = source;
     if (foodSearchQuery.trim()) {
       const q = foodSearchQuery.trim().toLowerCase();
@@ -1253,7 +1306,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
     }
     return results;
-  }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy]);
+  }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy, cityQuery]);
 
   const filteredExperiences = useMemo(() => {
     const source = Array.isArray(discoveryData?.experiences) ? discoveryData.experiences : [];
@@ -1384,29 +1437,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     });
   }, [discoveryData?.communityItineraries, discoveryData?.places, filteredPlaces, cityQuery]);
 
-  const communityBrowseList = useMemo(() => {
-    let results = Array.isArray(communityItineraries) ? [...communityItineraries] : [];
-
-    if (communitySearchQuery.trim()) {
-      const query = communitySearchQuery.trim().toLowerCase();
-      results = results.filter((itinerary) => (
-        String(itinerary?.title || '').toLowerCase().includes(query)
-        || String(itinerary?.creator || itinerary?.author?.name || '').toLowerCase().includes(query)
-        || String(itinerary?.type || '').toLowerCase().includes(query)
-      ));
-    }
-
-    if (communitySortBy === 'Recently published') {
-      results.sort((a, b) => new Date(b?.publishedAt || 0).getTime() - new Date(a?.publishedAt || 0).getTime());
-    } else if (communitySortBy === 'Most places') {
-      results.sort((a, b) => (Array.isArray(b?.places) ? b.places.length : 0) - (Array.isArray(a?.places) ? a.places.length : 0));
-    } else {
-      results.sort((a, b) => Number(b?.views || 0) - Number(a?.views || 0));
-    }
-
-    return results;
-  }, [communityItineraries, communitySearchQuery, communitySortBy]);
-
   const mapCenter = useMemo(() => {
     if (Array.isArray(discoveryData?.center) && discoveryData.center.length === 2) {
       return discoveryData.center;
@@ -1467,7 +1497,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     if (mapFilter === 'Food & Beverages') return foodMarkers;
     if (mapFilter === 'Experiences') return experienceMarkers;
-    if (mapFilter === 'Days') return tripItemMarkers.length > 0 ? tripItemMarkers : placeMarkers;
+    if (mapFilter === 'My Trip') return tripItemMarkers.length > 0 ? tripItemMarkers : [];
     return placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
   }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery]);
 
@@ -1593,17 +1623,20 @@ export default function TripDetailsPage({ user, onLogout }) {
     setPlaceDetailsView(null);
     setFoodDetailsView(null);
     setExperienceDetailsView(null);
-    setItineraryDetailsView(null);
     setPlaceDetailsTab('overview');
-    setSelectedPlaceMarkerId(null);
-    setCommunityBrowseAllOpen(true);
+    const firstItinerary = Array.isArray(communityItineraries) ? communityItineraries[0] : null;
+    if (firstItinerary) {
+      openCommunityItineraryDetails(firstItinerary);
+    } else {
+      setItineraryDetailsView(null);
+      setSelectedPlaceMarkerId(null);
+    }
     setAddPlacesOpen(true);
   };
 
   const openCommunityItineraryDetails = (itinerary) => {
     if (!itinerary) return;
     const firstPlace = Array.isArray(itinerary.places) ? itinerary.places.find((place) => place?.id) : null;
-    setCommunityBrowseAllOpen(false);
     setPlaceDetailsView(null);
     setPlaceDetailsTab('overview');
     setItineraryDetailsView(itinerary);
@@ -1974,8 +2007,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                               role="button"
                               tabIndex={0}
                               className="trip-details__itinerary-card"
-                              onClick={() => (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item)}
-                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item); } }}
+                              onClick={() => isEditableItineraryItem(item) && setEditPlaceItem(item)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); isEditableItineraryItem(item) && setEditPlaceItem(item); } }}
                             >
                               <span className="trip-details__itinerary-num" aria-hidden>{idx + 1}</span>
                               <div className="trip-details__itinerary-card-thumb">
@@ -1998,7 +2031,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 type="button"
                                 className="trip-details__itinerary-edit-btn"
                                 aria-label="Edit"
-                                onClick={(e) => { e.stopPropagation(); (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item); }}
+                                onClick={(e) => { e.stopPropagation(); isEditableItineraryItem(item) && setEditPlaceItem(item); }}
                               >
                                 <FileText size={16} aria-hidden />
                               </button>
@@ -2199,7 +2232,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   backgroundColor: `${style.color}18`,
                                   borderLeftColor: style.color,
                                 }}
-                                onClick={() => (item.categoryId === 'places' || item.category === 'Places') && setEditPlaceItem(item)}
+                                onClick={() => isEditableItineraryItem(item) && setEditPlaceItem(item)}
                               >
                                 <span className="trip-details__calendar-event-time">{timeRange}</span>
                                 <span className="trip-details__calendar-event-icon" style={{ color: style.color }}>
@@ -3750,7 +3783,6 @@ export default function TripDetailsPage({ user, onLogout }) {
       {addPlacesOpen && (() => {
         const showingPlaceDetail = placeDetailsView != null;
         const showingItineraryDetail = itineraryDetailsView != null;
-        const showingCommunityBrowseAll = communityBrowseAllOpen && !showingPlaceDetail && !showingItineraryDetail;
         const showingAnyDetail = showingPlaceDetail || showingItineraryDetail;
         const detailPlace = showingPlaceDetail ? placeDetailsView : null;
         const nearbyPlaces = detailPlace
@@ -3788,20 +3820,11 @@ export default function TripDetailsPage({ user, onLogout }) {
           : [];
         const selectedItineraryPlace = itineraryPlaces.find((place) => String(place.id) === String(selectedPlaceMarkerId)) || null;
 
-        const communityMapPlaces = showingCommunityBrowseAll
-          ? communityBrowseList
-            .flatMap((itinerary) => (Array.isArray(itinerary?.places) ? itinerary.places : []))
-            .filter((place) => place?.lat != null && place?.lng != null)
-            .slice(0, 150)
-          : [];
-
         const mapPlaces = showingPlaceDetail && detailPlace
           ? [detailPlace, ...nearbyPlaces].filter((p) => p && p.lat != null && p.lng != null)
           : showingItineraryDetail
             ? itineraryPlaces
-            : showingCommunityBrowseAll
-              ? communityMapPlaces
-              : filteredPlaces;
+            : filteredPlaces;
         const addPlacesMarkers = mapPlaces
           .filter((p) => p.lat != null && p.lng != null)
           .map((p, i) => ({
@@ -3829,7 +3852,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               : mapCenter;
         return (
           <>
-            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); setItineraryDetailsView(null); setCommunityBrowseAllOpen(false); setSelectedPlaceMarkerId(null); }} />
+            <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); setItineraryDetailsView(null); setSelectedPlaceMarkerId(null); }} />
             <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'place-detail-title') : 'add-places-title'} aria-modal="true">
               {showingItineraryDetail ? (
                 // Itinerary Detail View
@@ -3839,7 +3862,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <button type="button" className="trip-details__place-detail-back" onClick={() => setItineraryDetailsView(null)} aria-label="Back to list">
                         <ArrowLeft size={20} aria-hidden /> Back
                       </button>
-                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setItineraryDetailsView(null); setCommunityBrowseAllOpen(false); setSelectedPlaceMarkerId(null); }}>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setItineraryDetailsView(null); setSelectedPlaceMarkerId(null); }}>
                         <X size={20} aria-hidden />
                       </button>
                       <h1 id="itinerary-detail-title" className="trip-details__itinerary-detail-name">{itineraryDetailsView.title}</h1>
@@ -3937,12 +3960,12 @@ export default function TripDetailsPage({ user, onLogout }) {
               ) : !showingPlaceDetail ? (
                 <>
                   <div className="trip-details__add-places-head">
-                    <h2 id="add-places-title" className="trip-details__add-places-title">{showingCommunityBrowseAll ? 'Community Itineraries' : 'Add Places'}</h2>
+                    <h2 id="add-places-title" className="trip-details__add-places-title">Add Places</h2>
                     <div className="trip-details__add-places-location">
                       <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
                       <span>{trip.locations || trip.destination}</span>
                     </div>
-                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setCommunityBrowseAllOpen(false); setSelectedPlaceMarkerId(null); }}>
+                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setSelectedPlaceMarkerId(null); }}>
                       <X size={20} aria-hidden />
                     </button>
                   </div>
@@ -3953,91 +3976,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <input
                           type="text"
                           className="trip-details__add-places-search-input"
-                          placeholder={showingCommunityBrowseAll ? 'Search by itinerary name...' : 'Search by place name...'}
-                          value={showingCommunityBrowseAll ? communitySearchQuery : placeSearchQuery}
+                          placeholder="Search by place name..."
+                          value={placeSearchQuery}
                           onChange={(e) => {
-                            if (showingCommunityBrowseAll) setCommunitySearchQuery(e.target.value);
-                            else setPlaceSearchQuery(e.target.value);
+                            setPlaceSearchQuery(e.target.value);
                           }}
-                          aria-label={showingCommunityBrowseAll ? 'Search itineraries' : 'Search places'}
+                          aria-label="Search places"
                         />
                       </div>
                       {(() => {
                         const places = pagedPlaces;
-
-                        if (showingCommunityBrowseAll) {
-                          return (
-                            <>
-                              <div className="trip-details__add-places-community-header-row">
-                                <h3 className="trip-details__add-places-community-title">
-                                  <Users size={20} aria-hidden /> Community Itineraries
-                                </h3>
-                                <button
-                                  type="button"
-                                  className="trip-details__add-places-community-browse"
-                                  onClick={() => {
-                                    setCommunityBrowseAllOpen(false);
-                                    setCommunitySearchQuery('');
-                                  }}
-                                >
-                                  Back to places
-                                </button>
-                              </div>
-
-                              <div className="trip-details__add-food-toolbar">
-                                <p className="trip-details__add-places-results">{communityBrowseList.length} results found</p>
-                                <div className="trip-details__add-food-toolbar-actions">
-                                  <label htmlFor="community-sort" className="trip-details__add-places-results">Sort by:</label>
-                                  <select
-                                    id="community-sort"
-                                    className="trip-details__add-places-sort-select"
-                                    value={communitySortBy}
-                                    onChange={(e) => setCommunitySortBy(e.target.value)}
-                                  >
-                                    {COMMUNITY_SORT_OPTIONS.map((option) => (
-                                      <option key={option} value={option}>{option}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-
-                              <div className="trip-details__add-places-community-grid trip-details__add-places-community-grid--browse">
-                                {communityBrowseList.map((itinerary) => (
-                                  <div
-                                    key={itinerary.id}
-                                    className="trip-details__add-places-community-card"
-                                    onClick={() => openCommunityItineraryDetails(itinerary)}
-                                    role="button"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCommunityItineraryDetails(itinerary); } }}
-                                  >
-                                    <div className="trip-details__add-places-community-card-img-wrap">
-                                      <img src={resolveImageUrl(itinerary.image, itinerary.title, 'itinerary')} alt="" className="trip-details__add-places-community-card-img" onError={handleImageError} />
-                                      <span className="trip-details__add-places-community-card-duration">{itinerary.duration}</span>
-                                    </div>
-                                    <div className="trip-details__add-places-community-card-content">
-                                      <h4 className="trip-details__add-places-community-card-title">{itinerary.title}</h4>
-                                      <div className="trip-details__add-places-community-card-meta">
-                                        <span className="trip-details__add-places-community-card-creator">
-                                          <Users size={14} aria-hidden /> {itinerary.creator}
-                                        </span>
-                                        <span className="trip-details__add-places-community-card-type">{itinerary.type}</span>
-                                      </div>
-                                      <div className="trip-details__add-places-community-card-footer">
-                                        <span className="trip-details__add-places-community-card-profile">
-                                          {itinerary.author?.travelStyle || itinerary.type}
-                                        </span>
-                                        <span className="trip-details__add-places-community-card-views">
-                                          {(Number(itinerary.views || 0)).toLocaleString()} Viewed
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </>
-                          );
-                        }
 
                         return (
                           <>
@@ -4047,60 +3995,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                             {discoveryLoading && (
                               <p className="trip-details__add-places-results">Loading live places for {cityQuery}...</p>
                             )}
-                            {communityItineraries.length > 0 && (
-                              <div className="trip-details__add-places-community-section">
-                                <div className="trip-details__add-places-community-header-row">
-                                  <h3 className="trip-details__add-places-community-title">
-                                    <Users size={20} aria-hidden /> Community Itineraries for {cityQuery}
-                                  </h3>
-                                  <button
-                                    type="button"
-                                    className="trip-details__add-places-community-browse"
-                                    onClick={() => setCommunityBrowseAllOpen(true)}
-                                  >
-                                    Browse all
-                                  </button>
-                                </div>
-                                <p className="trip-details__add-places-community-subtitle">
-                                  Explore trip ideas created by other travelers
-                                </p>
-                                <div className="trip-details__add-places-community-grid">
-                                  {communityItineraries.slice(0, 3).map((itinerary) => (
-                                    <div
-                                      key={itinerary.id}
-                                      className="trip-details__add-places-community-card"
-                                      onClick={() => openCommunityItineraryDetails(itinerary)}
-                                      role="button"
-                                      tabIndex={0}
-                                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCommunityItineraryDetails(itinerary); } }}
-                                    >
-                                      <div className="trip-details__add-places-community-card-img-wrap">
-                                        <img src={resolveImageUrl(itinerary.image, itinerary.title, 'itinerary')} alt="" className="trip-details__add-places-community-card-img" onError={handleImageError} />
-                                        <span className="trip-details__add-places-community-card-duration">{itinerary.duration}</span>
-                                      </div>
-                                      <div className="trip-details__add-places-community-card-content">
-                                        <h4 className="trip-details__add-places-community-card-title">{itinerary.title}</h4>
-                                        <div className="trip-details__add-places-community-card-meta">
-                                          <span className="trip-details__add-places-community-card-creator">
-                                            <Users size={14} aria-hidden /> {itinerary.creator}
-                                          </span>
-                                          <span className="trip-details__add-places-community-card-type">{itinerary.type}</span>
-                                        </div>
-                                        <div className="trip-details__add-places-community-card-footer">
-                                          <span className="trip-details__add-places-community-card-profile">
-                                            {itinerary.author?.travelStyle || itinerary.type}
-                                          </span>
-                                          <span className="trip-details__add-places-community-card-views">
-                                            {(Number(itinerary.views || 0)).toLocaleString()} Viewed
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
                             <p className="trip-details__add-places-results">
                               {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
                             </p>
@@ -4227,7 +4121,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <button type="button" className="trip-details__place-detail-back" onClick={() => { setPlaceDetailsView(null); setPlaceDetailsTab('overview'); }} aria-label="Back to list">
                         <ArrowLeft size={20} aria-hidden /> Back
                       </button>
-                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); setCommunityBrowseAllOpen(false); setSelectedPlaceMarkerId(null); }}>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setPlaceDetailsView(null); setSelectedPlaceMarkerId(null); }}>
                         <X size={20} aria-hidden />
                       </button>
                       <h1 id="place-detail-title" className="trip-details__place-detail-name">{detailPlace.name}</h1>
@@ -4426,8 +4320,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
       {addFoodOpen && (() => {
         const showingFoodDetail = foodDetailsView != null;
-        const showingItineraryDetail = itineraryDetailsView != null;
-        const showingAnyDetail = showingFoodDetail || showingItineraryDetail;
+        const showingAnyDetail = showingFoodDetail;
         const foodPlaces = filteredFoods;
         const foodMapMarkers = foodPlaces
           .filter((place) => place.lat != null && place.lng != null)
@@ -4446,58 +4339,6 @@ export default function TripDetailsPage({ user, onLogout }) {
             website: place.website || '',
             originalData: place,
           }));
-        const foodieItineraries = communityItineraries.filter((it) => String(it.type || '').toLowerCase().includes('food'));
-        const localCommunityItineraries = foodieItineraries.length > 0 ? foodieItineraries : communityItineraries;
-        const foodItineraryPlaces = showingItineraryDetail && itineraryDetailsView
-          ? (Array.isArray(itineraryDetailsView.places) ? itineraryDetailsView.places : []).map((place, index) => {
-            const dayNumValue = Number(place?.dayNum || place?.day || Math.floor(index / 3) + 1);
-            return {
-              ...place,
-              id: place?.id || `${itineraryDetailsView.id || 'community-itinerary'}-food-place-${index + 1}`,
-              dayNum: Number.isFinite(dayNumValue) && dayNumValue > 0 ? dayNumValue : 1,
-            };
-          })
-          : [];
-        const foodItineraryDayGroups = showingItineraryDetail
-          ? Object.values(
-            foodItineraryPlaces.reduce((acc, place) => {
-              const dayNum = Number(place.dayNum || 1);
-              if (!acc[dayNum]) {
-                acc[dayNum] = {
-                  dayNum,
-                  title: place.dayTitle || `Day ${dayNum} in ${cityQuery}`,
-                  places: [],
-                };
-              }
-              acc[dayNum].places.push(place);
-              return acc;
-            }, {}),
-          ).sort((a, b) => a.dayNum - b.dayNum)
-          : [];
-        const foodSelectedItineraryPlace = foodItineraryPlaces.find((place) => String(place.id) === String(selectedPlaceMarkerId)) || null;
-        const foodItineraryMarkers = foodItineraryPlaces
-          .filter((place) => place.lat != null && place.lng != null)
-          .map((place) => ({
-            id: place.id,
-            sourceId: place.id,
-            markerType: 'place',
-            name: place.name,
-            lat: place.lat,
-            lng: place.lng,
-            dayNum: Number(place.dayNum) > 0 ? Number(place.dayNum) : 1,
-            address: place.address || cityQuery,
-            rating: place.rating,
-            reviewCount: place.reviewCount,
-            image: place.image,
-            website: place.website || '',
-            originalData: place,
-          }));
-        const firstFoodItineraryPlaceWithCoords = foodItineraryPlaces.find((place) => place.lat != null && place.lng != null);
-        const foodItineraryMapCenter = foodSelectedItineraryPlace && foodSelectedItineraryPlace.lat != null && foodSelectedItineraryPlace.lng != null
-          ? [foodSelectedItineraryPlace.lat, foodSelectedItineraryPlace.lng]
-          : firstFoodItineraryPlaceWithCoords
-            ? [firstFoodItineraryPlaceWithCoords.lat, firstFoodItineraryPlaceWithCoords.lng]
-            : mapCenter;
 
         return (
           <>
@@ -4505,112 +4346,10 @@ export default function TripDetailsPage({ user, onLogout }) {
               type="button"
               className="trip-details__modal-backdrop"
               aria-label="Close"
-              onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); setFoodDetailsView(null); }}
+              onClick={() => { setAddFoodOpen(false); setFoodDetailsView(null); }}
             />
-            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'food-detail-title') : 'add-food-title'} aria-modal="true">
-              {showingItineraryDetail ? (
-                <div className="trip-details__add-places-body trip-details__add-food-body">
-                  <div className="trip-details__itinerary-detail-panel">
-                    <div className="trip-details__itinerary-detail-header">
-                      <button type="button" className="trip-details__place-detail-back" onClick={() => setItineraryDetailsView(null)} aria-label="Back to list">
-                        <ArrowLeft size={20} aria-hidden /> Back
-                      </button>
-                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); }}>
-                        <X size={20} aria-hidden />
-                      </button>
-                      <h1 id="itinerary-detail-title" className="trip-details__itinerary-detail-name">{itineraryDetailsView.title}</h1>
-                      {itineraryDetailsView.author?.travelStyle && (
-                        <p className="trip-details__itinerary-detail-author-style">{itineraryDetailsView.author.travelStyle}</p>
-                      )}
-                      <div className="trip-details__itinerary-detail-meta">
-                        <span className="trip-details__itinerary-detail-creator">
-                          <Users size={16} aria-hidden /> {itineraryDetailsView.creator}
-                        </span>
-                        <span className="trip-details__itinerary-detail-stat">{(Number(itineraryDetailsView.views || 0)).toLocaleString()} views</span>
-                        <span className="trip-details__itinerary-detail-stat">{itineraryDetailsView.duration}</span>
-                        <span className="trip-details__itinerary-detail-stat">{Number(itineraryDetailsView.countriesCount || 1)} country</span>
-                        <span className="trip-details__itinerary-detail-stat">{foodItineraryPlaces.length} places</span>
-                      </div>
-                      <div className="trip-details__itinerary-detail-tags">
-                        {(Array.isArray(itineraryDetailsView.tags) ? itineraryDetailsView.tags : [itineraryDetailsView.type]).filter(Boolean).slice(0, 5).map((tag) => (
-                          <span key={tag} className="trip-details__itinerary-detail-tag">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="trip-details__itinerary-detail-content">
-                      {foodItineraryDayGroups.length > 0 ? foodItineraryDayGroups.map((dayGroup) => (
-                        <div key={`food-itinerary-day-${dayGroup.dayNum}`} className="trip-details__itinerary-detail-day">
-                          <div className="trip-details__itinerary-detail-day-header">
-                            <span className="trip-details__itinerary-detail-day-badge">Day {dayGroup.dayNum}</span>
-                            <span className="trip-details__itinerary-detail-day-title">{dayGroup.title}</span>
-                          </div>
-                          <div className="trip-details__itinerary-detail-places">
-                            {dayGroup.places.map((place) => (
-                              <div
-                                key={place.id}
-                                role="button"
-                                tabIndex={0}
-                                className="trip-details__itinerary-detail-place trip-details__itinerary-detail-place--interactive"
-                                onClick={() => openItineraryPlaceDetails(place)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    openItineraryPlaceDetails(place);
-                                  }
-                                }}
-                              >
-                                <div className="trip-details__itinerary-detail-place-img-wrap">
-                                  <img src={resolveImageUrl(place.image || itineraryDetailsView.image, place.name || itineraryDetailsView.title, 'landmark')} alt="" className="trip-details__itinerary-detail-place-img" onError={handleImageError} />
-                                </div>
-                                <div className="trip-details__itinerary-detail-place-content">
-                                  <h3 className="trip-details__itinerary-detail-place-name">{place.name}</h3>
-                                  <div className="trip-details__itinerary-detail-place-rating">
-                                    <Star size={14} fill="currentColor" aria-hidden /> {place.rating} ({(place.reviewCount || 0).toLocaleString()}) · Place
-                                  </div>
-                                  <div className="trip-details__itinerary-detail-place-address">
-                                    <MapPin size={14} aria-hidden /> {place.address || cityQuery}
-                                  </div>
-                                  <div className="trip-details__itinerary-detail-place-duration">
-                                    <Clock size={14} aria-hidden /> Duration: {place.durationLabel || place.duration || '2 hr'}
-                                  </div>
-                                  <div className="trip-details__itinerary-detail-place-note">
-                                    <strong>Note:</strong> {place.note || place.overview || 'Community recommendation from this itinerary.'}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )) : (
-                        <p className="trip-details__add-places-results">No places found for this itinerary.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="trip-details__add-places-map-panel">
-                    <div className="trip-details__add-places-map">
-                      <TripMap
-                        center={foodItineraryMapCenter}
-                        zoom={11}
-                        markers={foodItineraryMarkers}
-                        activeDayNums={allDayNums}
-                        className="trip-details__add-places-trip-map"
-                        fitBounds={foodItineraryMarkers.length > 0}
-                        selectedMarkerId={selectedPlaceMarkerId}
-                        popupMode="hover-preview"
-                        onMarkerAddClick={openAddToTripFromMapMarker}
-                        onMarkerViewDetails={openAddPlacesDetailsFromMapMarker}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      className="trip-details__add-places-filter-days"
-                      onClick={() => { resetMapDays(); setMapDayFilterOpen(true); }}
-                    >
-                      <CalendarIcon size={16} aria-hidden /> Filter days
-                    </button>
-                  </div>
-                </div>
-              ) : showingFoodDetail ? (
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? 'food-detail-title' : 'add-food-title'} aria-modal="true">
+              {showingFoodDetail ? (
                 // Food Detail View
                 <div className="trip-details__add-places-body trip-details__add-food-body">
                   <div className="trip-details__place-detail-panel">
@@ -4779,69 +4518,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
                       <span>{trip.locations || trip.destination}</span>
                     </div>
-                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); setItineraryDetailsView(null); }}>
+                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => { setAddFoodOpen(false); }}>
                       <X size={20} aria-hidden />
                     </button>
                   </div>
                   <div className="trip-details__add-places-body trip-details__add-food-body">
                     <div className="trip-details__add-places-list-panel trip-details__add-food-panel">
-                      {communityItineraries.length > 0 && (
-                        <div className="trip-details__add-places-community-section">
-                          <div className="trip-details__add-places-community-header-row">
-                            <h3 className="trip-details__add-places-community-title">
-                              <Users size={20} aria-hidden /> Community Itineraries for {cityQuery}
-                            </h3>
-                            <button
-                              type="button"
-                              className="trip-details__add-places-community-browse"
-                              onClick={openCommunityBrowseAll}
-                            >
-                              Browse all
-                            </button>
-                          </div>
-                          <p className="trip-details__add-places-community-subtitle">
-                            Food-focused plans from other travelers in {cityQuery}
-                          </p>
-                          <div className="trip-details__add-places-community-grid">
-                            {communityItineraries.slice(0, 3).map((itinerary) => (
-                              <div
-                                key={itinerary.id}
-                                className="trip-details__add-places-community-card"
-                                onClick={() => openCommunityItineraryDetails(itinerary)}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCommunityItineraryDetails(itinerary); } }}
-                              >
-                                <div className="trip-details__add-places-community-card-img-wrap">
-                                  <img src={resolveImageUrl(itinerary.image, itinerary.title, 'itinerary')} alt="" className="trip-details__add-places-community-card-img" onError={handleImageError} />
-                                  <span className="trip-details__add-places-community-card-duration">{itinerary.duration}</span>
-                                </div>
-                                <div className="trip-details__add-places-community-card-content">
-                                  <div className="trip-details__add-places-community-top">
-                                    <span className="trip-details__add-places-community-views">{(Number(itinerary.views || 0)).toLocaleString()} Viewed</span>
-                                  </div>
-                                  <h4 className="trip-details__add-places-community-card-title">{itinerary.title}</h4>
-                                  <div className="trip-details__add-places-community-card-meta">
-                                    <span className="trip-details__add-places-community-card-creator">
-                                      <Users size={14} aria-hidden /> {itinerary.creator}
-                                    </span>
-                                    <span className="trip-details__add-places-community-card-type">{itinerary.type}</span>
-                                  </div>
-                                  <div className="trip-details__add-places-community-card-footer">
-                                    <span className="trip-details__add-places-community-card-profile">
-                                      {itinerary.author?.travelStyle || itinerary.type}
-                                    </span>
-                                    <span className="trip-details__add-places-community-card-views">
-                                      {(Number(itinerary.views || 0)).toLocaleString()} Viewed
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       <div className="trip-details__add-places-search-wrap">
                         <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
                         <input
@@ -5821,12 +5503,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                     onClick={() => {
                       if (id === 'place') {
                         setAddPlacesDay(addSheetDay ?? 1);
-                        setCommunityBrowseAllOpen(false);
                         setAddPlacesOpen(true);
                       } else if (id === 'food') {
                         const day = days.find((d) => d.dayNum === (addSheetDay ?? 1));
                         setAddFoodDay(addSheetDay ?? 1);
-                        setCommunityBrowseAllOpen(false);
                         setFoodSearchQuery('');
                         setFoodDietaryFilter('All');
                         setFoodSortBy('Recommended');
@@ -5840,7 +5520,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                         setExperienceSortBy('Recently added');
                         setAddExperiencesOpen(true);
                       } else if (id === 'transportation') {
-                        setCommunityBrowseAllOpen(false);
                         setAddTransportDay(addSheetDay ?? 1);
                         setAddTransportOpen(true);
                       } else if (id === 'community') {

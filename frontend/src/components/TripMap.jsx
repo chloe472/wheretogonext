@@ -7,6 +7,63 @@ import './TripMap.css';
 
 const DAY_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#7c3aed', '#ea580c'];
 
+const MARKER_VARIANTS = {
+  sight: { className: 'trip-map__marker-pin--sight', glyph: '🏰' },
+  shopping: { className: 'trip-map__marker-pin--shopping', glyph: '🛍️' },
+  food: { className: 'trip-map__marker-pin--food', glyph: '🍸' },
+  nature: { className: 'trip-map__marker-pin--nature', glyph: '🌲' },
+  experience: { className: 'trip-map__marker-pin--experience', glyph: '⭐' },
+  trip: { className: 'trip-map__marker-pin--trip', glyph: '•' },
+};
+
+function inferMarkerVariant(marker) {
+  if (!marker) return 'sight';
+
+  const markerType = String(marker.markerType || '').toLowerCase();
+  if (markerType === 'food') return 'food';
+  if (markerType === 'experience') return 'experience';
+  if (markerType === 'trip') return 'trip';
+
+  const tags = Array.isArray(marker.tags)
+    ? marker.tags
+    : Array.isArray(marker.originalData?.tags)
+      ? marker.originalData.tags
+      : [];
+
+  const typeHints = [
+    marker.markerCategory,
+    marker.type,
+    marker.originalData?.type,
+    ...tags,
+    marker.name,
+    marker.address,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (/(food|restaurant|dining|cafe|bar|drink|cocktail)/.test(typeHints)) return 'food';
+  if (/(shop|shopping|mall|market|boutique|store)/.test(typeHints)) return 'shopping';
+  if (/(park|garden|nature|trail|forest|mountain|beach|waterfall)/.test(typeHints)) return 'nature';
+
+  return 'sight';
+}
+
+function getMarkerIcon(marker) {
+  const variantKey = inferMarkerVariant(marker);
+  const variant = MARKER_VARIANTS[variantKey] || MARKER_VARIANTS.sight;
+  const dayColor = DAY_COLORS[((Number(marker?.dayNum) || 1) % 5) || 0];
+  const styleAttr = variantKey === 'trip' ? ` style=\"background:${dayColor}\"` : '';
+
+  return L.divIcon({
+    className: 'trip-map__marker',
+    html: `<span class=\"trip-map__marker-pin ${variant.className}\"${styleAttr}><span class=\"trip-map__marker-glyph\">${variant.glyph}</span></span>`,
+    iconSize: [28, 36],
+    iconAnchor: [14, 34],
+    popupAnchor: [0, -30],
+  });
+}
+
 function FitBounds({ markers, disabled = false }) {
   const map = useMap();
   const key = markers?.length ? markers.map((m) => `${m.lat},${m.lng}`).join('|') : '';
@@ -246,13 +303,7 @@ export default function TripMap({
                 if (typeof onMarkerClick === 'function') onMarkerClick(m);
               },
             }}
-            icon={L.divIcon({
-              className: 'trip-map__marker',
-              html: `<span class="trip-map__marker-dot" style="background:${DAY_COLORS[((m.dayNum || 1) % 5) || 0]
-                }"></span>`,
-              iconSize: [24, 24],
-              iconAnchor: [12, 12],
-            })}
+            icon={getMarkerIcon(m)}
           >
             {popupMode === 'hover-preview' ? (
               (String(hoveredMarkerId) === String(m.id) || String(selectedMarkerId) === String(m.id)) ? (

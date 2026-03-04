@@ -1,7 +1,7 @@
 import { getMapCenterForDestination } from './mockPlaces';
 
 export const FOOD_DIETARY_FILTERS = ['All', 'Muslim-Friendly', 'Vegetarian', 'Vegan', 'Late Night', 'Cafe'];
-export const FOOD_SORT_OPTIONS = ['Recommended', 'Rating', 'Reviews', 'Name'];
+export const FOOD_SORT_OPTIONS = ['Recommended', 'Rating', 'Most reviewed', 'Name'];
 
 const FOOD_BY_DESTINATION = {
   Tokyo: [
@@ -69,7 +69,7 @@ export function getFoodAndBeveragesForDestination(destinationOrLocations, option
   }
 
   if (sortBy === 'Rating') list.sort((a, b) => b.rating - a.rating);
-  else if (sortBy === 'Reviews') list.sort((a, b) => b.reviewCount - a.reviewCount);
+  else if (sortBy === 'Most reviewed' || sortBy === 'Reviews') list.sort((a, b) => b.reviewCount - a.reviewCount);
   else if (sortBy === 'Name') list.sort((a, b) => a.name.localeCompare(b.name));
 
   return list;

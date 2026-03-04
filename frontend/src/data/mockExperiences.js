@@ -3,7 +3,7 @@ import { getMapCenterForDestination } from './mockPlaces';
 export const EXPERIENCE_TYPES = ['All', 'Day Trips', 'Guided Tours', 'Attraction', 'Outdoor Activities', 'Cultural Tours', 'Food Tours'];
 export const EXPERIENCE_PRICE_RANGES = ['All', 'US$0 - 50', 'US$50 - 100', 'US$100 - 200', 'US$200+'];
 export const EXPERIENCE_DURATIONS = ['All', 'Less than 4 hours', '4-8 hours', '8-12 hours', 'Full day (12+ hours)'];
-export const EXPERIENCE_SORT_OPTIONS = ['Recently added', 'Price: Low to High', 'Price: High to Low', 'Rating', 'Duration'];
+export const EXPERIENCE_SORT_OPTIONS = ['Most reviewed', 'Recently added', 'Price: Low to High', 'Price: High to Low', 'Rating', 'Duration'];
 
 const EXPERIENCES_BY_DESTINATION = {
   Tokyo: [
@@ -520,7 +520,9 @@ export function getExperiencesForDestination(destinationOrLocations, options = {
   }
 
   // Sort
-  if (sortBy === 'Price: Low to High') {
+  if (sortBy === 'Most reviewed') {
+    list.sort((a, b) => b.reviewCount - a.reviewCount);
+  } else if (sortBy === 'Price: Low to High') {
     list.sort((a, b) => a.price - b.price);
   } else if (sortBy === 'Price: High to Low') {
     list.sort((a, b) => b.price - a.price);

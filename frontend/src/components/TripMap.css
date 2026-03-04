@@ -18,13 +18,64 @@
   border: none !important;
 }
 
-.trip-map__marker-dot {
-  display: block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+.trip-map__marker-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+}
+
+.trip-map__marker-pin::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: inherit;
+}
+
+.trip-map__marker-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(45deg);
+  font-size: 13px;
+  line-height: 1;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.trip-map__marker-pin--sight {
+  background: #22b8cf;
+}
+
+.trip-map__marker-pin--shopping {
+  background: #2563eb;
+}
+
+.trip-map__marker-pin--food {
+  background: #ec4899;
+}
+
+.trip-map__marker-pin--nature {
+  background: #16a34a;
+}
+
+.trip-map__marker-pin--experience {
+  background: #7c3aed;
+}
+
+.trip-map__marker-pin--trip {
+  background: #2563eb;
 }
 
 .trip-map__popup-day {
