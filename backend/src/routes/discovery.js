@@ -7,6 +7,11 @@ const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const WIKI_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary';
 const WIKI_SEARCH_URL = 'https://en.wikipedia.org/w/api.php';
 const WIKIDATA_ENTITY_URL = 'https://www.wikidata.org/w/api.php';
+const WIKIMEDIA_COMMONS_API_URL = 'https://commons.wikimedia.org/w/api.php';
+const OPENVERSE_IMAGE_SEARCH_URL = 'https://api.openverse.org/v1/images/';
+const FOURSQUARE_API_BASE = 'https://api.foursquare.com/v3';
+
+const FOURSQUARE_API_KEY = process.env.FOURSQUARE_API_KEY || '';
 
 const headers = {
   'User-Agent': 'WhereToGoNext/1.0 (travel-planner)',
@@ -18,6 +23,7 @@ const DISCOVERY_CACHE = new Map();
 const IMAGE_RESOLVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const IMAGE_RESOLVE_CACHE = new Map();
 const WIKI_SUMMARY_CACHE = new Map();
+const IMAGE_URL_CACHE = new Map();
 
 function getTimedCache(map, key, ttlMs) {
   const hit = map.get(key);
@@ -125,6 +131,45 @@ function scoreElement(item, centerLat, centerLon) {
   }
 
   return score;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function stableHash(value = '') {
+  let hash = 0;
+  const text = String(value || '');
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function buildPlaceTags(item, rating, reviewCount, distanceKm) {
+  const tags = [];
+  const tourismType = String(item.tourismType || '').toLowerCase();
+  const isIconicType = ['attraction', 'museum', 'theme_park', 'zoo', 'monument'].includes(tourismType);
+
+  if (isIconicType || rating >= 4.6 || reviewCount >= 12000) {
+    tags.push('Must go');
+  }
+
+  if (reviewCount >= 3000) {
+    tags.push('Seen in 100+ plans');
+  }
+
+  const hiddenGemType = ['gallery', 'viewpoint'].includes(tourismType);
+  if ((hiddenGemType || distanceKm > 2.5) && rating >= 4.3 && reviewCount < 4000) {
+    tags.push('Hidden gem');
+  }
+
+  if (tags.length === 0) {
+    tags.push('Must go');
+  }
+
+  return [...new Set(tags)];
 }
 
 async function geocodeDestination(destination) {
@@ -372,8 +417,117 @@ function buildWhySkip(place = {}) {
 }
 
 function fallbackImage(seed, topic = 'travel') {
-  const normalizedSeed = encodeURIComponent(`${topic}-${String(seed || 'place').toLowerCase()}`);
-  return `https://picsum.photos/seed/${normalizedSeed}/800/520`;
+  return '';
+}
+
+function svgPlaceholderMarkup(title = 'Image unavailable', subtitle = 'Travel photo placeholder') {
+  const safeTitle = String(title || 'Image unavailable').replace(/[<>&"']/g, '');
+  const safeSubtitle = String(subtitle || '').replace(/[<>&"']/g, '');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img" aria-label="${safeTitle}">
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <text x="400" y="285" fill="#64748b" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">${safeTitle}</text>
+  <text x="400" y="325" fill="#64748b" font-size="18" font-family="Arial, sans-serif" text-anchor="middle">${safeSubtitle}</text>
+</svg>`;
+}
+
+async function fetchFoursquareVenuePhoto(venueName = '', location = '') {
+  if (!FOURSQUARE_API_KEY) return '';
+  const query = String(venueName || '').trim();
+  const near = String(location || '').trim();
+  if (!query) return '';
+
+  try {
+    const searchParams = new URLSearchParams({
+      query,
+      near: near || 'Malaysia',
+      limit: '5',
+    });
+
+    const searchRes = await fetchWithTimeout(
+      `${FOURSQUARE_API_BASE}/places/search?${searchParams.toString()}`,
+      {
+        headers: {
+          ...headers,
+          Authorization: FOURSQUARE_API_KEY,
+          Accept: 'application/json',
+        },
+      },
+      6000,
+    );
+
+    if (!searchRes.ok) return '';
+    const searchData = await searchRes.json().catch(() => ({}));
+    const venues = Array.isArray(searchData?.results) ? searchData.results : [];
+    if (venues.length === 0) return '';
+
+    for (const venue of venues) {
+      const venueId = venue?.fsq_id;
+      if (!venueId) continue;
+
+      try {
+        const photoRes = await fetchWithTimeout(
+          `${FOURSQUARE_API_BASE}/places/${venueId}/photos?limit=5`,
+          {
+            headers: {
+              ...headers,
+              Authorization: FOURSQUARE_API_KEY,
+              Accept: 'application/json',
+            },
+          },
+          5000,
+        );
+
+        if (!photoRes.ok) continue;
+        const photoData = await photoRes.json().catch(() => ({}));
+        const photos = Array.isArray(photoData) ? photoData : [];
+        
+        for (const photo of photos) {
+          if (!photo?.prefix || !photo?.suffix) continue;
+          const photoUrl = `${photo.prefix}800x600${photo.suffix}`;
+          const validated = await validateImageUrl(photoUrl, { trustAnyHost: true });
+          if (validated) return validated;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+async function fetchOpenverseImageByQuery(queryText = '', topic = 'travel') {
+  const query = String(queryText || '').trim();
+  const normalizedTopic = String(topic || 'travel').trim();
+  const composedQuery = [query, normalizedTopic].filter(Boolean).join(' ');
+  if (!composedQuery) return '';
+
+  try {
+    const params = new URLSearchParams({
+      q: composedQuery,
+      page_size: '20',
+      mature: 'false',
+      extension: 'jpg',
+    });
+
+    const res = await fetchWithTimeout(`${OPENVERSE_IMAGE_SEARCH_URL}?${params.toString()}`, {}, 7000);
+    if (!res.ok) return '';
+    const data = await res.json().catch(() => ({}));
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    for (const result of results) {
+      const candidate = String(result?.thumbnail || result?.url || '').trim();
+      if (!candidate) continue;
+      const validated = await validateImageUrl(candidate, { trustAnyHost: true });
+      if (validated) return validated;
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 function commonsFileUrl(fileName, width = 900) {
@@ -421,6 +575,190 @@ function tokenizeForMatch(value = '') {
     .split(/\s+/)
     .map((t) => t.trim())
     .filter((t) => t.length >= 2 && !stopwords.has(t));
+}
+
+function uniqueTokens(value = '') {
+  return [...new Set(tokenizeForMatch(value))];
+}
+
+function destinationHintScore(destinationHint = '', candidateTitle = '', candidateSnippet = '') {
+  const destinationTokens = uniqueTokens(destinationHint);
+  if (destinationTokens.length === 0) return 0.5;
+
+  const combined = `${candidateTitle} ${candidateSnippet}`.toLowerCase();
+  const hitCount = destinationTokens.reduce((count, token) => (combined.includes(token) ? count + 1 : count), 0);
+  return clamp(hitCount / destinationTokens.length, 0, 1);
+}
+
+function maybeHttpUrl(value = '') {
+  const text = String(value || '').trim();
+  return /^https?:\/\//i.test(text);
+}
+
+function decodeHtmlEntities(value = '') {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function commonsSearchKeywords(item = {}) {
+  const name = String(item.name || '').trim();
+  const address = String(item.address || '').trim();
+  const type = String(item.type || item.tourismType || item.amenityType || '').trim();
+  const city = parseDestination(address);
+
+  const queries = [
+    [name, city].filter(Boolean).join(' '),
+    [name, address].filter(Boolean).join(' '),
+    [name, type, city].filter(Boolean).join(' '),
+    name,
+  ]
+    .map((q) => q.trim())
+    .filter(Boolean);
+
+  return [...new Set(queries)].slice(0, 4);
+}
+
+function isLowQualityCommonsTitle(title = '') {
+  const value = String(title || '').toLowerCase();
+  if (!value) return true;
+  if (value.includes('logo')) return true;
+  if (value.includes('map')) return true;
+  if (value.includes('flag')) return true;
+  if (value.includes('coat of arms')) return true;
+  if (value.includes('locator')) return true;
+  if (value.includes('icon')) return true;
+  return false;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      redirect: 'follow',
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function validateImageUrl(url = '', options = {}) {
+  if (!maybeHttpUrl(url)) return '';
+  const { trustAnyHost = false } = options || {};
+
+  const normalized = String(url || '').trim();
+  const cached = getTimedCache(IMAGE_URL_CACHE, normalized, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (typeof cached === 'string') return cached;
+
+  const allowedByPattern = trustAnyHost || /wikimedia\.org|wikipedia\.org|openstreetmap\.org/i.test(normalized);
+  if (!allowedByPattern) return '';
+
+  try {
+    const head = await fetchWithTimeout(normalized, { method: 'HEAD' }, 5000);
+    if (head.ok) {
+      const type = String(head.headers.get('content-type') || '').toLowerCase();
+      if (type.startsWith('image/')) {
+        const finalUrl = head.url || normalized;
+        setTimedCache(IMAGE_URL_CACHE, normalized, finalUrl);
+        return finalUrl;
+      }
+    }
+  } catch {
+    // continue to GET fallback
+  }
+
+  try {
+    const get = await fetchWithTimeout(normalized, {
+      method: 'GET',
+      headers: {
+        Range: 'bytes=0-1024',
+      },
+    }, 7000);
+    if (!get.ok) return '';
+    const type = String(get.headers.get('content-type') || '').toLowerCase();
+    if (!type.startsWith('image/')) return '';
+    const finalUrl = get.url || normalized;
+    setTimedCache(IMAGE_URL_CACHE, normalized, finalUrl);
+    return finalUrl;
+  } catch {
+    return '';
+  }
+}
+
+async function fetchCommonsImageBySearch(item = {}) {
+  const queries = commonsSearchKeywords(item);
+  if (queries.length === 0) return null;
+
+  for (const queryText of queries) {
+    try {
+      const params = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        generator: 'search',
+        gsrsearch: `file:${queryText}`,
+        gsrnamespace: '6',
+        gsrlimit: '12',
+        prop: 'imageinfo',
+        iiprop: 'url|mime',
+        iiurlwidth: '900',
+        origin: '*',
+      });
+
+      const res = await fetch(`${WIKIMEDIA_COMMONS_API_URL}?${params.toString()}`, { headers });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const pages = Object.values(data?.query?.pages || {});
+      if (!Array.isArray(pages) || pages.length === 0) continue;
+
+      const ranked = pages
+        .map((page) => {
+          const title = decodeHtmlEntities(String(page?.title || '').replace(/^File:/i, '').trim());
+          const imageInfo = Array.isArray(page?.imageinfo) ? page.imageinfo[0] : null;
+          const imageUrl = String(imageInfo?.thumburl || imageInfo?.url || '').trim();
+          const mime = String(imageInfo?.mime || '').toLowerCase();
+
+          if (!imageUrl || !mime.startsWith('image/')) return null;
+          if (isLowQualityCommonsTitle(title)) return null;
+
+          const nameScore = computeNameMatchScore(item.name || '', title, queryText);
+          const cityScore = destinationHintScore(item.address || '', title, queryText);
+          const score = nameScore * 0.8 + cityScore * 0.2;
+
+          return {
+            title,
+            imageUrl,
+            score,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.score - a.score);
+
+      const best = ranked[0];
+      if (!best || best.score < 0.65) continue;
+
+      const validated = await validateImageUrl(best.imageUrl);
+      if (!validated) continue;
+
+      return {
+        image: validated,
+        sourceTitle: best.title,
+      };
+    } catch {
+      // continue next query
+    }
+  }
+
+  return null;
 }
 
 function computeNameMatchScore(placeName = '', candidateTitle = '', candidateSnippet = '') {
@@ -512,12 +850,64 @@ async function fetchWikipediaSummaryBySearch(name = '', destinationHint = '') {
       .map((candidate) => ({
         title: candidate?.title || '',
         snippet: String(candidate?.snippet || '').replace(/<[^>]*>/g, ' '),
-        score: computeNameMatchScore(name, candidate?.title || '', candidate?.snippet || ''),
+        score: (
+          computeNameMatchScore(name, candidate?.title || '', candidate?.snippet || '') * 0.8
+          + destinationHintScore(destinationHint, candidate?.title || '', candidate?.snippet || '') * 0.2
+        ),
       }))
       .sort((a, b) => b.score - a.score);
 
     const best = ranked[0];
-    if (!best?.title || best.score < 0.5) return null;
+    if (!best?.title || best.score < 0.65) return null;
+
+    const summary = await fetchWikipediaSummary(best.title, name);
+    if (!summary?.image) return null;
+    setTimedCache(WIKI_SUMMARY_CACHE, cacheKey, summary);
+    return summary;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWikipediaSummaryByGeo(name = '', lat, lng, destinationHint = '') {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const cacheKey = `geo::${String(name || '').toLowerCase()}::${lat.toFixed(3)}::${lng.toFixed(3)}`;
+  const cached = getTimedCache(WIKI_SUMMARY_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  try {
+    const query = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      list: 'geosearch',
+      gscoord: `${lat}|${lng}`,
+      gsradius: '2500',
+      gslimit: '12',
+      origin: '*',
+    });
+    const res = await fetch(`${WIKI_SEARCH_URL}?${query.toString()}`, { headers });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const candidates = Array.isArray(data?.query?.geosearch) ? data.query.geosearch : [];
+    if (candidates.length === 0) return null;
+
+    const ranked = candidates
+      .map((candidate) => {
+        const title = String(candidate?.title || '');
+        const dist = Number(candidate?.dist || 99999);
+        const nameScore = computeNameMatchScore(name, title, `${destinationHint} ${title}`);
+        const proximityScore = dist <= 100 ? 1 : dist <= 500 ? 0.8 : dist <= 1200 ? 0.6 : dist <= 2500 ? 0.4 : 0.2;
+        return {
+          title,
+          score: nameScore * 0.7 + proximityScore * 0.2 + destinationHintScore(destinationHint, title, '') * 0.1,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const best = ranked[0];
+    if (!best?.title || best.score < 0.65) return null;
 
     const summary = await fetchWikipediaSummary(best.title, name);
     if (!summary?.image) return null;
@@ -564,20 +954,20 @@ async function resolveOpenDataPhoto(item = {}) {
   const cached = getTimedCache(IMAGE_RESOLVE_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
   if (cached) return cached;
 
-  const tags = item.tags || {};
+  const tags = item.osmTags || item.tags || {};
   let image = '';
   let wikiUrl = '';
   let extract = '';
 
   const directTagImage = String(tags.image || '').trim();
-  if (/^https?:\/\//i.test(directTagImage)) {
-    image = directTagImage;
+  if (maybeHttpUrl(directTagImage)) {
+    image = await validateImageUrl(directTagImage);
   }
 
   if (!image) {
     const commonsFile = parseCommonsFileTag(tags.wikimedia_commons || tags.wikimedia || '');
     if (commonsFile) {
-      image = commonsFileUrl(commonsFile);
+      image = await validateImageUrl(commonsFileUrl(commonsFile));
     }
   }
 
@@ -586,24 +976,36 @@ async function resolveOpenDataPhoto(item = {}) {
     const wikidata = parseWikidataTag(tags.wikidata || item.wikidataTag || '');
     if (wikidata) {
       const wikidataHit = await fetchWikidataImageByQid(wikidata);
-      if (wikidataHit?.image) image = wikidataHit.image;
+      if (wikidataHit?.image) image = await validateImageUrl(wikidataHit.image);
       if (!wikiTitle && wikidataHit?.wikiTitle) wikiTitle = wikidataHit.wikiTitle;
       if (!wikiUrl && wikidataHit?.wikiUrl) wikiUrl = wikidataHit.wikiUrl;
     }
   }
 
   const summary = wikiTitle
-    ? await fetchWikipediaSummary(wikiTitle)
+    ? await fetchWikipediaSummary(wikiTitle, item.name || '')
     : await fetchWikipediaSummaryBySearch(item.name || '', item.address || '');
-  if (!image && summary?.image) image = summary.image;
+  if (!image && summary?.image) image = await validateImageUrl(summary.image);
   if (!wikiUrl && summary?.wikiUrl) wikiUrl = summary.wikiUrl;
   if (summary?.extract) extract = summary.extract;
 
   if (!image) {
+    const geoSummary = await fetchWikipediaSummaryByGeo(item.name || '', item.lat, item.lng, item.address || '');
+    if (geoSummary?.image) image = await validateImageUrl(geoSummary.image);
+    if (!wikiUrl && geoSummary?.wikiUrl) wikiUrl = geoSummary.wikiUrl;
+    if (!extract && geoSummary?.extract) extract = geoSummary.extract;
+  }
+
+  if (!image) {
     const searchSummary = await fetchWikipediaSummaryBySearch(item.name || '', item.address || '');
-    if (searchSummary?.image) image = searchSummary.image;
+    if (searchSummary?.image) image = await validateImageUrl(searchSummary.image);
     if (!wikiUrl && searchSummary?.wikiUrl) wikiUrl = searchSummary.wikiUrl;
     if (!extract && searchSummary?.extract) extract = searchSummary.extract;
+  }
+
+  if (!image) {
+    const commonsImage = await fetchCommonsImageBySearch(item);
+    if (commonsImage?.image) image = commonsImage.image;
   }
 
   const value = { image, wikiUrl, extract };
@@ -616,17 +1018,27 @@ async function enrichWithWikipedia(items, max = 8, topic = 'travel') {
   const enriched = await Promise.all(
     subset.map(async (item) => {
       try {
-        const resolved = await resolveOpenDataPhoto(item);
+        let imageUrl = '';
+        
+        if (FOURSQUARE_API_KEY && item.name && item.address) {
+          imageUrl = await fetchFoursquareVenuePhoto(item.name, item.address);
+        }
+        
+        if (!imageUrl) {
+          const resolved = await resolveOpenDataPhoto(item);
+          imageUrl = resolved.image || '';
+        }
+        
         return {
           ...item,
-          description: resolved.extract || item.description,
-          image: resolved.image || item.image || fallbackImage(item.name, topic),
-          wikiUrl: resolved.wikiUrl || item.wikiUrl || '',
+          description: item.description || item.overview || '',
+          image: imageUrl || item.image || '',
+          wikiUrl: item.wikiUrl || '',
         };
       } catch {
         return {
           ...item,
-          image: item.image || fallbackImage(item.name, topic),
+          image: item.image || '',
         };
       }
     }),
@@ -636,7 +1048,7 @@ async function enrichWithWikipedia(items, max = 8, topic = 'travel') {
     ...enriched,
     ...items.slice(max).map((item) => ({
       ...item,
-      image: item.image || fallbackImage(item.name, topic),
+      image: item.image || '',
     })),
   ];
 }
@@ -645,45 +1057,178 @@ function buildCommunityItineraries(destination, places) {
   const top = places.slice(0, 15);
   if (top.length === 0) return [];
 
-  const itineraries = [
+  const personas = [
     {
-      id: `community-${destination.toLowerCase().replace(/\s+/g, '-')}-1`,
-      title: `${destination} Highlights in 3 Days`,
-      creator: 'Local Explorer',
-      type: 'City Highlights',
-      duration: '3 days',
-      image: top[0]?.image || fallbackImage(destination, 'city'),
-      price: 0,
-      currency: 'USD',
-      likes: 120,
-      places: top.slice(0, 9).map((p) => ({
-        name: p.name,
-        lat: p.lat,
-        lng: p.lng,
-        address: p.address,
-      })),
+      name: 'Jamie Estella',
+      travelStyle: 'Culture + city wanderer',
+      interests: ['Landmarks', 'Architecture', 'Neighborhood walks'],
+      avatar: '',
+      titlePattern: `A Journey Through Time: My Unforgettable {days} Days in ${destination}`,
+      type: 'Culture & Art',
     },
     {
-      id: `community-${destination.toLowerCase().replace(/\s+/g, '-')}-2`,
-      title: `${destination} Culture & Food Route`,
-      creator: 'Food + Culture Crew',
+      name: 'Brandi Bartlett',
+      travelStyle: 'Food-first explorer',
+      interests: ['Street food', 'Local markets', 'Hidden gems'],
+      avatar: '',
+      titlePattern: `${destination} Between Bites and Views: My {days}-Day Food Trail`,
       type: 'Foodie',
-      duration: '2 days',
-      image: top[1]?.image || fallbackImage(destination, 'food'),
-      price: 0,
-      currency: 'USD',
-      likes: 84,
-      places: top.slice(3, 10).map((p) => ({
-        name: p.name,
-        lat: p.lat,
-        lng: p.lng,
-        address: p.address,
-      })),
+    },
+    {
+      name: 'Noah Chua',
+      travelStyle: 'Adventure + photo spots',
+      interests: ['Viewpoints', 'Sunset spots', 'Active days'],
+      avatar: '',
+      titlePattern: `${destination} in Motion: {days} Days of Views, Walks, and Big Energy`,
+      type: 'Adventure',
     },
   ];
 
+  const dayTitlePresets = [
+    `Exploring the iconic core of ${destination}`,
+    `Neighborhood gems and slower moments`,
+    `Skyline views, local flavors, and a perfect finish`,
+  ];
+
+  const dayTitleByPersona = [
+    [
+      `Old quarter landmarks and museums in ${destination}`,
+      `Architecture trail and hidden courtyards`,
+      `Cultural finale with sunset viewpoints`,
+    ],
+    [
+      `${destination} breakfast markets and coffee stops`,
+      `Street food circuit and local kitchens`,
+      `Signature dinner spots and dessert lanes`,
+    ],
+    [
+      `Sunrise viewpoints and high-energy start`,
+      `Scenic walks, photo points, and action`,
+      `Golden-hour route and night views`,
+    ],
+  ];
+
+  const durations = [2, 3, 4];
+
+  const buildPlaceNote = (place, dayNum, persona, index) => {
+    const startersByPersona = [
+      [
+        `I opened day ${dayNum} at ${place.name}, and the design details were incredible.`,
+        `${place.name} felt like the perfect anchor stop for this culture-focused day.`,
+        `From the moment I reached ${place.name}, the historical atmosphere stood out.`,
+      ],
+      [
+        `${place.name} became my day ${dayNum} flavor highlight almost instantly.`,
+        `I planned day ${dayNum} around ${place.name}, and it was worth it.`,
+        `${place.name} was my favorite surprise bite of the day.`,
+      ],
+      [
+        `${place.name} kicked off day ${dayNum} with exactly the energy I wanted.`,
+        `I reached ${place.name} early and got amazing views before the crowds.`,
+        `${place.name} set the pace for a very active day ${dayNum}.`,
+      ],
+    ];
+    const personaIndex = Math.max(0, ['Culture & Art', 'Foodie', 'Adventure'].indexOf(persona.type));
+    const starters = startersByPersona[personaIndex] || startersByPersona[0];
+
+    const middle = place.address
+      ? `Getting there was easy from ${place.address}.`
+      : `It was easy to fit this stop into my route.`;
+    const closerByPersona = [
+      [
+        'I would absolutely revisit with extra time for nearby museums.',
+        'This stop adds real depth to a culture-heavy itinerary.',
+        'I ended up reading far more than expected because every section was interesting.',
+      ],
+      [
+        'I would return hungry and try two more menu picks next time.',
+        'If food is your priority, this stop is easy to recommend.',
+        'I stayed longer than planned and still wanted to order more.',
+      ],
+      [
+        'Bring comfortable shoes; it pairs well with other nearby active stops.',
+        'Photo opportunities here are excellent, especially in soft evening light.',
+        'I stayed longer than expected because the route around it was so scenic.',
+      ],
+    ];
+    const closer = closerByPersona[personaIndex] || closerByPersona[0];
+
+    return `${starters[index % starters.length]} ${middle} ${closer[(index + dayNum) % closer.length]}`;
+  };
+
+  const itineraries = personas.map((persona, personaIndex) => {
+    const days = durations[personaIndex % durations.length];
+    const desiredStops = Math.min(top.length, Math.max(6, days * 3));
+    const startOffset = personaIndex * 3;
+    const chosen = [];
+    for (let i = 0; i < desiredStops; i += 1) {
+      chosen.push(top[(startOffset + i) % top.length]);
+    }
+
+    const itineraryId = `community-${destination.toLowerCase().replace(/\s+/g, '-')}-${personaIndex + 1}`;
+    const views = 6500 + personaIndex * 4300 + Math.max(0, chosen.length * 380);
+
+    return {
+      id: itineraryId,
+      title: persona.titlePattern.replace('{days}', String(days)),
+      creator: persona.name,
+      author: {
+        name: persona.name,
+        travelStyle: persona.travelStyle,
+        interests: persona.interests,
+        avatar: persona.avatar,
+      },
+      type: persona.type,
+      duration: `${days} days`,
+      image: chosen[0]?.image || '',
+      views,
+      likes: Math.round(views * 0.08),
+      countriesCount: 1,
+      publishedAt: new Date(Date.now() - ((personaIndex + 2) * 86400000 * 18)).toISOString(),
+      tags: [persona.type, ...persona.interests.slice(0, 3)],
+      places: chosen.map((place, index) => {
+        const dayNum = Math.min(days, Math.floor(index / 3) + 1);
+        const durationHours = inferDurationHours((place.type || '').toLowerCase()) || 2;
+        return {
+          id: place.id,
+          placeId: place.id,
+          name: place.name,
+          lat: place.lat,
+          lng: place.lng,
+          image: place.image,
+          address: place.address,
+          rating: place.rating,
+          reviewCount: place.reviewCount,
+          website: place.website || '',
+          tags: Array.isArray(place.tags) ? place.tags : [place.type || 'Place'],
+          overview: place.overview || place.description || `${place.name} is one of my favorite stops in ${destination}.`,
+          dayNum,
+          dayTitle: (dayTitleByPersona[personaIndex] || dayTitlePresets)[(dayNum - 1) % dayTitlePresets.length],
+          duration: `${Math.max(1, durationHours)} hr`,
+          durationHrs: Math.max(1, durationHours),
+          note: buildPlaceNote(place, dayNum, persona, index),
+        };
+      }),
+    };
+  });
+
   return itineraries;
 }
+
+router.get('/image', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 140);
+    const topic = String(req.query.topic || 'travel').trim().slice(0, 80);
+    const label = q || topic || 'Image unavailable';
+    res.set('Cache-Control', 'public, max-age=21600');
+    res.type('image/svg+xml');
+    return res.status(200).send(svgPlaceholderMarkup(label, topic || 'Travel'));
+  } catch {
+    res.set('Cache-Control', 'public, max-age=300');
+    res.type('image/svg+xml');
+    return res.status(200).send(svgPlaceholderMarkup('Image unavailable', 'Please try again'));
+  }
+});
 
 router.get('/destination', async (req, res) => {
   try {
@@ -721,29 +1266,50 @@ router.get('/destination', async (req, res) => {
     const placeBase = ranked
       .filter((it) => it.category === 'place')
       .slice(0, limit)
-      .map((it, idx) => ({
-        id: it.id,
-        osmType: it.osmType,
-        osmId: it.osmId,
-        name: it.name,
-        type: inferPlaceType(it.tourismType),
-        rating: Number((4 + ((idx % 8) * 0.1)).toFixed(1)),
-        reviewCount: 120 + idx * 17,
-        lat: it.lat,
-        lng: it.lng,
-        address: it.address,
-        description: `${it.name} in ${destination}`,
-        image: '',
-        website: it.website,
-        phone: it.phone,
-        openingHoursRaw: it.tags?.opening_hours || '',
-        openingHours: it.tags?.opening_hours || 'Check official website',
-        estimatedDuration: inferDurationHours(it.tourismType) >= 4 ? 'Half day' : '2-3 hours',
-        tags: [inferPlaceType(it.tourismType), destination],
-        wikipediaTag: it.tags?.wikipedia || '',
-        wikidataTag: it.tags?.wikidata || '',
-        rawTags: it.tags || {},
-      }));
+      .map((it) => {
+        const distanceKm = haversineKm(geo.lat, geo.lon, it.lat, it.lng);
+        const hash = stableHash(`${it.id}|${destination}`);
+        const scoreDelta = Math.max(0, it.score - 8);
+        const rating = Number(clamp(3.9 + scoreDelta * 0.06 + ((hash % 30) / 100), 3.8, 4.9).toFixed(1));
+        const reviewCount = Math.max(120, Math.round(450 + scoreDelta * 320 + (hash % 7000)));
+        const tags = buildPlaceTags(it, rating, reviewCount, distanceKm);
+        const recommendedScore = Number((
+          it.score * 1.5
+          + (rating - 4) * 7
+          + Math.log10(reviewCount + 1) * 2.4
+          + (it.website ? 1.2 : 0)
+          + (it.phone ? 0.8 : 0)
+          + (String(it.tourismType || '') === 'attraction' || String(it.tourismType || '') === 'museum' ? 1.4 : 0)
+          - clamp(distanceKm * 0.11, 0, 2.8)
+        ).toFixed(2));
+
+        return {
+          id: it.id,
+          osmType: it.osmType,
+          osmId: it.osmId,
+          name: it.name,
+          type: inferPlaceType(it.tourismType),
+          rating,
+          reviewCount,
+          lat: it.lat,
+          lng: it.lng,
+          address: it.address,
+          description: `${it.name} in ${destination}`,
+          image: '',
+          images: [],
+          website: it.website,
+          phone: it.phone,
+          openingHoursRaw: it.tags?.opening_hours || '',
+          openingHours: it.tags?.opening_hours || 'Check official website',
+          estimatedDuration: inferDurationHours(it.tourismType) >= 4 ? 'Half day' : '2-3 hours',
+          tags,
+          recommendedScore,
+          wikipediaTag: it.tags?.wikipedia || '',
+          wikidataTag: it.tags?.wikidata || '',
+          rawTags: it.tags || {},
+        };
+      })
+      .sort((a, b) => (b.recommendedScore || 0) - (a.recommendedScore || 0));
 
     const foodBase = ranked
       .filter((it) => it.category === 'food')
@@ -773,13 +1339,18 @@ router.get('/destination', async (req, res) => {
 
     const places = (await enrichWithWikipedia(placeBase.map((place) => ({
       ...place,
-      tags: place.rawTags || {},
-    })), 14, 'landmark')).map((place) => {
+      osmTags: place.rawTags || {},
+      tags: Array.isArray(place.tags) ? place.tags : [],
+    })), 18, 'landmark')).map((place) => {
       const hours = parseOpeningHours(place.openingHoursRaw);
       const overview = place.description || `${place.name} is a notable attraction in ${destination}.`;
+      const fallbackGallery = [
+        place.image,
+      ].filter(Boolean);
       return {
         ...place,
-        image: place.image || fallbackImage(place.name, 'landmark'),
+        image: place.image || '',
+        images: (Array.isArray(place.images) && place.images.length > 0 ? place.images : fallbackGallery).slice(0, 3),
         description: overview,
         overview,
         hours,
@@ -788,6 +1359,7 @@ router.get('/destination', async (req, res) => {
         whySkip: buildWhySkip(place),
         googleMapsReviewUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address || destination}`)}`,
         rawTags: undefined,
+        osmTags: undefined,
       };
     });
     const foods = (await enrichWithWikipedia(foodBase.map((food) => ({
@@ -795,7 +1367,7 @@ router.get('/destination', async (req, res) => {
       tags: food.rawTags || {},
     })), 12, 'restaurant')).map((food) => ({
       ...food,
-      image: food.image || fallbackImage(food.name, 'restaurant'),
+      image: food.image || '',
       rawTags: undefined,
     }));
 

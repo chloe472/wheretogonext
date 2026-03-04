@@ -9,6 +9,7 @@ import {
   SORT_OPTIONS,
   CREATOR_NATIONALITIES,
 } from '../data/mockCommunityItineraries';
+import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import './SearchResultsPage.css';
 
 export default function SearchResultsPage({ user, onLogout }) {
@@ -168,7 +169,14 @@ export default function SearchResultsPage({ user, onLogout }) {
             {itineraries.map((it) => (
               <article key={it.id} className="search-results__card">
                 <div className="search-results__card-image-wrap">
-                  <img src={it.image} alt="" className="search-results__card-image" />
+                  <img
+                    src={resolveImageUrl(it.image, it.title, 'itinerary')}
+                    alt={it.title || 'Itinerary'}
+                    className="search-results__card-image"
+                    data-image-hint={it.title || ''}
+                    data-image-topic="itinerary"
+                    onError={(event) => applyImageFallback(event)}
+                  />
                 </div>
                 <div className="search-results__card-body">
                   <h3 className="search-results__card-title">{it.title}</h3>

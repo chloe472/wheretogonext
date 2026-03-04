@@ -1,6 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
-const DISCOVERY_CACHE_VERSION = 'v2';
+const DISCOVERY_CACHE_VERSION = 'v6';
 
 function cacheStorageKey(destination = '') {
   return `wtg.discovery.${DISCOVERY_CACHE_VERSION}.${String(destination || '').trim().toLowerCase()}`;

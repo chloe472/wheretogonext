@@ -2,14 +2,16 @@ import { useMemo, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import './TripMap.css';
 
 const DAY_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#7c3aed', '#ea580c'];
 
-function FitBounds({ markers }) {
+function FitBounds({ markers, disabled = false }) {
   const map = useMap();
   const key = markers?.length ? markers.map((m) => `${m.lat},${m.lng}`).join('|') : '';
   useEffect(() => {
+    if (disabled) return;
     if (!markers || markers.length === 0) return;
     try {
       const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng]));
@@ -17,7 +19,7 @@ function FitBounds({ markers }) {
     } catch (_) {
       // ignore
     }
-  }, [map, key]);
+  }, [map, key, disabled]);
   return null;
 }
 
@@ -177,6 +179,10 @@ export default function TripMap({
     onMarkerViewDetails(marker);
   };
 
+  const handleImageError = (event) => {
+    applyImageFallback(event);
+  };
+
   const clearHoverLeaveTimer = () => {
     if (hoverLeaveTimerRef.current) {
       clearTimeout(hoverLeaveTimerRef.current);
@@ -212,7 +218,7 @@ export default function TripMap({
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         {fitBounds && visibleMarkers.length > 0 ? (
-          <FitBounds markers={visibleMarkers} />
+          <FitBounds markers={visibleMarkers} disabled={Boolean(selectedMarker)} />
         ) : null}
         {visibleMarkers.map((m) => (
           <Marker
@@ -242,15 +248,14 @@ export default function TripMap({
             }}
             icon={L.divIcon({
               className: 'trip-map__marker',
-              html: `<span class="trip-map__marker-dot" style="background:${
-                DAY_COLORS[((m.dayNum || 1) % 5) || 0]
-              }"></span>`,
+              html: `<span class="trip-map__marker-dot" style="background:${DAY_COLORS[((m.dayNum || 1) % 5) || 0]
+                }"></span>`,
               iconSize: [24, 24],
               iconAnchor: [12, 12],
             })}
           >
             {popupMode === 'hover-preview' ? (
-              String(hoveredMarkerId) === String(m.id) ? (
+              (String(hoveredMarkerId) === String(m.id) || String(selectedMarkerId) === String(m.id)) ? (
                 <Tooltip
                   permanent
                   direction="top"
@@ -291,122 +296,129 @@ export default function TripMap({
             {popupMode === 'hover-preview' ? null : (
               <Popup>
                 {popupMode === 'itinerary' ? (
-                <div className="trip-map__popup-form-wrap">
-                  {m.image ? <img src={m.image} alt={m.name || 'Place'} className="trip-map__popup-image" /> : null}
-                  <span className="trip-map__popup-day">Day {m.dayNum}</span>
-                  <strong className="trip-map__popup-title">{m.name || 'Place'}</strong>
-                  {m.rating ? (
-                    <p className="trip-map__popup-rating">⭐ {m.rating} ({(m.reviewCount || 0).toLocaleString()} reviews)</p>
-                  ) : null}
-                  {m.address ? <p className="trip-map__popup-address">{m.address}</p> : null}
-                  <form className="trip-map__popup-form" onSubmit={(e) => handleMarkerSubmit(e, m)}>
-                    <label>
-                      Date *
-                      <select
-                        value={getFormState(m.id).date || defaultDateValue}
-                        onChange={(e) => updateFormField(m.id, 'date', e.target.value)}
-                        required
-                      >
-                        {dayOptions.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Start time *
-                      <input
-                        type="time"
-                        value={getFormState(m.id).startTime}
-                        onChange={(e) => updateFormField(m.id, 'startTime', e.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Duration *
-                      <div className="trip-map__popup-duration">
+                  <div className="trip-map__popup-form-wrap">
+                    <img
+                      src={resolveImageUrl(m.image, m.name, m.markerType || 'place')}
+                      alt={m.name || 'Place'}
+                      className="trip-map__popup-image"
+                      data-image-hint={m.name || ''}
+                      data-image-topic={m.markerType || 'place'}
+                      onError={handleImageError}
+                    />
+                    <span className="trip-map__popup-day">Day {m.dayNum}</span>
+                    <strong className="trip-map__popup-title">{m.name || 'Place'}</strong>
+                    {m.rating ? (
+                      <p className="trip-map__popup-rating">⭐ {m.rating} ({(m.reviewCount || 0).toLocaleString()} reviews)</p>
+                    ) : null}
+                    {m.address ? <p className="trip-map__popup-address">{m.address}</p> : null}
+                    <form className="trip-map__popup-form" onSubmit={(e) => handleMarkerSubmit(e, m)}>
+                      <label>
+                        Date *
+                        <select
+                          value={getFormState(m.id).date || defaultDateValue}
+                          onChange={(e) => updateFormField(m.id, 'date', e.target.value)}
+                          required
+                        >
+                          {dayOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Start time *
                         <input
-                          type="number"
-                          min="0"
-                          max="24"
-                          value={getFormState(m.id).durationHrs}
-                          onChange={(e) => updateFormField(m.id, 'durationHrs', Number(e.target.value) || 0)}
+                          type="time"
+                          value={getFormState(m.id).startTime}
+                          onChange={(e) => updateFormField(m.id, 'startTime', e.target.value)}
+                          required
                         />
-                        <span>hr</span>
+                      </label>
+                      <label>
+                        Duration *
+                        <div className="trip-map__popup-duration">
+                          <input
+                            type="number"
+                            min="0"
+                            max="24"
+                            value={getFormState(m.id).durationHrs}
+                            onChange={(e) => updateFormField(m.id, 'durationHrs', Number(e.target.value) || 0)}
+                          />
+                          <span>hr</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="59"
+                            value={getFormState(m.id).durationMins}
+                            onChange={(e) => updateFormField(m.id, 'durationMins', Number(e.target.value) || 0)}
+                          />
+                          <span>mins</span>
+                        </div>
+                      </label>
+                      <label>
+                        Note (Optional)
+                        <textarea
+                          rows={2}
+                          placeholder="Enter your note..."
+                          value={getFormState(m.id).note}
+                          onChange={(e) => updateFormField(m.id, 'note', e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Cost (Optional)
                         <input
-                          type="number"
-                          min="0"
-                          max="59"
-                          value={getFormState(m.id).durationMins}
-                          onChange={(e) => updateFormField(m.id, 'durationMins', Number(e.target.value) || 0)}
+                          type="text"
+                          placeholder="US$0.00"
+                          value={getFormState(m.id).cost}
+                          onChange={(e) => updateFormField(m.id, 'cost', e.target.value)}
                         />
-                        <span>mins</span>
+                      </label>
+                      <label>
+                        External link (optional)
+                        <input
+                          type="url"
+                          placeholder="https://"
+                          value={getFormState(m.id).externalLink}
+                          onChange={(e) => updateFormField(m.id, 'externalLink', e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Travel Documents
+                        <input
+                          type="file"
+                          multiple
+                          accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
+                          onChange={(e) => handleTravelDocsChange(m.id, e.target.files)}
+                        />
+                        <small className="trip-map__popup-docs-hint">Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.</small>
+                      </label>
+                      <div className="trip-map__popup-actions">
+                        <button type="button" className="trip-map__popup-secondary" onClick={() => handleMarkerViewDetails(m)}>View details</button>
+                        <button type="submit" className="trip-map__popup-submit">Add to itinerary</button>
                       </div>
-                    </label>
-                    <label>
-                      Note (Optional)
-                      <textarea
-                        rows={2}
-                        placeholder="Enter your note..."
-                        value={getFormState(m.id).note}
-                        onChange={(e) => updateFormField(m.id, 'note', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Cost (Optional)
-                      <input
-                        type="text"
-                        placeholder="US$0.00"
-                        value={getFormState(m.id).cost}
-                        onChange={(e) => updateFormField(m.id, 'cost', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      External link (optional)
-                      <input
-                        type="url"
-                        placeholder="https://"
-                        value={getFormState(m.id).externalLink}
-                        onChange={(e) => updateFormField(m.id, 'externalLink', e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Travel Documents
-                      <input
-                        type="file"
-                        multiple
-                        accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
-                        onChange={(e) => handleTravelDocsChange(m.id, e.target.files)}
-                      />
-                      <small className="trip-map__popup-docs-hint">Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.</small>
-                    </label>
-                    <div className="trip-map__popup-actions">
-                      <button type="button" className="trip-map__popup-secondary" onClick={() => handleMarkerViewDetails(m)}>View details</button>
-                      <button type="submit" className="trip-map__popup-submit">Add to itinerary</button>
-                    </div>
-                  </form>
-                </div>
+                    </form>
+                  </div>
                 ) : popupMode === 'preview' ? (
-                <div className="trip-map__popup-preview">
-                  <span className="trip-map__popup-day">Day {m.dayNum}</span>
-                  <strong className="trip-map__popup-title">{m.name || 'Place'}</strong>
-                  {m.rating ? (
-                    <p className="trip-map__popup-rating">⭐ {m.rating} ({(m.reviewCount || 0).toLocaleString()} reviews)</p>
-                  ) : null}
-                  {m.address ? <p className="trip-map__popup-address">{m.address}</p> : null}
-                  {m.overview ? <p className="trip-map__popup-overview">{m.overview}</p> : null}
-                  <button
-                    type="button"
-                    className="trip-map__popup-submit"
-                    onClick={() => handleMarkerAddClick(m)}
-                  >
-                    Add to trip
-                  </button>
-                </div>
+                  <div className="trip-map__popup-preview">
+                    <span className="trip-map__popup-day">Day {m.dayNum}</span>
+                    <strong className="trip-map__popup-title">{m.name || 'Place'}</strong>
+                    {m.rating ? (
+                      <p className="trip-map__popup-rating">⭐ {m.rating} ({(m.reviewCount || 0).toLocaleString()} reviews)</p>
+                    ) : null}
+                    {m.address ? <p className="trip-map__popup-address">{m.address}</p> : null}
+                    {m.overview ? <p className="trip-map__popup-overview">{m.overview}</p> : null}
+                    <button
+                      type="button"
+                      className="trip-map__popup-submit"
+                      onClick={() => handleMarkerAddClick(m)}
+                    >
+                      Add to trip
+                    </button>
+                  </div>
                 ) : (
-                <>
-                  <span className="trip-map__popup-day">Day {m.dayNum}</span>
-                  <strong>{m.name || 'Place'}</strong>
-                </>
+                  <>
+                    <span className="trip-map__popup-day">Day {m.dayNum}</span>
+                    <strong>{m.name || 'Place'}</strong>
+                  </>
                 )}
               </Popup>
             )}

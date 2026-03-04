@@ -3420,6 +3420,27 @@
   gap: 8px;
 }
 
+.trip-details__add-places-community-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trip-details__add-places-community-browse {
+  border: none;
+  background: none;
+  color: var(--place-primary, #dc2626);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.trip-details__add-places-community-browse:hover {
+  text-decoration: underline;
+}
+
 .trip-details__add-places-community-title svg {
   color: var(--place-accent, #5c4a3d);
 }
@@ -3434,6 +3455,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 14px;
+}
+
+.trip-details__add-places-community-grid--browse {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
 
 .trip-details__add-places-community-card {
@@ -3534,13 +3560,17 @@
   border-top: none;
 }
 
-.trip-details__add-places-community-card-price {
+.trip-details__add-places-community-card-profile {
   font-size: 14px;
-  font-weight: 600;
-  color: var(--place-accent, #5c4a3d);
+  font-weight: 500;
+  color: var(--place-text, #3d3428);
+  max-width: 65%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.trip-details__add-places-community-card-likes {
+.trip-details__add-places-community-card-views {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -3593,6 +3623,12 @@
   color: var(--place-text, #3d3428);
   margin: 0.5rem 0 1rem 0;
   line-height: 1.3;
+}
+
+.trip-details__itinerary-detail-author-style {
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  color: var(--place-text-muted, #6b6055);
 }
 
 .trip-details__itinerary-detail-meta {
@@ -3685,6 +3721,15 @@
 .trip-details__itinerary-detail-place:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border-color: var(--place-accent, #5c4a3d);
+}
+
+.trip-details__itinerary-detail-place--interactive {
+  cursor: pointer;
+}
+
+.trip-details__itinerary-detail-place--interactive:focus-visible {
+  outline: 2px solid var(--place-accent, #5c4a3d);
+  outline-offset: 2px;
 }
 
 .trip-details__itinerary-detail-place-img-wrap {
@@ -3813,6 +3858,24 @@
   height: 220px;
   object-fit: cover;
   display: block;
+}
+.trip-details__place-detail-gallery {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 0.5rem;
+}
+.trip-details__place-detail-gallery-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.5rem;
+}
+.trip-details__place-detail-img--primary {
+  height: 220px;
+  border-radius: 10px;
+}
+.trip-details__place-detail-img--secondary {
+  height: 106px;
+  border-radius: 10px;
 }
 .trip-details__place-detail-tabs {
   display: flex;
@@ -5196,7 +5259,7 @@
   margin-bottom: 8px;
 }
 
-.trip-details__add-places-community-likes {
+.trip-details__add-places-community-views {
   font-size: 13px;
   color: var(--place-text-muted, #6b6055);
 }
