@@ -5,6 +5,8 @@ const router = express.Router();
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const WIKI_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary';
+const WIKI_SEARCH_URL = 'https://en.wikipedia.org/w/api.php';
+const WIKIDATA_ENTITY_URL = 'https://www.wikidata.org/w/api.php';
 
 const headers = {
   'User-Agent': 'WhereToGoNext/1.0 (travel-planner)',
@@ -13,6 +15,23 @@ const headers = {
 
 const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const DISCOVERY_CACHE = new Map();
+const IMAGE_RESOLVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const IMAGE_RESOLVE_CACHE = new Map();
+const WIKI_SUMMARY_CACHE = new Map();
+
+function getTimedCache(map, key, ttlMs) {
+  const hit = map.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.createdAt > ttlMs) {
+    map.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function setTimedCache(map, key, value) {
+  map.set(key, { value, createdAt: Date.now() });
+}
 
 function slugifyTitle(value = '') {
   return String(value)
@@ -173,18 +192,32 @@ function normalizeElement(el, destinationName) {
   const amenityType = tags.amenity;
   const category = tourismType ? 'place' : amenityType ? 'food' : 'other';
 
-  const name = tags.name || tags['name:en'];
+  const hasNonLatin = (value = '') => /[^\u0000-\u024f\s0-9.,'’&()\-/:]/.test(String(value || ''));
+
+  const name = (
+    tags['name:en']
+    || tags['official_name:en']
+    || tags['name:latin']
+    || tags.int_name
+    || tags['alt_name:en']
+    || tags.name
+    || tags.official_name
+  );
   if (!name) return null;
   if (isLowQualityName(name)) return null;
 
-  const address = [
+  const rawAddress = [
     tags['addr:housenumber'],
-    tags['addr:street'],
-    tags['addr:city'] || destinationName,
+    tags['addr:street:en'] || tags['addr:street'],
+    tags['addr:city:en'] || tags['addr:city'] || destinationName,
   ]
     .filter(Boolean)
     .join(' ')
     .trim();
+
+  const address = (!rawAddress || hasNonLatin(rawAddress))
+    ? destinationName
+    : rawAddress;
 
   const website = tags.website || tags['contact:website'] || '';
   const phone = tags.phone || tags['contact:phone'] || '';
@@ -266,33 +299,346 @@ function inferDurationHours(tourismType) {
   return 4;
 }
 
-function fallbackImage(seed, topic = 'travel') {
-  return `https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=520&fit=crop&auto=format&q=80&${topic}=${encodeURIComponent(seed)}`;
+function parseOpeningHours(raw = '') {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  if (value === '24/7') {
+    return {
+      Monday: 'Open 24 hours',
+      Tuesday: 'Open 24 hours',
+      Wednesday: 'Open 24 hours',
+      Thursday: 'Open 24 hours',
+      Friday: 'Open 24 hours',
+      Saturday: 'Open 24 hours',
+      Sunday: 'Open 24 hours',
+    };
+  }
+
+  const dayMap = {
+    Mo: 'Monday',
+    Tu: 'Tuesday',
+    We: 'Wednesday',
+    Th: 'Thursday',
+    Fr: 'Friday',
+    Sa: 'Saturday',
+    Su: 'Sunday',
+  };
+  const order = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  const result = {};
+
+  value.split(';').map((part) => part.trim()).filter(Boolean).forEach((entry) => {
+    const match = entry.match(/^([A-Za-z]{2})(?:-([A-Za-z]{2}))?\s+(.+)$/);
+    if (!match) return;
+    const [, startDay, endDay, hours] = match;
+    if (!dayMap[startDay]) return;
+    const startIndex = order.indexOf(startDay);
+    const endIndex = endDay ? order.indexOf(endDay) : startIndex;
+    if (startIndex === -1 || endIndex === -1) return;
+
+    if (startIndex <= endIndex) {
+      for (let idx = startIndex; idx <= endIndex; idx += 1) {
+        result[dayMap[order[idx]]] = hours;
+      }
+    } else {
+      for (let idx = startIndex; idx < order.length; idx += 1) {
+        result[dayMap[order[idx]]] = hours;
+      }
+      for (let idx = 0; idx <= endIndex; idx += 1) {
+        result[dayMap[order[idx]]] = hours;
+      }
+    }
+  });
+
+  return Object.keys(result).length > 0 ? result : { Hours: value };
 }
 
-async function enrichWithWikipedia(items, max = 8) {
+function buildWhyVisit(place = {}, destination = '') {
+  const reasons = [];
+  if (place.type) reasons.push(`${place.type} experience in ${destination}`.trim());
+  if (place.website) reasons.push('Official website available for up-to-date visitor information');
+  if (place.rating >= 4.5) reasons.push('Strong visitor ratings from recent travelers');
+  if (place.estimatedDuration) reasons.push(`Easy to fit into your day (${place.estimatedDuration})`);
+  if (place.tags?.length) reasons.push(`Highlights include ${place.tags.slice(0, 2).join(' and ')}`);
+  return reasons.slice(0, 4);
+}
+
+function buildWhySkip(place = {}) {
+  const reasons = [];
+  if (!place.website) reasons.push('Limited official visitor information online');
+  if (!place.phone) reasons.push('No public phone contact listed');
+  if (!place.openingHoursRaw) reasons.push('Opening hours may vary and should be verified before visiting');
+  if (!place.reviewCount || place.reviewCount < 80) reasons.push('Fewer public reviews than top attractions nearby');
+  return reasons.slice(0, 3);
+}
+
+function fallbackImage(seed, topic = 'travel') {
+  const normalizedSeed = encodeURIComponent(`${topic}-${String(seed || 'place').toLowerCase()}`);
+  return `https://picsum.photos/seed/${normalizedSeed}/800/520`;
+}
+
+function commonsFileUrl(fileName, width = 900) {
+  if (!fileName) return '';
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=${width}`;
+}
+
+function parseWikipediaTag(value = '') {
+  const tag = String(value || '').trim();
+  if (!tag) return '';
+
+  if (tag.startsWith('http://') || tag.startsWith('https://')) {
+    const marker = '/wiki/';
+    const idx = tag.indexOf(marker);
+    if (idx >= 0) return decodeURIComponent(tag.slice(idx + marker.length)).trim();
+    return '';
+  }
+
+  const colonIndex = tag.indexOf(':');
+  if (colonIndex > 0) {
+    return tag.slice(colonIndex + 1).trim();
+  }
+  return tag;
+}
+
+function parseWikidataTag(value = '') {
+  const raw = String(value || '').trim();
+  const match = raw.match(/Q\d+/i);
+  return match ? match[0].toUpperCase() : '';
+}
+
+function parseCommonsFileTag(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const normalized = raw.replace(/^https?:\/\/commons\.wikimedia\.org\/wiki\//i, '').trim();
+  if (/^File:/i.test(normalized)) return normalized.replace(/^File:/i, '').trim();
+  return '';
+}
+
+function tokenizeForMatch(value = '') {
+  const stopwords = new Set(['the', 'a', 'an', 'of', 'in', 'at', 'de', 'la', 'le', 'du', 'des', 'and', 'for']);
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !stopwords.has(t));
+}
+
+function computeNameMatchScore(placeName = '', candidateTitle = '', candidateSnippet = '') {
+  const placeTokens = tokenizeForMatch(placeName);
+  const titleTokens = tokenizeForMatch(candidateTitle);
+  const snippetTokens = tokenizeForMatch(candidateSnippet);
+  if (placeTokens.length === 0 || (titleTokens.length === 0 && snippetTokens.length === 0)) return 0;
+
+  const titleSet = new Set(titleTokens);
+  const snippetSet = new Set(snippetTokens);
+  let titleHits = 0;
+  let snippetHits = 0;
+
+  placeTokens.forEach((token) => {
+    if (titleSet.has(token)) titleHits += 1;
+    if (snippetSet.has(token)) snippetHits += 1;
+  });
+
+  const titleRatio = titleHits / placeTokens.length;
+  const snippetRatio = snippetHits / placeTokens.length;
+
+  const normalizedPlace = placeTokens.join(' ');
+  const normalizedTitle = titleTokens.join(' ');
+  const fullContainmentBoost = normalizedTitle.includes(normalizedPlace) || normalizedPlace.includes(normalizedTitle)
+    ? 0.2
+    : 0;
+
+  return Math.min(1, titleRatio * 0.75 + snippetRatio * 0.25 + fullContainmentBoost);
+}
+
+async function fetchWikipediaSummary(title = '', expectedName = '') {
+  const normalizedTitle = String(title || '').trim().replace(/\s+/g, '_');
+  if (!normalizedTitle) return null;
+
+  const cacheKey = normalizedTitle.toLowerCase();
+  const cached = getTimedCache(WIKI_SUMMARY_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(`${WIKI_SUMMARY_URL}/${encodeURIComponent(normalizedTitle)}`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (isDisambiguationText(data?.extract)) return null;
+    const result = {
+      image: data?.thumbnail?.source || '',
+      extract: data?.extract || '',
+      wikiUrl: data?.content_urls?.desktop?.page || '',
+      title: data?.title || normalizedTitle,
+    };
+    if (expectedName) {
+      const score = computeNameMatchScore(expectedName, result.title, result.extract);
+      if (score < 0.45) return null;
+    }
+    setTimedCache(WIKI_SUMMARY_CACHE, cacheKey, result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWikipediaSummaryBySearch(name = '', destinationHint = '') {
+  const queryText = [String(name || '').trim(), String(destinationHint || '').trim()]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (!queryText) return null;
+
+  const cacheKey = `search::${queryText.toLowerCase()}`;
+  const cached = getTimedCache(WIKI_SUMMARY_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  try {
+    const query = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      list: 'search',
+      srsearch: queryText,
+      srlimit: '6',
+      srnamespace: '0',
+      origin: '*',
+    });
+    const res = await fetch(`${WIKI_SEARCH_URL}?${query.toString()}`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const candidates = Array.isArray(data?.query?.search) ? data.query.search : [];
+    if (candidates.length === 0) return null;
+
+    const ranked = candidates
+      .map((candidate) => ({
+        title: candidate?.title || '',
+        snippet: String(candidate?.snippet || '').replace(/<[^>]*>/g, ' '),
+        score: computeNameMatchScore(name, candidate?.title || '', candidate?.snippet || ''),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const best = ranked[0];
+    if (!best?.title || best.score < 0.5) return null;
+
+    const summary = await fetchWikipediaSummary(best.title, name);
+    if (!summary?.image) return null;
+    setTimedCache(WIKI_SUMMARY_CACHE, cacheKey, summary);
+    return summary;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWikidataImageByQid(qid = '') {
+  const id = parseWikidataTag(qid);
+  if (!id) return null;
+
+  try {
+    const query = new URLSearchParams({
+      action: 'wbgetentities',
+      format: 'json',
+      ids: id,
+      props: 'claims|sitelinks',
+      languages: 'en',
+    });
+    const res = await fetch(`${WIKIDATA_ENTITY_URL}?${query.toString()}`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const entity = data?.entities?.[id];
+    if (!entity) return null;
+
+    const imageFile = entity?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+    const enwikiTitle = entity?.sitelinks?.enwiki?.title;
+
+    return {
+      image: imageFile ? commonsFileUrl(imageFile) : '',
+      wikiTitle: enwikiTitle || '',
+      wikiUrl: enwikiTitle ? `https://en.wikipedia.org/wiki/${encodeURIComponent(enwikiTitle.replace(/\s+/g, '_'))}` : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function resolveOpenDataPhoto(item = {}) {
+  const cacheKey = `${item.osmType || 'x'}:${item.osmId || item.id || item.name || ''}`;
+  const cached = getTimedCache(IMAGE_RESOLVE_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  const tags = item.tags || {};
+  let image = '';
+  let wikiUrl = '';
+  let extract = '';
+
+  const directTagImage = String(tags.image || '').trim();
+  if (/^https?:\/\//i.test(directTagImage)) {
+    image = directTagImage;
+  }
+
+  if (!image) {
+    const commonsFile = parseCommonsFileTag(tags.wikimedia_commons || tags.wikimedia || '');
+    if (commonsFile) {
+      image = commonsFileUrl(commonsFile);
+    }
+  }
+
+  let wikiTitle = parseWikipediaTag(tags.wikipedia || item.wikipediaTag || '');
+  if (!image) {
+    const wikidata = parseWikidataTag(tags.wikidata || item.wikidataTag || '');
+    if (wikidata) {
+      const wikidataHit = await fetchWikidataImageByQid(wikidata);
+      if (wikidataHit?.image) image = wikidataHit.image;
+      if (!wikiTitle && wikidataHit?.wikiTitle) wikiTitle = wikidataHit.wikiTitle;
+      if (!wikiUrl && wikidataHit?.wikiUrl) wikiUrl = wikidataHit.wikiUrl;
+    }
+  }
+
+  const summary = wikiTitle
+    ? await fetchWikipediaSummary(wikiTitle)
+    : await fetchWikipediaSummaryBySearch(item.name || '', item.address || '');
+  if (!image && summary?.image) image = summary.image;
+  if (!wikiUrl && summary?.wikiUrl) wikiUrl = summary.wikiUrl;
+  if (summary?.extract) extract = summary.extract;
+
+  if (!image) {
+    const searchSummary = await fetchWikipediaSummaryBySearch(item.name || '', item.address || '');
+    if (searchSummary?.image) image = searchSummary.image;
+    if (!wikiUrl && searchSummary?.wikiUrl) wikiUrl = searchSummary.wikiUrl;
+    if (!extract && searchSummary?.extract) extract = searchSummary.extract;
+  }
+
+  const value = { image, wikiUrl, extract };
+  setTimedCache(IMAGE_RESOLVE_CACHE, cacheKey, value);
+  return value;
+}
+
+async function enrichWithWikipedia(items, max = 8, topic = 'travel') {
   const subset = items.slice(0, max);
   const enriched = await Promise.all(
     subset.map(async (item) => {
       try {
-        const title = slugifyTitle(item.name);
-        const res = await fetch(`${WIKI_SUMMARY_URL}/${encodeURIComponent(title)}`, { headers });
-        if (!res.ok) return item;
-        const data = await res.json();
-        if (isDisambiguationText(data.extract)) return item;
+        const resolved = await resolveOpenDataPhoto(item);
         return {
           ...item,
-          description: data.extract || item.description,
-          image: data?.thumbnail?.source || item.image,
-          wikiUrl: data?.content_urls?.desktop?.page || '',
+          description: resolved.extract || item.description,
+          image: resolved.image || item.image || fallbackImage(item.name, topic),
+          wikiUrl: resolved.wikiUrl || item.wikiUrl || '',
         };
       } catch {
-        return item;
+        return {
+          ...item,
+          image: item.image || fallbackImage(item.name, topic),
+        };
       }
     }),
   );
 
-  return [...enriched, ...items.slice(max)];
+  return [
+    ...enriched,
+    ...items.slice(max).map((item) => ({
+      ...item,
+      image: item.image || fallbackImage(item.name, topic),
+    })),
+  ];
 }
 
 function buildCommunityItineraries(destination, places) {
@@ -377,6 +723,8 @@ router.get('/destination', async (req, res) => {
       .slice(0, limit)
       .map((it, idx) => ({
         id: it.id,
+        osmType: it.osmType,
+        osmId: it.osmId,
         name: it.name,
         type: inferPlaceType(it.tourismType),
         rating: Number((4 + ((idx % 8) * 0.1)).toFixed(1)),
@@ -385,12 +733,16 @@ router.get('/destination', async (req, res) => {
         lng: it.lng,
         address: it.address,
         description: `${it.name} in ${destination}`,
-        image: fallbackImage(it.name, 'landmark'),
+        image: '',
         website: it.website,
         phone: it.phone,
-        openingHours: 'Check official website',
+        openingHoursRaw: it.tags?.opening_hours || '',
+        openingHours: it.tags?.opening_hours || 'Check official website',
         estimatedDuration: inferDurationHours(it.tourismType) >= 4 ? 'Half day' : '2-3 hours',
         tags: [inferPlaceType(it.tourismType), destination],
+        wikipediaTag: it.tags?.wikipedia || '',
+        wikidataTag: it.tags?.wikidata || '',
+        rawTags: it.tags || {},
       }));
 
     const foodBase = ranked
@@ -398,13 +750,15 @@ router.get('/destination', async (req, res) => {
       .slice(0, limit)
       .map((it, idx) => ({
         id: it.id,
+        osmType: it.osmType,
+        osmId: it.osmId,
         name: it.name,
         rating: Number((4 + ((idx % 7) * 0.1)).toFixed(1)),
         reviewCount: 70 + idx * 11,
         lat: it.lat,
         lng: it.lng,
         address: it.address,
-        image: fallbackImage(it.name, 'restaurant'),
+        image: '',
         cuisine: it.tags?.cuisine || 'Local cuisine',
         priceLevel: toPriceLevel(it.amenityType),
         dietaryTags: toDietary(it.tags),
@@ -412,10 +766,38 @@ router.get('/destination', async (req, res) => {
         description: `${it.name} in ${destination}`,
         website: it.website,
         phone: it.phone,
+        wikipediaTag: it.tags?.wikipedia || '',
+        wikidataTag: it.tags?.wikidata || '',
+        rawTags: it.tags || {},
       }));
 
-    const places = await enrichWithWikipedia(placeBase, 10);
-    const foods = await enrichWithWikipedia(foodBase, 8);
+    const places = (await enrichWithWikipedia(placeBase.map((place) => ({
+      ...place,
+      tags: place.rawTags || {},
+    })), 14, 'landmark')).map((place) => {
+      const hours = parseOpeningHours(place.openingHoursRaw);
+      const overview = place.description || `${place.name} is a notable attraction in ${destination}.`;
+      return {
+        ...place,
+        image: place.image || fallbackImage(place.name, 'landmark'),
+        description: overview,
+        overview,
+        hours,
+        isOpenNow: place.openingHoursRaw === '24/7' ? true : null,
+        whyVisit: buildWhyVisit(place, destination),
+        whySkip: buildWhySkip(place),
+        googleMapsReviewUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address || destination}`)}`,
+        rawTags: undefined,
+      };
+    });
+    const foods = (await enrichWithWikipedia(foodBase.map((food) => ({
+      ...food,
+      tags: food.rawTags || {},
+    })), 12, 'restaurant')).map((food) => ({
+      ...food,
+      image: food.image || fallbackImage(food.name, 'restaurant'),
+      rawTags: undefined,
+    }));
 
     const experiences = places.slice(0, Math.min(10, places.length)).map((p, idx) => {
       const durationHours = inferDurationHours(p.type);

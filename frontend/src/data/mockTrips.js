@@ -85,28 +85,87 @@ export const MOCK_TRIPS = [
   },
 ];
 
+const TRIPS_STORAGE_KEY = 'wheretogonext_trips_store';
+
+function loadTripStore() {
+  if (typeof window === 'undefined') {
+    return { userTrips: [], mockOverrides: {} };
+  }
+  try {
+    const raw = window.localStorage.getItem(TRIPS_STORAGE_KEY);
+    if (!raw) return { userTrips: [], mockOverrides: {} };
+    const parsed = JSON.parse(raw);
+    return {
+      userTrips: Array.isArray(parsed?.userTrips) ? parsed.userTrips : [],
+      mockOverrides: parsed?.mockOverrides && typeof parsed.mockOverrides === 'object' ? parsed.mockOverrides : {},
+    };
+  } catch {
+    return { userTrips: [], mockOverrides: {} };
+  }
+}
+
+function saveTripStore() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      TRIPS_STORAGE_KEY,
+      JSON.stringify({
+        userTrips,
+        mockOverrides,
+      }),
+    );
+  } catch {
+    // Ignore storage write failures (e.g., quota exceeded/private mode).
+  }
+}
+
+const storedTripStore = loadTripStore();
+
 /** User-created trips (from "Start planning"); merged with MOCK_TRIPS for dashboard and getTripById */
-const userTrips = [];
+const userTrips = Array.isArray(storedTripStore.userTrips) ? storedTripStore.userTrips : [];
+const mockOverrides = storedTripStore.mockOverrides && typeof storedTripStore.mockOverrides === 'object'
+  ? storedTripStore.mockOverrides
+  : {};
+
+function getResolvedMockTrips() {
+  return MOCK_TRIPS.map((trip) => ({ ...trip, ...(mockOverrides[trip.id] || {}) }));
+}
 
 export function getAllTrips() {
-  return [...MOCK_TRIPS, ...userTrips];
+  return [...getResolvedMockTrips(), ...userTrips];
 }
 
 export function getTripById(id) {
-  return userTrips.find((t) => t.id === id) ?? MOCK_TRIPS.find((t) => t.id === id) ?? null;
+  const userTrip = userTrips.find((t) => t.id === id);
+  if (userTrip) return userTrip;
+  return getResolvedMockTrips().find((t) => t.id === id) ?? null;
 }
 
 /** Add a newly created trip (from New Trip flow) and return it. */
 export function addTrip(trip) {
   userTrips.push(trip);
+  saveTripStore();
   return trip;
 }
 
 /** Update an existing trip by id. Mutates the trip in place (works for both MOCK_TRIPS and userTrips). */
 export function updateTrip(id, updates) {
-  const t = userTrips.find((x) => x.id === id) ?? MOCK_TRIPS.find((x) => x.id === id);
-  if (t) Object.assign(t, updates);
-  return t;
+  const userTrip = userTrips.find((x) => x.id === id);
+  if (userTrip) {
+    Object.assign(userTrip, updates);
+    saveTripStore();
+    return userTrip;
+  }
+
+  const seedTrip = MOCK_TRIPS.find((x) => x.id === id);
+  if (!seedTrip) return null;
+
+  mockOverrides[id] = {
+    ...(mockOverrides[id] || {}),
+    ...updates,
+  };
+  saveTripStore();
+  return { ...seedTrip, ...mockOverrides[id] };
 }
 
 /** Remove a trip from userTrips by id. Returns true if removed; false if not in userTrips (e.g. seed trip). */
@@ -114,6 +173,7 @@ export function deleteTrip(id) {
   const i = userTrips.findIndex((x) => x.id === id);
   if (i === -1) return false;
   userTrips.splice(i, 1);
+  saveTripStore();
   return true;
 }
 
