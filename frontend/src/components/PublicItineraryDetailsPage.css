@@ -1,0 +1,209 @@
+.public-itinerary {
+  min-height: 100vh;
+  background: var(--wtg-bg);
+  color: var(--wtg-text);
+}
+
+.public-itinerary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: var(--wtg-surface);
+  border-bottom: 1px solid var(--wtg-border);
+  gap: 1rem;
+}
+
+.public-itinerary__back {
+  color: var(--wtg-text);
+  font-weight: 600;
+}
+
+.public-itinerary__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.public-itinerary__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-primary-contrast);
+  color: var(--wtg-text);
+  font-weight: 600;
+}
+
+.public-itinerary__btn:hover {
+  background: var(--wtg-hover);
+}
+
+.public-itinerary__btn--taupe {
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
+  border-color: var(--wtg-primary);
+}
+
+.public-itinerary__btn--taupe:hover {
+  filter: brightness(1.03);
+}
+
+.public-itinerary__user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-left: 0.25rem;
+  color: var(--wtg-text-muted);
+  font-size: 0.875rem;
+}
+
+.public-itinerary__user-avatar {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--wtg-input-bg);
+  border: 1px solid var(--wtg-border);
+}
+
+.public-itinerary__main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.public-itinerary__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.6rem;
+  line-height: 1.2;
+  color: var(--wtg-primary);
+}
+
+.public-itinerary__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--wtg-text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.public-itinerary__collage {
+  margin: 1rem 0 1.25rem;
+}
+
+.public-itinerary__collage-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: 160px 160px;
+  gap: 0.5rem;
+}
+
+.public-itinerary__collage-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
+}
+
+.public-itinerary__collage-grid img:first-child {
+  grid-row: 1 / span 2;
+}
+
+.public-itinerary__section {
+  margin: 1.25rem 0;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.public-itinerary__section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: var(--wtg-primary);
+}
+
+.public-itinerary__places {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.public-itinerary__place {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-primary-contrast);
+}
+
+.public-itinerary__place-img {
+  width: 96px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
+  flex-shrink: 0;
+}
+
+.public-itinerary__place-body {
+  min-width: 0;
+}
+
+.public-itinerary__place-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.public-itinerary__place-name {
+  color: var(--wtg-text);
+}
+
+.public-itinerary__place-day {
+  color: var(--wtg-text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.public-itinerary__place-address {
+  margin: 0.25rem 0 0;
+  color: var(--wtg-text-muted);
+  font-size: 0.9rem;
+}
+
+.public-itinerary__place-note {
+  margin: 0.35rem 0 0;
+  color: var(--wtg-text);
+  font-size: 0.92rem;
+}
+
+.public-itinerary__empty {
+  padding: 2rem 0;
+  color: var(--wtg-text-muted);
+}
+
+@media (max-width: 760px) {
+  .public-itinerary__collage-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 160px 120px 120px;
+  }
+  .public-itinerary__collage-grid img:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+  }
+}
+

@@ -1,18 +1,101 @@
-import { useState, useRef, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Search, User, Bell, ChevronDown } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, User, Bell, ChevronDown, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
 import {
-  getCommunityItineraries,
   ADVENTURE_TYPES,
   DURATIONS,
   SORT_OPTIONS,
   CREATOR_NATIONALITIES,
 } from '../data/mockCommunityItineraries';
+import { fetchDiscoveryData } from '../api/discoveryApi';
+import { fetchItinerariesEngagementBatch } from '../api/itineraryEngagementApi';
 import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
+import countriesData from '../data/countries.json';
 import './SearchResultsPage.css';
 
+function countryCodeToEmoji(code = '') {
+  const c = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) return '';
+  const A = 0x1f1e6;
+  const out = [...c].map((ch) => String.fromCodePoint(A + (ch.charCodeAt(0) - 65))).join('');
+  return out;
+}
+
+function inferCountryCode(itinerary, fallbackCountry = '') {
+  const direct = String(itinerary?.countryCode || '').trim().toLowerCase();
+  if (direct && /^[a-z]{2}$/.test(direct)) return direct;
+  const name = String(itinerary?.country || fallbackCountry || '').trim().toLowerCase();
+  if (!name) return '';
+  const hit = (countriesData || []).find((c) => String(c?.name || '').trim().toLowerCase() === name);
+  return hit?.id || '';
+}
+
+function getCardImages(itinerary) {
+  const out = [];
+  if (itinerary?.image) out.push(itinerary.image);
+  const placeImages = Array.isArray(itinerary?.places)
+    ? itinerary.places.map((p) => p?.image).filter(Boolean)
+    : [];
+  out.push(...placeImages);
+  return [...new Set(out)].filter(Boolean).slice(0, 6);
+}
+
+function ItineraryCarousel({ images, title }) {
+  const [index, setIndex] = useState(0);
+  const safeImages = Array.isArray(images) && images.length > 0 ? images : [''];
+  const active = safeImages[index] || safeImages[0] || '';
+  const count = safeImages.length;
+
+  const go = (delta) => {
+    if (count <= 1) return;
+    setIndex((prev) => (prev + delta + count) % count);
+  };
+
+  return (
+    <div className="search-results__carousel">
+      <img
+        src={resolveImageUrl(active, title, 'itinerary')}
+        alt={title || 'Itinerary'}
+        className="search-results__card-image"
+        data-image-hint={title || ''}
+        data-image-topic="itinerary"
+        onError={(event) => applyImageFallback(event)}
+      />
+      {count > 1 ? (
+        <>
+          <button
+            type="button"
+            className="search-results__carousel-nav search-results__carousel-nav--left"
+            aria-label="Previous photo"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(-1); }}
+          >
+            <ChevronLeft size={18} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="search-results__carousel-nav search-results__carousel-nav--right"
+            aria-label="Next photo"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(1); }}
+          >
+            <ChevronRight size={18} aria-hidden />
+          </button>
+          <div className="search-results__carousel-dots" aria-hidden>
+            {safeImages.map((_, i) => (
+              <span
+                key={String(i)}
+                className={`search-results__carousel-dot ${i === index ? 'search-results__carousel-dot--active' : ''}`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SearchResultsPage({ user, onLogout }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
   const [searchInput, setSearchInput] = useState(q);
@@ -22,11 +105,111 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [duration, setDuration] = useState('');
   const [creatorNationality, setCreatorNationality] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState('');
+  const [communityItineraries, setCommunityItineraries] = useState([]);
+  const [destinationCountry, setDestinationCountry] = useState({ country: '', countryCode: '' });
+  const [engagementById, setEngagementById] = useState({});
   const searchRef = useRef(null);
   const suggestRef = useRef(null);
 
   const suggestions = searchLocations(searchInput.trim());
-  const itineraries = getCommunityItineraries(q, { type: adventureType !== 'All' ? adventureType : undefined, duration: duration || undefined, sort: sortBy });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const query = (q || '').trim();
+      if (!query) {
+        setCommunityItineraries([]);
+        setDiscoveryError('');
+        setDiscoveryLoading(false);
+        return;
+      }
+
+      setDiscoveryLoading(true);
+      setDiscoveryError('');
+      try {
+        const data = await fetchDiscoveryData(query, 24);
+        if (cancelled) return;
+        const list = Array.isArray(data?.communityItineraries) ? data.communityItineraries : [];
+        setCommunityItineraries(list);
+        setDestinationCountry({
+          country: String(data?.country || '').trim(),
+          countryCode: String(data?.countryCode || '').trim(),
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setDiscoveryError(err?.message || 'Failed to load community itineraries');
+        setCommunityItineraries([]);
+      } finally {
+        if (!cancelled) setDiscoveryLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [q]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEngagement() {
+      const ids = (Array.isArray(communityItineraries) ? communityItineraries : []).map((it) => it.id).filter(Boolean);
+      if (ids.length === 0) {
+        setEngagementById({});
+        return;
+      }
+      try {
+        const data = await fetchItinerariesEngagementBatch(ids);
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const next = {};
+        items.forEach((row) => {
+          if (!row?.itineraryId) return;
+          next[String(row.itineraryId)] = {
+            views: Number(row.views || 0),
+            commentsCount: Number(row.commentsCount || 0),
+          };
+        });
+        setEngagementById(next);
+      } catch {
+        if (!cancelled) setEngagementById({});
+      }
+    }
+    loadEngagement();
+    return () => {
+      cancelled = true;
+    };
+  }, [communityItineraries]);
+
+  const itineraries = useMemo(() => {
+    let list = Array.isArray(communityItineraries) ? communityItineraries : [];
+
+    if (adventureType && adventureType !== 'All') {
+      list = list.filter((it) => it.type === adventureType);
+    }
+
+    if (duration) {
+      list = list.filter((it) => {
+        const days = parseInt(it.duration, 10) || 0;
+        if (duration === '1-3 days') return days >= 1 && days <= 3;
+        if (duration === '3-5 days') return days >= 3 && days <= 5;
+        if (duration === '5-7 days') return days >= 5 && days <= 7;
+        if (duration === '7-10 days') return days >= 7 && days <= 10;
+        if (duration === '10-14 days') return days >= 10 && days <= 14;
+        if (duration === '14+ days') return days >= 14;
+        return true;
+      });
+    }
+
+    if (sortBy === 'Newest') list = [...list].sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+    if (sortBy === 'Most Popular') list = [...list].sort((a, b) => (Number(b.views || 0) + Number(b.likes || 0)) - (Number(a.views || 0) + Number(a.likes || 0)));
+    if (sortBy === 'Price: Low to High') list = [...list].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    if (sortBy === 'Price: High to Low') list = [...list].sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    if (sortBy === 'Duration') list = [...list].sort((a, b) => (parseInt(a.duration, 10) || 0) - (parseInt(b.duration, 10) || 0));
+
+    return list;
+  }, [communityItineraries, adventureType, duration, sortBy, creatorNationality]);
 
   useEffect(() => {
     setSearchInput(q);
@@ -167,33 +350,56 @@ export default function SearchResultsPage({ user, onLogout }) {
           )}
           <div className="search-results__grid">
             {itineraries.map((it) => (
-              <article key={it.id} className="search-results__card">
+              <article
+                key={it.id}
+                className="search-results__card"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/itinerary/${encodeURIComponent(it.id)}`, { state: { destination: it.destination || q } })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/itinerary/${encodeURIComponent(it.id)}`, { state: { destination: it.destination || q } });
+                  }
+                }}
+              >
                 <div className="search-results__card-image-wrap">
-                  <img
-                    src={resolveImageUrl(it.image, it.title, 'itinerary')}
-                    alt={it.title || 'Itinerary'}
-                    className="search-results__card-image"
-                    data-image-hint={it.title || ''}
-                    data-image-topic="itinerary"
-                    onError={(event) => applyImageFallback(event)}
-                  />
+                  <ItineraryCarousel images={getCardImages(it)} title={it.title} />
+                  <div className="search-results__views-badge" aria-label="Views">
+                    <Eye size={16} aria-hidden />
+                    <span>{Number(engagementById?.[String(it.id)]?.views || 0).toLocaleString()}</span>
+                  </div>
+                  {(() => {
+                    const code = inferCountryCode(it, destinationCountry.country);
+                    const emoji = countryCodeToEmoji(code);
+                    return emoji ? (
+                      <span className="search-results__flag" aria-label={it.country || destinationCountry.country || 'Country'}>
+                        {emoji}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="search-results__card-body">
                   <h3 className="search-results__card-title">{it.title}</h3>
-                  <p className="search-results__card-price">{it.currency} {it.price}</p>
+                  <div className="search-results__pills">
+                    <span className="search-results__pill">{parseInt(it.duration, 10) || 0} days</span>
+                    <span className="search-results__pill">{Array.isArray(it.places) ? it.places.length : 0} places</span>
+                  </div>
                   <div className="search-results__card-creator">
                     <span className="search-results__card-avatar"><User size={14} aria-hidden /></span>
                     <span className="search-results__card-username">{it.creator}</span>
-                  </div>
-                  <div className="search-results__card-meta">
-                    <span className="search-results__card-type">{it.type}</span>
-                    <span className="search-results__card-duration">{it.duration}</span>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-          {itineraries.length === 0 && (
+          {discoveryLoading && (
+            <p className="search-results__empty">Loading community itineraries…</p>
+          )}
+          {discoveryError && !discoveryLoading && (
+            <p className="search-results__empty">{discoveryError}</p>
+          )}
+          {itineraries.length === 0 && !discoveryLoading && !discoveryError && (
             <p className="search-results__empty">No itineraries match your search. Try a different destination or filters.</p>
           )}
         </div>

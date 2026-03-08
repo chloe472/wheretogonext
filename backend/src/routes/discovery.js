@@ -190,11 +190,14 @@ async function geocodeDestination(destination) {
   }
 
   const hit = data[0];
+  const addr = hit.address || {};
   return {
     lat: Number(hit.lat),
     lon: Number(hit.lon),
     name: hit.display_name,
     osmId: hit.osm_id,
+    country: String(addr.country || '').trim(),
+    countryCode: String(addr.country_code || '').trim().toLowerCase(),
   };
 }
 
@@ -1053,7 +1056,7 @@ async function enrichWithWikipedia(items, max = 8, topic = 'travel') {
   ];
 }
 
-function buildCommunityItineraries(destination, places) {
+function buildCommunityItineraries(destination, places, country = '', countryCode = '') {
   const top = places.slice(0, 15);
   if (top.length === 0) return [];
 
@@ -1063,6 +1066,7 @@ function buildCommunityItineraries(destination, places) {
       travelStyle: 'Culture + city wanderer',
       interests: ['Landmarks', 'Architecture', 'Neighborhood walks'],
       avatar: '',
+      bio: 'I plan trips around museums, architecture, and the neighborhoods locals actually hang out in.',
       titlePattern: `A Journey Through Time: My Unforgettable {days} Days in ${destination}`,
       type: 'Culture & Art',
     },
@@ -1071,6 +1075,7 @@ function buildCommunityItineraries(destination, places) {
       travelStyle: 'Food-first explorer',
       interests: ['Street food', 'Local markets', 'Hidden gems'],
       avatar: '',
+      bio: 'I build itineraries one meal at a time—markets, coffee stops, and tiny local favorites included.',
       titlePattern: `${destination} Between Bites and Views: My {days}-Day Food Trail`,
       type: 'Foodie',
     },
@@ -1079,6 +1084,7 @@ function buildCommunityItineraries(destination, places) {
       travelStyle: 'Adventure + photo spots',
       interests: ['Viewpoints', 'Sunset spots', 'Active days'],
       avatar: '',
+      bio: 'Fast-paced days, scenic walks, and the best golden-hour spots—always with comfy shoes.',
       titlePattern: `${destination} in Motion: {days} Days of Views, Walks, and Big Energy`,
       type: 'Adventure',
     },
@@ -1170,6 +1176,9 @@ function buildCommunityItineraries(destination, places) {
 
     return {
       id: itineraryId,
+      destination,
+      country,
+      countryCode,
       title: persona.titlePattern.replace('{days}', String(days)),
       creator: persona.name,
       author: {
@@ -1177,6 +1186,8 @@ function buildCommunityItineraries(destination, places) {
         travelStyle: persona.travelStyle,
         interests: persona.interests,
         avatar: persona.avatar,
+        joinedAt: new Date(Date.now() - ((personaIndex + 8) * 86400000 * 365)).toISOString(),
+        bio: persona.bio || '',
       },
       type: persona.type,
       duration: `${days} days`,
@@ -1422,10 +1433,12 @@ router.get('/destination', async (req, res) => {
       };
     });
 
-    const communityItineraries = buildCommunityItineraries(destination, places);
+    const communityItineraries = buildCommunityItineraries(destination, places, geo.country || '', geo.countryCode || '');
 
     const payload = {
       destination,
+      country: geo.country || '',
+      countryCode: geo.countryCode || '',
       center: [geo.lat, geo.lon],
       sources: {
         geocode: 'OpenStreetMap Nominatim',

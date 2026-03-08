@@ -57,14 +57,15 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           emailOrUsername: loginEmailOrUsername.trim(),
           password: loginPassword,
         }),
       });
       const data = await parseRes(res);
-      if (onLoginSuccess && data.user && data.token) {
-        onLoginSuccess(data.user, data.token);
+      if (onLoginSuccess && data.user) {
+        onLoginSuccess(data.user);
       }
     } catch (err) {
       setError(err.message || 'Log in failed. Try again.');
@@ -101,6 +102,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: signupEmail.trim(),
           password: signupPassword,
@@ -109,8 +111,8 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
         }),
       });
       const data = await parseRes(res);
-      if (onLoginSuccess && data.user && data.token) {
-        onLoginSuccess(data.user, data.token);
+      if (onLoginSuccess && data.user) {
+        onLoginSuccess(data.user);
       }
     } catch (err) {
       setError(err.message || 'Sign up failed. Try again.');
@@ -134,6 +136,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
         const res = await fetch(`${API_BASE}/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ credential: tokenResponse.access_token }),
         });
         const text = await res.text();
@@ -144,8 +147,8 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
           throw new Error(res.ok ? 'Invalid response from server' : 'Sign-in failed. Is the server running?');
         }
         if (!res.ok) throw new Error(data.error || 'Sign-in failed');
-        if (onLoginSuccess && data.user && data.token) {
-          onLoginSuccess(data.user, data.token);
+        if (onLoginSuccess && data.user) {
+          onLoginSuccess(data.user);
         }
       } catch (err) {
         setError(err.message || 'Google sign-in failed. Try again.');

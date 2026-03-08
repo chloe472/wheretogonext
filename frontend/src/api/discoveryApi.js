@@ -1,33 +1,27 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
-const DISCOVERY_CACHE_VERSION = 'v6';
 
-function cacheStorageKey(destination = '') {
-  return `wtg.discovery.${DISCOVERY_CACHE_VERSION}.${String(destination || '').trim().toLowerCase()}`;
+const MEM_CACHE = new Map(); // key -> { timestamp, data }
+
+function cacheKey(destination = '') {
+  return String(destination || '').trim().toLowerCase();
 }
 
 function readCachedDiscovery(destination) {
-  try {
-    const raw = localStorage.getItem(cacheStorageKey(destination));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.timestamp || !parsed?.data) return null;
-    if (Date.now() - parsed.timestamp > DISCOVERY_CACHE_TTL_MS) return null;
-    return parsed.data;
-  } catch {
+  const key = cacheKey(destination);
+  const hit = MEM_CACHE.get(key);
+  if (!hit) return null;
+  if (!hit.timestamp || !hit.data) return null;
+  if (Date.now() - hit.timestamp > DISCOVERY_CACHE_TTL_MS) {
+    MEM_CACHE.delete(key);
     return null;
   }
+  return hit.data;
 }
 
 function writeCachedDiscovery(destination, data) {
-  try {
-    localStorage.setItem(
-      cacheStorageKey(destination),
-      JSON.stringify({ timestamp: Date.now(), data }),
-    );
-  } catch {
-    // ignore storage issues
-  }
+  const key = cacheKey(destination);
+  MEM_CACHE.set(key, { timestamp: Date.now(), data });
 }
 
 async function requestDiscovery(destination, limit, timeoutMs) {
@@ -37,6 +31,7 @@ async function requestDiscovery(destination, limit, timeoutMs) {
   try {
     const res = await fetch(`${API_BASE}/api/discovery/destination?${query.toString()}`, {
       signal: controller.signal,
+      credentials: 'include',
     });
 
     if (!res.ok) {

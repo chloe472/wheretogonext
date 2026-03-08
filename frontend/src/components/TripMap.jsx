@@ -457,13 +457,15 @@ export default function TripMap({
                     ) : null}
                     {m.address ? <p className="trip-map__popup-address">{m.address}</p> : null}
                     {m.overview ? <p className="trip-map__popup-overview">{m.overview}</p> : null}
-                    <button
-                      type="button"
-                      className="trip-map__popup-submit"
-                      onClick={() => handleMarkerAddClick(m)}
-                    >
-                      Add to trip
-                    </button>
+                    {typeof onMarkerAddClick === 'function' ? (
+                      <button
+                        type="button"
+                        className="trip-map__popup-submit"
+                        onClick={() => handleMarkerAddClick(m)}
+                      >
+                        Add to trip
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <>

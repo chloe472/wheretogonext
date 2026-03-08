@@ -55,7 +55,8 @@ import {
   ArrowLeft,
   ExternalLink,
 } from 'lucide-react';
-import { getTripById, getTripDays, updateTrip, deleteTrip } from '../data/mockTrips';
+import { getTripDays } from '../lib/tripDates';
+import { fetchTrip, patchTrip, deleteTrip as apiDeleteTrip } from '../api/tripsApi';
 import {
   searchAddressSuggestions,
   getMapCenterForDestination,
@@ -648,13 +649,11 @@ function searchAirlines(query, limit = 8) {
   ).slice(0, limit);
 }
 
-export default function TripDetailsPage({ user, onLogout }) {
-  const { tripId } = useParams();
+function TripDetailsPageInner({ user, onLogout, tripId, initialTripData }) {
   const navigate = useNavigate();
   const [locationUpdateKey, setLocationUpdateKey] = useState(0);
 
-  // Use useMemo to re-fetch trip when location updates
-  const tripData = useMemo(() => getTripById(tripId), [tripId, locationUpdateKey]);
+  const [tripData, setTripData] = useState(initialTripData);
 
   // Local state for immediate destination/location updates
   const [localDestination, setLocalDestination] = useState(null);
@@ -687,12 +686,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleEditValue, setTitleEditValue] = useState('');
-  const [titleDisplay, setTitleDisplay] = useState(() => {
-    const t = getTripById(tripId);
-    if (!t) return '';
-    const d = getTripDays(t);
-    return t.title ?? `${d.length} days to ${t.destination}`;
-  });
+  const [titleDisplay, setTitleDisplay] = useState('');
   const [mapView, setMapView] = useState('Default');
   const [mapFilter, setMapFilter] = useState('Default');
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
@@ -752,14 +746,13 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [bookingStartTime, setBookingStartTime] = useState('07:00');
   const [bookingTravellers, setBookingTravellers] = useState(2);
   const [bookingNotes, setBookingNotes] = useState('');
-  const [tripExpenseItems, setTripExpenseItems] = useState(() => {
-    const existingTrip = getTripById(tripId);
-    if (!Array.isArray(existingTrip?.tripExpenseItems)) return [];
-    return existingTrip.tripExpenseItems.map((item) => ({
-      ...item,
-      attachments: Array.isArray(item?.attachments) ? item.attachments : [],
-    }));
-  });
+  const [tripExpenseItems, setTripExpenseItems] = useState([]);
+
+  const saveTripUpdates = (updates) => {
+    setTripData((prev) => (prev ? { ...prev, ...updates } : prev));
+    patchTrip(tripId, updates).catch(() => {});
+  };
+
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [customPlaceAddress, setCustomPlaceAddress] = useState('');
   const [customPlaceAddressSelection, setCustomPlaceAddressSelection] = useState(null);
@@ -949,21 +942,20 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [titleDropdownOpen]);
 
   useEffect(() => {
-    const existingTrip = getTripById(tripId);
-    const persistedItems = Array.isArray(existingTrip?.tripExpenseItems)
-      ? existingTrip.tripExpenseItems.map((item) => ({
-        ...item,
-        attachments: Array.isArray(item?.attachments) ? item.attachments : [],
-      }))
-      : [];
-
-    setTripExpenseItems(persistedItems);
+    if (!tripData || !tripId) return;
     hydratedTripItemsForIdRef.current = tripId;
-  }, [tripId]);
+  }, [tripData, tripId]);
 
+  const persistItemsTimerRef = useRef(null);
   useEffect(() => {
     if (hydratedTripItemsForIdRef.current !== tripId) return;
-    updateTrip(tripId, { tripExpenseItems });
+    if (persistItemsTimerRef.current) clearTimeout(persistItemsTimerRef.current);
+    persistItemsTimerRef.current = setTimeout(() => {
+      patchTrip(tripId, { tripExpenseItems }).catch(() => {});
+    }, 600);
+    return () => {
+      if (persistItemsTimerRef.current) clearTimeout(persistItemsTimerRef.current);
+    };
   }, [tripId, tripExpenseItems]);
 
   if (!trip) {
@@ -1676,7 +1668,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 onBlur={() => {
                   const v = titleEditValue.trim();
                   if (v) {
-                    updateTrip(tripId, { title: v });
+                    saveTripUpdates({ title: v });
                     setTitleDisplay(v);
                   }
                   setTitleEditing(false);
@@ -1733,9 +1725,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                       onClick={() => {
                         setTitleDropdownOpen(false);
                         if (!window.confirm('Delete this trip? This cannot be undone.')) return;
-                        const removed = deleteTrip(tripId);
-                        if (removed) navigate('/');
-                        else alert('This is a sample trip and cannot be deleted.');
+                        apiDeleteTrip(tripId)
+                          .then(() => navigate('/'))
+                          .catch(() => {});
                       }}
                     >
                       Delete trip
@@ -2501,7 +2493,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                   setLocalLocations(locationsStr);
 
                   // Update the trip data in the store
-                  updateTrip(tripId, {
+                  saveTripUpdates({
                     destination: newDestination,
                     locations: locationsStr
                   });
@@ -5904,5 +5896,74 @@ export default function TripDetailsPage({ user, onLogout }) {
         </>
       )}
     </div>
+  );
+}
+
+export default function TripDetailsPage({ user, onLogout }) {
+  const { tripId } = useParams();
+  const [tripData, setTripData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!tripId) return;
+      setLoading(true);
+      setError('');
+      try {
+        const data = await fetchTrip(tripId);
+        if (cancelled) return;
+        const trip = data?.trip || null;
+        setTripData(trip);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err?.message || 'Failed to load trip');
+          setTripData(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId]);
+
+  if (loading) {
+    return (
+      <div className="trip-details trip-details--missing">
+        <p>Loading trip…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="trip-details trip-details--missing">
+        <p>{error}</p>
+        <Link to="/">Back to My Trips</Link>
+      </div>
+    );
+  }
+
+  if (!tripData) {
+    return (
+      <div className="trip-details trip-details--missing">
+        <p>Trip not found.</p>
+        <Link to="/">Back to My Trips</Link>
+      </div>
+    );
+  }
+
+  return (
+    <TripDetailsPageInner
+      key={tripId}
+      user={user}
+      onLogout={onLogout}
+      tripId={tripId}
+      initialTripData={tripData}
+    />
   );
 }

@@ -357,6 +357,7 @@
 .search-results__card-image-wrap {
   aspect-ratio: 400 / 260;
   overflow: hidden;
+  position: relative;
 }
 
 .search-results__card-image {
@@ -365,8 +366,95 @@
   object-fit: cover;
 }
 
+.search-results__carousel {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.search-results__carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(0, 0, 0, 0.32);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.search-results__carousel-nav--left {
+  left: 10px;
+}
+
+.search-results__carousel-nav--right {
+  right: 10px;
+}
+
+.search-results__carousel-nav:hover {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.search-results__carousel-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.search-results__carousel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.search-results__carousel-dot--active {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.search-results__flag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 1rem;
+  line-height: 1;
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.search-results__views-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  backdrop-filter: blur(4px);
+}
+
 .search-results__card-body {
   padding: 1rem;
+  position: relative;
 }
 
 .search-results__card-title {
@@ -386,6 +474,23 @@
   font-size: 1rem;
   font-weight: 700;
   color: #0d9488;
+}
+
+.search-results__pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.2rem 0 0.65rem;
+}
+
+.search-results__pill {
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
+  color: var(--wtg-text);
+  font-weight: 600;
+  font-size: 0.8125rem;
 }
 
 .search-results__card-creator {

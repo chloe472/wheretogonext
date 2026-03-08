@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
-import { addTrip } from '../data/mockTrips';
+import { createTrip } from '../api/tripsApi';
 import DateRangePickerModal from './DateRangePickerModal';
 import './NewTripPage.css';
 
@@ -95,15 +95,13 @@ export default function NewTripPage({ user, onLogout }) {
     }
     const start = startDate;
     const end = endDate;
-    const tripId = `trip-${Date.now()}`;
     const title = resolvedLocation.country
       ? `${resolvedLocation.name}, ${resolvedLocation.country}`
       : resolvedLocation.name;
     const locations = resolvedLocation.country
       ? `${resolvedLocation.name}, ${resolvedLocation.country}`
       : resolvedLocation.name;
-    const newTrip = {
-      id: tripId,
+    const payload = {
       title: `Trip to ${title}`,
       destination: resolvedLocation.name,
       dates: formatTripDates(start, end),
@@ -117,9 +115,16 @@ export default function NewTripPage({ user, onLogout }) {
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
       image: DEFAULT_TRIP_IMAGE,
+      tripExpenseItems: [],
     };
-    addTrip(newTrip);
-    navigate(`/trip/${tripId}`);
+    createTrip(payload)
+      .then((res) => {
+        const id = res?.trip?._id || res?.trip?.id;
+        if (id) navigate(`/trip/${id}`);
+      })
+      .catch(() => {
+        setDatesError('Failed to create trip. Please try again.');
+      });
   };
 
   return (

@@ -15,7 +15,7 @@ import {
   ChevronDown,
   Search,
 } from 'lucide-react';
-import { getAllTrips } from '../data/mockTrips';
+import { fetchTrips, patchTrip } from '../api/tripsApi';
 import { searchLocations } from '../data/mockLocations';
 import './Dashboard.css';
 
@@ -50,14 +50,13 @@ export default function Dashboard({ user, onLogout }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const [tripsError, setTripsError] = useState('');
+  const [trips, setTrips] = useState([]);
   const searchRef = useRef(null);
-  const trips = getAllTrips();
   const searchSuggestions = searchLocations(searchQuery);
   const [tripStatuses, setTripStatuses] = useState(() => {
     const map = {};
-    trips.forEach((t) => {
-      map[t.id] = t.status;
-    });
     return map;
   });
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
@@ -76,9 +75,38 @@ export default function Dashboard({ user, onLogout }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setTripsLoading(true);
+      setTripsError('');
+      try {
+        const data = await fetchTrips();
+        if (cancelled) return;
+        const list = Array.isArray(data?.trips) ? data.trips : [];
+        setTrips(list);
+        setTripStatuses(() => {
+          const map = {};
+          list.forEach((t) => { map[t._id || t.id] = t.status; });
+          return map;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setTripsError(err?.message || 'Failed to load trips');
+          setTrips([]);
+        }
+      } finally {
+        if (!cancelled) setTripsLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
   const setTripStatus = (tripId, status) => {
     setTripStatuses((prev) => ({ ...prev, [tripId]: status }));
     setOpenStatusDropdownId(null);
+    patchTrip(tripId, { status }).catch(() => {});
   };
 
   const todayStr = (() => {
@@ -230,17 +258,23 @@ export default function Dashboard({ user, onLogout }) {
               ))}
             </div>
             <ul className="dashboard__trip-list">
+              {tripsLoading && (
+                <li style={{ padding: '1rem', color: 'var(--wtg-text-muted)' }}>Loading your trips…</li>
+              )}
+              {tripsError && !tripsLoading && (
+                <li style={{ padding: '1rem', color: 'var(--wtg-text-muted)' }}>{tripsError}</li>
+              )}
               {filteredTrips.map((trip) => (
                 <li
-                  key={trip.id}
+                  key={trip._id || trip.id}
                   className="trip-card"
                   role="button"
                   tabIndex={0}
-                  onClick={() => navigate(`/trip/${trip.id}`)}
+                  onClick={() => navigate(`/trip/${trip._id || trip.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      navigate(`/trip/${trip.id}`);
+                      navigate(`/trip/${trip._id || trip.id}`);
                     }
                   }}
                 >
@@ -250,33 +284,34 @@ export default function Dashboard({ user, onLogout }) {
                       alt=""
                       className="trip-card__image"
                     />
-                    <div className="trip-card__status-wrap" ref={openStatusDropdownId === trip.id ? statusDropdownRef : null}>
+                    <div className="trip-card__status-wrap" ref={openStatusDropdownId === (trip._id || trip.id) ? statusDropdownRef : null}>
                       <button
                         type="button"
-                        className={`trip-card__status-btn ${getStatusClass(tripStatuses[trip.id] ?? trip.status)}`}
+                        className={`trip-card__status-btn ${getStatusClass(tripStatuses[trip._id || trip.id] ?? trip.status)}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenStatusDropdownId((id) => (id === trip.id ? null : trip.id));
+                          const id = trip._id || trip.id;
+                          setOpenStatusDropdownId((open) => (open === id ? null : id));
                         }}
-                        aria-expanded={openStatusDropdownId === trip.id}
+                        aria-expanded={openStatusDropdownId === (trip._id || trip.id)}
                         aria-haspopup="listbox"
-                        aria-label={`Trip status: ${trip.title}, ${tripStatuses[trip.id] ?? trip.status}`}
+                        aria-label={`Trip status: ${trip.title}, ${tripStatuses[trip._id || trip.id] ?? trip.status}`}
                       >
-                        <span className="trip-card__status-btn-text">{tripStatuses[trip.id] ?? trip.status}</span>
+                        <span className="trip-card__status-btn-text">{tripStatuses[trip._id || trip.id] ?? trip.status}</span>
                         <ChevronDown size={14} className="trip-card__status-chevron" aria-hidden />
                       </button>
-                      {openStatusDropdownId === trip.id && (
+                      {openStatusDropdownId === (trip._id || trip.id) && (
                         <div className="trip-card__status-dropdown" role="listbox">
                           {TRIP_STATUS_OPTIONS.map((opt) => (
                             <button
                               key={opt.value}
                               type="button"
                               role="option"
-                              aria-selected={(tripStatuses[trip.id] ?? trip.status) === opt.value}
+                              aria-selected={(tripStatuses[trip._id || trip.id] ?? trip.status) === opt.value}
                               className="trip-card__status-option"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setTripStatus(trip.id, opt.value);
+                                setTripStatus(trip._id || trip.id, opt.value);
                               }}
                             >
                               <span className="trip-card__status-dot" style={{ backgroundColor: opt.dotColor }} aria-hidden />
@@ -312,7 +347,7 @@ export default function Dashboard({ user, onLogout }) {
                       </span>
                     </div>
                     <Link
-                      to={`/trip/${trip.id}`}
+                      to={`/trip/${trip._id || trip.id}`}
                       className="trip-card__link"
                       onClick={(e) => e.stopPropagation()}
                     >

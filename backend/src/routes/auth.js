@@ -7,8 +7,35 @@ const router = Router();
 
 const GOOGLE_USERINFO = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') return '';
+  return 'wtg_dev_secret_change_me';
+}
+
+function cookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+}
+
+function setAuthCookie(res, token) {
+  res.cookie('wtg_token', token, cookieOptions());
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie('wtg_token', { path: '/' });
+}
+
 function requireJwt(req, res, next) {
-  if (!process.env.JWT_SECRET) {
+  const secret = getJwtSecret();
+  if (!secret) {
     return res.status(500).json({ error: 'Server misconfiguration (JWT_SECRET). Add it to backend/.env' });
   }
   next();
@@ -23,9 +50,10 @@ async function getGoogleUser(accessToken) {
 }
 
 function signToken(user) {
+  const secret = getJwtSecret();
   return jwt.sign(
     { userId: user._id },
-    process.env.JWT_SECRET,
+    secret,
     { expiresIn: '7d' }
   );
 }
@@ -38,6 +66,34 @@ function userToJson(user) {
     picture: user.picture,
   };
 }
+
+function readToken(req) {
+  const header = String(req.headers.authorization || '');
+  const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+  const cookie = req.cookies?.wtg_token ? String(req.cookies.wtg_token) : '';
+  return bearer || cookie || '';
+}
+
+router.get('/me', requireJwt, async (req, res) => {
+  try {
+    const token = readToken(req);
+    if (!token) return res.status(401).json({ error: 'Not signed in' });
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(token, secret);
+    const userId = decoded?.userId;
+    if (!userId) return res.status(401).json({ error: 'Not signed in' });
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(401).json({ error: 'Not signed in' });
+    return res.json({ user: userToJson(user) });
+  } catch {
+    return res.status(401).json({ error: 'Not signed in' });
+  }
+});
+
+router.post('/logout', (req, res) => {
+  clearAuthCookie(res);
+  return res.json({ ok: true });
+});
 
 router.post('/register', requireJwt, async (req, res) => {
   try {
@@ -75,7 +131,8 @@ router.post('/register', requireJwt, async (req, res) => {
     });
 
     const token = signToken(user);
-    res.status(201).json({ user: userToJson(user), token });
+    setAuthCookie(res, token);
+    res.status(201).json({ user: userToJson(user) });
   } catch (err) {
     console.error('Register error:', err);
     if (!res.headersSent) {
@@ -124,7 +181,8 @@ router.post('/login', requireJwt, async (req, res) => {
     }
 
     const token = signToken(user);
-    res.json({ user: userToJson(user), token });
+    setAuthCookie(res, token);
+    res.json({ user: userToJson(user) });
   } catch (err) {
     console.error('Login error:', err);
     if (!res.headersSent) {
@@ -166,7 +224,8 @@ router.post('/google', requireJwt, async (req, res) => {
     }
 
     const token = signToken(user);
-    res.json({ user: userToJson(user), token });
+    setAuthCookie(res, token);
+    res.json({ user: userToJson(user) });
   } catch (err) {
     console.error('Google auth error:', err);
     if (!res.headersSent) {

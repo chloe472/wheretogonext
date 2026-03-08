@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
@@ -7,33 +7,58 @@ import TripDetailsPage from './components/TripDetailsPage';
 import NewTripPage from './components/NewTripPage';
 import ProfilePage from './components/ProfilePage';
 import SearchResultsPage from './components/SearchResultsPage';
+import PublicItineraryDetailsPage from './components/PublicItineraryDetailsPage';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('wheretogonext_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const openAuthModal = () => setAuthModalOpen(true);
   const closeAuthModal = () => setAuthModalOpen(false);
 
-  const handleLoginSuccess = (userData, token) => {
-    localStorage.setItem('wheretogonext_token', token);
-    localStorage.setItem('wheretogonext_user', JSON.stringify(userData));
-    setUser(userData);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setUser(res.ok ? (data.user || null) : null);
+          setAuthChecked(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setUser(null);
+          setAuthChecked(true);
+        }
+      }
+    }
+    loadMe();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLoginSuccess = (userData) => {
+    setUser(userData || null);
     closeAuthModal();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('wheretogonext_token');
-    localStorage.removeItem('wheretogonext_user');
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch {
+      // ignore
+    }
     setUser(null);
   };
+
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--wtg-bg)' }} />
+    );
+  }
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -83,6 +108,16 @@ function App() {
           element={
             user ? (
               <SearchResultsPage user={user} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/itinerary/:itineraryId"
+          element={
+            user ? (
+              <PublicItineraryDetailsPage user={user} onLogout={handleLogout} />
             ) : (
               <Navigate to="/" replace />
             )
