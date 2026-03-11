@@ -21,7 +21,6 @@ We use **two separate API keys** following security best practices:
 
 ### Frontend Key (Browser) - **UPDATED** ✨
 
-**Key:** `AIzaSyC6UmfWTKcuEZsWUUgcHnrdZs19jIUj69o`  
 **Enabled APIs:**
 
 - ✅ Maps JavaScript API
@@ -33,7 +32,6 @@ We use **two separate API keys** following security best practices:
 
 ### Backend Key (Server) - **NO CHANGE** ✓
 
-**Key:** `AIzaSyAgXNQqSGQoxnJNEeXnJMJjb0k8YMurlmI`  
 **Enabled APIs:**
 
 - ✅ Places API
