@@ -32,7 +32,8 @@ export function resolveImageUrl(imageUrl, hint = '', topic = 'travel') {
   if (raw && raw.startsWith('data:image/')) {
     return raw;
   }
-  if (raw && /^(https?:)?\/\//i.test(raw) && !isKnownPlaceholderUrl(raw)) {
+  // Accept absolute URLs (http://, https://, //) OR relative URLs starting with /
+  if (raw && (/^(https?:)?\/\//i.test(raw) || raw.startsWith('/')) && !isKnownPlaceholderUrl(raw)) {
     return raw;
   }
   return buildInlinePlaceholderUrl(hint, topic);

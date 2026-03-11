@@ -48,6 +48,7 @@ import {
   Heading2,
   Footprints,
   Bike,
+  Bed,
   FileText,
   Palette,
   Route,
@@ -711,12 +712,15 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addExperiencesOpen, setAddExperiencesOpen] = useState(false);
+  const [addStaysOpen, setAddStaysOpen] = useState(false);
   const [placeDetailsView, setPlaceDetailsView] = useState(null);
   const [placeDetailsTab, setPlaceDetailsTab] = useState('overview');
   const [foodDetailsView, setFoodDetailsView] = useState(null);
   const [foodDetailsTab, setFoodDetailsTab] = useState('overview');
   const [experienceDetailsView, setExperienceDetailsView] = useState(null);
   const [experienceDetailsTab, setExperienceDetailsTab] = useState('overview');
+  const [stayDetailsView, setStayDetailsView] = useState(null);
+  const [stayDetailsTab, setStayDetailsTab] = useState('overview');
   const [itineraryDetailsView, setItineraryDetailsView] = useState(null);
   const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
   const [addCustomFoodOpen, setAddCustomFoodOpen] = useState(false);
@@ -740,6 +744,10 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [foodSearchQuery, setFoodSearchQuery] = useState('');
   const [foodDietaryFilter, setFoodDietaryFilter] = useState('All');
   const [foodSortBy, setFoodSortBy] = useState('Recommended');
+  const [staySearchQuery, setStaySearchQuery] = useState('');
+  const [stayTypeFilter, setStayTypeFilter] = useState('All');
+  const [stayPriceRange, setStayPriceRange] = useState('All');
+  const [staySortBy, setStaySortBy] = useState('Recommended');
   const [experienceSearchQuery, setExperienceSearchQuery] = useState('');
   const [experienceTypeFilter, setExperienceTypeFilter] = useState('All');
   const [experiencePriceRange, setExperiencePriceRange] = useState('All');
@@ -850,6 +858,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [discoveryData, setDiscoveryData] = useState({
     places: [],
     foods: [],
+    stays: [],
     experiences: [],
     communityItineraries: [],
     center: null,
@@ -897,6 +906,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           setDiscoveryData({
             places: Array.isArray(data?.places) ? data.places : [],
             foods: Array.isArray(data?.foods) ? data.foods : [],
+            stays: Array.isArray(data?.stays) ? data.stays : [],
             experiences: Array.isArray(data?.experiences) ? data.experiences : [],
             communityItineraries: Array.isArray(data?.communityItineraries) ? data.communityItineraries : [],
             center: Array.isArray(data?.center) ? data.center : null,
@@ -910,6 +920,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           setDiscoveryError(err?.message || 'Failed to load destination data');
           setDiscoveryData({
             places: [],
+            stays: [],
             foods: [],
             experiences: [],
             communityItineraries: [],
@@ -1195,36 +1206,15 @@ export default function TripDetailsPage({ user, onLogout }) {
       if (typeof rawTags === 'string' && rawTags.trim()) {
         return [rawTags.trim()];
       }
-
-      const tags = [];
-      const rating = Number(place?.rating || 0);
-      const reviewCount = Number(place?.reviewCount || 0);
-      const type = String(place?.type || '').toLowerCase();
-
-      if (rating >= 4.6 || reviewCount >= 12000 || type.includes('museum') || type.includes('attraction') || type.includes('landmark')) {
-        tags.push('Must go');
-      }
-      if (reviewCount >= 3000) {
-        tags.push('Seen in 100+ plans');
-      }
-      if ((type.includes('gallery') || type.includes('scenic') || type.includes('view')) && rating >= 4.3 && reviewCount < 4000) {
-        tags.push('Hidden gem');
-      }
-      if (tags.length === 0) {
-        tags.push('Must go');
-      }
-      return [...new Set(tags)];
+      // Return type if no tags available
+      return place?.type ? [place.type] : [];
     };
 
     const scorePlaceRecommendation = (place) => {
-      const tags = deriveSemanticTags(place);
       let score = 0;
       score += Number(place?.recommendedScore || 0);
       score += Number(place?.rating || 0) * 8;
       score += Math.log10(Number(place?.reviewCount || 0) + 1) * 5;
-      if (tags.includes('Must go')) score += 8;
-      if (tags.includes('Seen in 100+ plans')) score += 4;
-      if (tags.includes('Hidden gem')) score += 3;
       return score;
     };
 
@@ -1243,13 +1233,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         || (p.description || '').toLowerCase().includes(q),
       );
     }
-    if (placeFilterTag) {
-      const tag = placeFilterTag.toLowerCase();
-      results = results.filter((p) =>
-        (p.type || '').toLowerCase().includes(tag)
-        || (Array.isArray(p.tags) && p.tags.some((t) => String(t).toLowerCase().includes(tag))),
-      );
-    }
     if (placeSortBy === 'Rating: Low to High') {
       results = [...results].sort((a, b) => (a.rating || 0) - (b.rating || 0));
     } else if (placeSortBy === 'Rating: High to Low') {
@@ -1258,7 +1241,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       results = [...results].sort((a, b) => scorePlaceRecommendation(b) - scorePlaceRecommendation(a));
     }
     return results;
-  }, [discoveryData?.places, placeSearchQuery, placeFilterTag, placeSortBy]);
+  }, [discoveryData?.places, placeSearchQuery, placeSortBy]);
 
   const handleImageError = (event) => {
     applyImageFallback(event);
@@ -1276,7 +1259,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   useEffect(() => {
     setAddPlacesPage(1);
-  }, [placeSearchQuery, placeFilterTag, placeSortBy]);
+  }, [placeSearchQuery, placeSortBy]);
 
   useEffect(() => {
     if (addPlacesPage > addPlacesTotalPages) {
@@ -1352,6 +1335,49 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
     return results;
   }, [discoveryData?.experiences, experienceSearchQuery, experienceTypeFilter, experiencePriceRange, experienceDurationFilter, experienceSortBy]);
+
+  const filteredStays = useMemo(() => {
+    const source = Array.isArray(discoveryData?.stays) ? discoveryData.stays : [];
+    let results = source;
+    
+    if (staySearchQuery.trim()) {
+      const q = staySearchQuery.trim().toLowerCase();
+      results = results.filter((s) =>
+        (s.name || '').toLowerCase().includes(q)
+        || (s.address || '').toLowerCase().includes(q)
+        || (s.type || '').toLowerCase().includes(q),
+      );
+    }
+    
+    if (stayTypeFilter !== 'All') {
+      results = results.filter((s) => (s.type || '').toLowerCase() === stayTypeFilter.toLowerCase());
+    }
+    
+    if (stayPriceRange !== 'All') {
+      const [min, max] = stayPriceRange.split('-').map(Number);
+      results = results.filter((s) => {
+        const price = s.pricePerNight || 0;
+        return max ? (price >= min && price <= max) : (price >= min);
+      });
+    }
+    
+    if (staySortBy === 'Price: Low to High') {
+      results = [...results].sort((a, b) => (a.pricePerNight || 0) - (b.pricePerNight || 0));
+    } else if (staySortBy === 'Price: High to Low') {
+      results = [...results].sort((a, b) => (b.pricePerNight || 0) - (a.pricePerNight || 0));
+    } else if (staySortBy === 'Rating: High to Low') {
+      results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else {
+      // Recommended
+      results = [...results].sort((a, b) => {
+        const scoreA = (a.rating || 0) * 10 + Math.log10((a.reviewCount || 0) + 1) * 5;
+        const scoreB = (b.rating || 0) * 10 + Math.log10((b.reviewCount || 0) + 1) * 5;
+        return scoreB - scoreA;
+      });
+    }
+    
+    return results;
+  }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayPriceRange, staySortBy]);
 
   const communityItineraries = useMemo(() => {
     const source = Array.isArray(discoveryData?.communityItineraries) ? discoveryData.communityItineraries : [];
@@ -3995,20 +4021,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                             {discoveryLoading && (
                               <p className="trip-details__add-places-results">Loading live places for {cityQuery}...</p>
                             )}
-                            <p className="trip-details__add-places-results">
-                              {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
-                            </p>
                             <div className="trip-details__add-places-filters">
-                              {PLACE_FILTER_TAGS.map((tag) => (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  className={`trip-details__add-places-tag ${placeFilterTag === tag ? 'trip-details__add-places-tag--active' : ''}`}
-                                  onClick={() => setPlaceFilterTag(placeFilterTag === tag ? '' : tag)}
-                                >
-                                  {tag}
-                                </button>
-                              ))}
+                              <p className="trip-details__add-places-results">
+                                {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
+                              </p>
                               <div className="trip-details__add-places-sort">
                                 <label htmlFor="add-places-sort">Sort by:</label>
                                 <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
@@ -4053,13 +4069,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <div className="trip-details__add-places-card-info">
                                     <span className="trip-details__add-places-card-name">{place.name}</span>
                                     <span className="trip-details__add-places-card-rating">{place.rating} ({place.reviewCount.toLocaleString()})</span>
-                                    {place.tags && place.tags.length > 0 && (
-                                      <div className="trip-details__add-places-card-tags">
-                                        {place.tags.map((t) => (
-                                          <span key={t} className="trip-details__add-places-card-tag" data-tag={t}>{t}</span>
-                                        ))}
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -4129,9 +4138,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <span className="trip-details__place-detail-rating">
                           <Star size={16} fill="currentColor" aria-hidden /> {detailPlace.rating} ({detailPlace.reviewCount?.toLocaleString() ?? '0'})
                         </span>
-                        {detailPlace.tags && detailPlace.tags[0] && (
-                          <span className="trip-details__place-detail-badge">{detailPlace.tags[0]}</span>
-                        )}
                         <button type="button" className="trip-details__place-detail-heart" aria-label="Save">
                           <Heart size={20} aria-hidden />
                         </button>
@@ -4169,7 +4175,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       {placeDetailsTab === 'overview' ? (
                         <>
                           {detailPlace.overview && (
-                            <p className="trip-details__place-detail-overview">{detailPlace.overview}<span className="trip-details__place-detail-read-more"> Read more</span></p>
+                            <p className="trip-details__place-detail-overview">{detailPlace.overview}</p>
                           )}
                           <div className="trip-details__place-detail-add-wrap">
                             <button
@@ -4208,16 +4214,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               </ul>
                             </div>
                           )}
-                          {Array.isArray(detailPlace.whySkip) && detailPlace.whySkip.length > 0 && (
-                            <div className="trip-details__place-detail-section">
-                              <h3 className="trip-details__place-detail-section-title">Why you might want to skip it</h3>
-                              <ul className="trip-details__place-detail-hours">
-                                {detailPlace.whySkip.map((reason, idx) => (
-                                  <li key={`skip-${idx}`}>{reason}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+
                           {detailPlace.address && (
                             <div className="trip-details__place-detail-section">
                               <h3 className="trip-details__place-detail-section-title">Address</h3>
@@ -4420,16 +4417,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               </ul>
                             </div>
                           )}
-                          {Array.isArray(foodDetailsView.whySkip) && foodDetailsView.whySkip.length > 0 && (
-                            <div className="trip-details__place-detail-section">
-                              <h3 className="trip-details__place-detail-section-title">Why you might want to skip it</h3>
-                              <ul className="trip-details__place-detail-hours">
-                                {foodDetailsView.whySkip.map((reason, idx) => (
-                                  <li key={`food-skip-${idx}`}>{reason}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+
                           {foodDetailsView.address && (
                             <div className="trip-details__place-detail-section">
                               <h3 className="trip-details__place-detail-section-title">Address</h3>
@@ -4651,6 +4639,385 @@ export default function TripDetailsPage({ user, onLogout }) {
                       >
                         <CalendarIcon size={16} aria-hidden /> Filter days
                       </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
+
+      {addStaysOpen && (() => {
+        const showingStayDetail = stayDetailsView != null;
+
+        const stayMapMarkers = filteredStays
+          .filter((stay) => stay.lat != null && stay.lng != null)
+          .map((stay, index) => ({
+            id: stay.id,
+            sourceId: stay.id,
+            markerType: 'stay',
+            name: stay.name,
+            lat: stay.lat,
+            lng: stay.lng,
+            dayNum: (index % Math.max(days.length, 1)) + 1,
+            address: stay.address || cityQuery,
+            rating: stay.rating,
+            reviewCount: stay.reviewCount,
+            image: stay.image,
+            originalData: stay,
+          }));
+
+        return (
+          <>
+            <button
+              type="button"
+              className="trip-details__modal-backdrop"
+              aria-label="Close"
+              onClick={() => { setAddStaysOpen(false); setStayDetailsView(null); }}
+            />
+            <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingStayDetail ? 'stay-detail-title' : 'add-stays-title'} aria-modal="true">
+              {showingStayDetail ? (
+                // Stay Detail View
+                <div className="trip-details__add-places-body">
+                  <div className="trip-details__place-detail-panel">
+                    <div className="trip-details__place-detail-header">
+                      <button type="button" className="trip-details__place-detail-back" onClick={() => { setStayDetailsView(null); setStayDetailsTab('overview'); }} aria-label="Back to list">
+                        <ArrowLeft size={20} aria-hidden /> Back
+                      </button>
+                      <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddStaysOpen(false); setStayDetailsView(null); }}>
+                        <X size={20} aria-hidden />
+                      </button>
+                      <h1 id="stay-detail-title" className="trip-details__place-detail-name">{stayDetailsView.name}</h1>
+                      <div className="trip-details__place-detail-meta">
+                        <span className="trip-details__place-detail-rating">
+                          {[...Array(stayDetailsView.starRating || 5)].map((_, i) => (
+                            <Star key={i} size={14} fill="#f59e0b" color="#f59e0b" aria-hidden />
+                          ))}
+                          <span style={{ marginLeft: '8px' }}>{stayDetailsView.rating} ({stayDetailsView.reviewCount?.toLocaleString() ?? '0'} reviews)</span>
+                        </span>
+                        <button type="button" className="trip-details__place-detail-heart" aria-label="Save">
+                          <Heart size={20} aria-hidden />
+                        </button>
+                      </div>
+                      {Array.isArray(stayDetailsView.images) && stayDetailsView.images.length > 0 && (
+                        <div className="trip-details__place-detail-gallery">
+                          <div className="trip-details__place-detail-gallery-main">
+                            <img src={resolveImageUrl(stayDetailsView.images[0], stayDetailsView.name, 'hotel')} alt={stayDetailsView.name} className="trip-details__place-detail-img trip-details__place-detail-img--main" onError={handleImageError} />
+                          </div>
+                          <div className="trip-details__place-detail-gallery-grid">
+                            {stayDetailsView.images.slice(1, 5).map((img, idx) => (
+                              <img key={`stay-gallery-${idx}`} src={resolveImageUrl(img, stayDetailsView.name, 'hotel')} alt="" className="trip-details__place-detail-img trip-details__place-detail-img--secondary" onError={handleImageError} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="trip-details__place-detail-tabs">
+                      <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('overview')}>Overview</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'rooms' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('rooms')}>Rooms</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'policies' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('policies')}>Policies</button>
+                      <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'nearby' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('nearby')}>Stays Nearby</button>
+                    </div>
+                    <div className="trip-details__place-detail-content">
+                      {stayDetailsTab === 'overview' ? (
+                        <>
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Overview</h3>
+                            <p className="trip-details__place-detail-section-text">{stayDetailsView.overview || stayDetailsView.description}</p>
+                          </div>
+                          {stayDetailsView.address && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Address</h3>
+                              <p className="trip-details__place-detail-section-text">
+                                <MapPin size={14} aria-hidden style={{ display: 'inline', marginRight: '6px' }} />
+                                {stayDetailsView.address}
+                              </p>
+                            </div>
+                          )}
+                          {Array.isArray(stayDetailsView.surrounding) && stayDetailsView.surrounding.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Surrounding</h3>
+                              <ul className="trip-details__place-detail-list">
+                                {stayDetailsView.surrounding.map((item, idx) => (
+                                  <li key={idx}>{item.name}: {item.distance}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {Array.isArray(stayDetailsView.amenities) && stayDetailsView.amenities.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">What this accommodation offers</h3>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                                {stayDetailsView.amenities.map((amenity, idx) => (
+                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Check size={16} color="#16a34a" aria-hidden />
+                                    <span>{amenity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : stayDetailsTab === 'rooms' ? (
+                        <div className="trip-details__place-detail-section">
+                          <h3 className="trip-details__place-detail-section-title">Choose your room</h3>
+                          {Array.isArray(stayDetailsView.roomTypes) && stayDetailsView.roomTypes.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                              {stayDetailsView.roomTypes.map((room) => (
+                                <div key={room.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+                                  <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{room.name}</h4>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '14px', color: '#6b7280' }}>
+                                    <Bed size={16} aria-hidden /> {room.beds}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
+                                    <div>
+                                      <div style={{ fontSize: '20px', fontWeight: '700' }}>
+                                        {stayDetailsView.currency === 'USD' ? '$' : stayDetailsView.currency}
+                                        {room.price.toFixed(2)}
+                                      </div>
+                                      {room.originalPrice && (
+                                        <div style={{ fontSize: '14px', color: '#9ca3af', textDecoration: 'line-through' }}>
+                                          {stayDetailsView.currency === 'USD' ? '$' : stayDetailsView.currency}
+                                          {room.originalPrice.toFixed(2)}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        marginLeft: 'auto',
+                                        padding: '8px 16px',
+                                        backgroundColor: '#2563eb',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontWeight: '500',
+                                      }}
+                                      onClick={() => {
+                                        alert(`Booking functionality coming soon! Room: ${room.name}`);
+                                      }}
+                                    >
+                                      Book Room
+                                    </button>
+                                  </div>
+                                  <div style={{ marginTop: '12px', display: 'flex', gap: '12px', fontSize: '12px', color: '#6b7280' }}>
+                                    {room.mealsIncluded && <span>✓ Meals included</span>}
+                                    {room.refundable && <span>✓ Refundable</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="trip-details__place-detail-section-text">No room information available.</p>
+                          )}
+                        </div>
+                      ) : stayDetailsTab === 'policies' ? (
+                        <>
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Hotel Policies</h3>
+                            {stayDetailsView.policies && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Check-in</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.checkIn}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Check-out</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.checkOut}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Children and Extra Beds</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.children}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Pets</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.pets}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Smoking</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.smoking}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Parking</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.parking}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Cancellation Policy</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.cancellation}</p>
+                                </div>
+                                <div>
+                                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Payment</h4>
+                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.payment}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : stayDetailsTab === 'nearby' ? (
+                        <div className="trip-details__place-detail-section">
+                          <h3 className="trip-details__place-detail-section-title">Stays Nearby</h3>
+                          {filteredStays.filter(s => s.id !== stayDetailsView.id).slice(0, 8).length > 0 ? (
+                            <div className="trip-details__place-detail-nearby-grid">
+                              {filteredStays.filter(s => s.id !== stayDetailsView.id).slice(0, 8).map((nearStay) => (
+                                <button
+                                  key={nearStay.id}
+                                  type="button"
+                                  className="trip-details__place-detail-nearby-card"
+                                  onClick={() => { setStayDetailsView(nearStay); setStayDetailsTab('overview'); }}
+                                >
+                                  <img src={resolveImageUrl(nearStay.image, nearStay.name, 'hotel')} alt="" className="trip-details__place-detail-nearby-img" onError={handleImageError} />
+                                  <button type="button" className="trip-details__place-detail-nearby-heart" aria-label="Save" onClick={(e) => e.stopPropagation()}>
+                                    <Heart size={16} aria-hidden />
+                                  </button>
+                                  <div className="trip-details__place-detail-nearby-info">
+                                    <span className="trip-details__place-detail-nearby-name">{nearStay.name}</span>
+                                    <span className="trip-details__place-detail-nearby-rating">
+                                      {[...Array(nearStay.starRating || 5)].map((_, i) => (
+                                        <Star key={i} size={10} fill="#f59e0b" color="#f59e0b" aria-hidden />
+                                      ))}
+                                    </span>
+                                    <span className="trip-details__place-detail-nearby-rating">
+                                      {nearStay.currency === 'USD' ? '$' : nearStay.currency}{nearStay.pricePerNight}/night
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="trip-details__place-detail-section-text">No nearby stays found.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Stays List View
+                <>
+                  <div className="trip-details__add-places-head">
+                    <h2 id="add-stays-title" className="trip-details__add-places-title">Add Stays</h2>
+                    <div className="trip-details__add-places-location">
+                      <Search size={18} className="trip-details__add-places-location-icon" aria-hidden />
+                      <span>{trip.locations || trip.destination}</span>
+                    </div>
+                    <button type="button" className="trip-details__modal-close trip-details__add-places-close" aria-label="Close" onClick={() => setAddStaysOpen(false)}>
+                      <X size={20} aria-hidden />
+                    </button>
+                  </div>
+                  <div className="trip-details__add-places-body">
+                    <div className="trip-details__add-places-list-panel">
+                      <div className="trip-details__add-places-search-wrap">
+                        <Search size={18} className="trip-details__add-places-search-icon" aria-hidden />
+                        <input
+                          type="text"
+                          className="trip-details__add-places-search-input"
+                          placeholder="Search by hotel name..."
+                          value={staySearchQuery}
+                          onChange={(e) => setStaySearchQuery(e.target.value)}
+                          aria-label="Search accommodations"
+                        />
+                      </div>
+
+                      <div className="trip-details__add-food-toolbar">
+                        <p className="trip-details__add-places-results">{filteredStays.length} results found</p>
+                        <div className="trip-details__add-food-toolbar-actions">
+                        <select
+                          className="trip-details__add-places-sort-select"
+                          value={stayTypeFilter}
+                          onChange={(e) => setStayTypeFilter(e.target.value)}
+                          aria-label="Filter by hotel type"
+                        >
+                          <option value="All">All Types</option>
+                          <option value="Hotel">Hotel</option>
+                          <option value="Resort">Resort</option>
+                          <option value="Motel">Motel</option>
+                          <option value="Extended Stay">Extended Stay</option>
+                        </select>
+                        <select
+                          className="trip-details__add-places-sort-select"
+                          value={stayPriceRange}
+                          onChange={(e) => setStayPriceRange(e.target.value)}
+                          aria-label="Filter by price range"
+                        >
+                          <option value="All">All Prices</option>
+                          <option value="0-100">Under $100</option>
+                          <option value="100-200">$100 - $200</option>
+                          <option value="200-400">$200 - $400</option>
+                          <option value="400-99999">$400+</option>
+                        </select>
+                        <select
+                          className="trip-details__add-places-sort-select"
+                          value={staySortBy}
+                          onChange={(e) => setStaySortBy(e.target.value)}
+                          aria-label="Sort accommodations"
+                        >
+                          <option value="Recommended">Recommended</option>
+                          <option value="Price: Low to High">Price: Low to High</option>
+                          <option value="Price: High to Low">Price: High to Low</option>
+                          <option value="Rating: High to Low">Rating: High to Low</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {discoveryError && (
+                      <p className="trip-details__add-places-results">Could not load live data: {discoveryError}</p>
+                    )}
+                    {discoveryData?.warning && (
+                      <p className="trip-details__add-places-results">{discoveryData.warning}</p>
+                    )}
+                    {discoveryLoading && (
+                      <p className="trip-details__add-places-results">Loading stays for {cityQuery}...</p>
+                    )}
+
+                    <div className="trip-details__add-places-grid">
+                      {filteredStays.map((stay) => (
+                        <button
+                          key={stay.id}
+                          type="button"
+                          className="trip-details__add-places-card"
+                          onClick={() => { setStayDetailsView(stay); setStayDetailsTab('overview'); }}
+                        >
+                          <img src={resolveImageUrl(stay.image, stay.name, 'hotel')} alt="" className="trip-details__add-places-card-img" onError={handleImageError} />
+                          <button type="button" className="trip-details__add-places-card-heart" aria-label="Save" onClick={(e) => e.stopPropagation()}>
+                            <Heart size={18} fill="none" aria-hidden />
+                          </button>
+                          <div className="trip-details__add-places-card-info">
+                            <span className="trip-details__add-places-card-name">{stay.name}</span>
+                            <span className="trip-details__add-places-card-rating">
+                              {[...Array(stay.starRating || 5)].map((_, i) => (
+                                <Star key={i} size={12} fill="#f59e0b" color="#f59e0b" aria-hidden />
+                              ))}
+                              <span style={{ marginLeft: '6px' }}>{stay.rating} ({stay.reviewCount?.toLocaleString() ?? '0'})</span>
+                            </span>
+                            <span className="trip-details__add-places-card-address">{stay.type}</span>
+                            <span className="trip-details__add-places-card-price" style={{ fontWeight: '600', color: '#2563eb' }}>
+                              {stay.currency === 'USD' ? '$' : stay.currency}{stay.pricePerNight}/night
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                        {filteredStays.length === 0 && !discoveryLoading && (
+                          <p className="trip-details__add-places-results">No stays found. Try adjusting your filters.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="trip-details__add-places-map-panel">
+                      <div className="trip-details__add-places-map">
+                        <TripMap
+                          center={discoveryData?.center || [1.290270, 103.851959]}
+                          zoom={13}
+                          markers={stayMapMarkers}
+                          activeDayNums={allDayNums}
+                          className="trip-details__add-places-trip-map"
+                          fitBounds={stayMapMarkers.length > 0}
+                          popupMode="hover-preview"
+                          // onMarkerAddClick={openAddToTripFromMapMarker}
+                          // onMarkerViewDetails={(marker) => { setStayDetailsView(marker.originalData); setStayDetailsTab('overview'); }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </>
@@ -5512,6 +5879,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                         setFoodSortBy('Recommended');
                         setCustomFoodDateKey(day?.date || days[0]?.date || '');
                         setAddFoodOpen(true);
+                      } else if (id === 'stays') {
+                        setStaySearchQuery('');
+                        setStayTypeFilter('All');
+                        setStayPriceRange('All');
+                        setStaySortBy('Recommended');
+                        setAddStaysOpen(true);
                       } else if (id === 'experience') {
                         setExperienceSearchQuery('');
                         setExperienceTypeFilter('All');

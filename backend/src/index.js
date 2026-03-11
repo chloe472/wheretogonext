@@ -2,10 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import authRoutes from './routes/auth.js';
-import discoveryRoutes from './routes/discovery.js';
 
+// Load environment variables FIRST
 dotenv.config();
+
+console.log('[Server] GOOGLE_PLACES_API_KEY loaded:', Boolean(process.env.GOOGLE_PLACES_API_KEY));
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,13 +21,18 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     message: 'where to go next API',
     db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    googlePlacesConfigured: Boolean(process.env.GOOGLE_PLACES_API_KEY),
   });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/discovery', discoveryRoutes);
-
 async function start() {
+  // Dynamically import routes AFTER env vars are loaded
+  const { default: authRoutes } = await import('./routes/auth.js');
+  const { default: discoveryRoutes } = await import('./routes/discovery.js');
+  
+  app.use('/api/auth', authRoutes);
+  app.use('/api/discovery', discoveryRoutes);
+
   if (MONGODB_URI) {
     try {
       await mongoose.connect(MONGODB_URI);
