@@ -6,6 +6,9 @@ import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import './TripMap.css';
 
 const DAY_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#7c3aed', '#ea580c'];
+// Colorful raster basemap (Carto Voyager) — good OSM-derived colored style without API key
+const ENGLISH_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+const ENGLISH_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const MARKER_VARIANTS = {
   sight: { className: 'trip-map__marker-pin--sight', glyph: '🏰' },
@@ -271,8 +274,8 @@ export default function TripMap({
         <SelectedMarkerFocus marker={selectedMarker} />
         <MapResizeHandler resizeKey={resizeKey} />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={ENGLISH_TILE_ATTRIBUTION}
+          url={ENGLISH_TILE_URL}
         />
         {fitBounds && visibleMarkers.length > 0 ? (
           <FitBounds markers={visibleMarkers} disabled={Boolean(selectedMarker)} />

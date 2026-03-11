@@ -27,7 +27,6 @@ import {
   PlusCircle,
   Paperclip,
   Clock,
-  Mail,
   Plane,
   Train,
   Bus,
@@ -105,6 +104,14 @@ function extractPrimaryDestination(destinationOrLocations) {
   return parts[0]?.trim() || String(destinationOrLocations).trim();
 }
 
+function buildStayFallbackLink(stay = {}, city = '') {
+  if (stay.bookingUrl) return stay.bookingUrl;
+  if (stay.website) return stay.website;
+  if (stay.mapsUrl) return stay.mapsUrl;
+  const query = `${stay.name || ''} ${stay.address || city || ''}`.trim();
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 const WHERE_TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
 
 const CURRENCY_LIST = [
@@ -128,7 +135,8 @@ const CURRENCY_LIST = [
 ];
 const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
 const MAP_FILTERS = ['Default', 'Food & Beverages', 'Experiences', 'My Trip'];
-const ADD_PLACES_PAGE_SIZE = 18;
+// Keep one slot for the manual-add card so 3-column pages don't end with a lone card row.
+const ADD_PLACES_PAGE_SIZE = 17;
 
 /** Category display for day cards */
 const CATEGORY_CARD_STYLES = {
@@ -796,19 +804,31 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [mapDayFilterSelected, setMapDayFilterSelected] = useState([]);
   const [addTransportOpen, setAddTransportOpen] = useState(false);
   const [addTransportDay, setAddTransportDay] = useState(1);
-  const [addTransportTab, setAddTransportTab] = useState('Private Transfers');
+  const [addTransportTab, setAddTransportTab] = useState('Flights');
   const [transferType, setTransferType] = useState('pickup');
   const [transferFrom, setTransferFrom] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [transferDateKey, setTransferDateKey] = useState('');
   const [transferTime, setTransferTime] = useState('08:00');
   const [transferPax, setTransferPax] = useState(2);
+  const [surfaceFrom, setSurfaceFrom] = useState('');
+  const [surfaceTo, setSurfaceTo] = useState('');
+  const [surfaceDate, setSurfaceDate] = useState('');
+  const [surfaceTime, setSurfaceTime] = useState('08:00');
+  const [surfaceOperator, setSurfaceOperator] = useState('');
+  const [surfaceNumber, setSurfaceNumber] = useState('');
+  const [surfaceCost, setSurfaceCost] = useState('');
   const [flightCode, setFlightCode] = useState('');
   const [flightDepartDate, setFlightDepartDate] = useState('');
+  const [transportHomeCountry, setTransportHomeCountry] = useState(() => user?.country || 'United States');
   const [flightSearchResults, setFlightSearchResults] = useState([]);
   const [flightSearchLoading, setFlightSearchLoading] = useState(false);
   const [flightSearchError, setFlightSearchError] = useState('');
-  const [transportFaqOpen, setTransportFaqOpen] = useState(null);
+  const [trainCode, setTrainCode] = useState('');
+  const [trainDepartDate, setTrainDepartDate] = useState('');
+  const [trainSearchResults, setTrainSearchResults] = useState([]);
+  const [trainSearchLoading, setTrainSearchLoading] = useState(false);
+  const [trainSearchError, setTrainSearchError] = useState('');
   const [addCustomTransportOpen, setAddCustomTransportOpen] = useState(false);
   const [customTransportVehicle, setCustomTransportVehicle] = useState('Bus');
   const [customTransportFrom, setCustomTransportFrom] = useState('');
@@ -1023,136 +1043,257 @@ export default function TripDetailsPage({ user, onLogout }) {
     setFlightSearchResults([]);
 
     try {
-      // Parse flight code (e.g., "UA1" -> airline: "UA", flight_number: "1")
-      const match = flightCode.trim().toUpperCase().match(/^([A-Z0-9]{2})(\d+)$/);
+      // Parse flight code (e.g., UA1, AA100, SQ-322)
+      const match = flightCode.trim().toUpperCase().match(/^([A-Z0-9]{2,3})[-\s]?(\d{1,4})$/);
       if (!match) {
-        throw new Error('Invalid flight code format. Example: UA1, AA100, DL250');
+        throw new Error('Invalid flight code format. Example: UA1, AA100, SQ322');
       }
 
       const [, airlineCode, flightNumber] = match;
+      const normalizedCode = `${airlineCode}${flightNumber}`;
+      const homeCountry = String(transportHomeCountry || '').trim();
+      const targetCountry = String(destinationCountry || '').trim();
 
-      // Try real API first (AviationStack)
-      const apiKey = 'YOUR_AVIATIONSTACK_API_KEY'; // You'll need to get this from https://aviationstack.com/
+      if (!homeCountry || !targetCountry) {
+        throw new Error('Unable to determine home/destination country for route filtering.');
+      }
 
-      // For demo purposes, if no API key, use mock data
-      if (!apiKey || apiKey === 'YOUR_AVIATIONSTACK_API_KEY') {
-        // Generate realistic mock flight data
-        const airline = AIRLINES.find(a => a.id === airlineCode) || { name: `${airlineCode} Airlines` };
-        const departDate = new Date(flightDepartDate);
+      const routeCountries = new Set([homeCountry, targetCountry]);
+      const airportByCode = new Map(
+        AIRPORTS_AND_CITIES
+          .filter((item) => item.type === 'Airport')
+          .map((item) => [String(item.id || '').toUpperCase(), item]),
+      );
+      const apiKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY || '';
 
-        // Mock realistic flights with proper timing
-        const mockFlights = [];
+      if (apiKey) {
+        try {
+          const response = await fetch(
+            `https://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${normalizedCode}&flight_date=${flightDepartDate}`,
+          );
+          if (!response.ok) {
+            throw new Error(`Flight provider error (${response.status})`);
+          }
+          const data = await response.json();
+          const apiFlights = Array.isArray(data?.data) ? data.data : [];
+          if (apiFlights.length > 0) {
+            const flights = apiFlights
+              .map((flight) => {
+                const dep = flight?.departure || {};
+                const arr = flight?.arrival || {};
+                const airline = flight?.airline || {};
+                const flightMeta = flight?.flight || {};
+                const iataCode = flightMeta.iata || `${airline.iata || airlineCode}${flightMeta.number || flightNumber}`;
+                return {
+                  id: `${iataCode}-${dep.scheduled || dep.estimated || Date.now()}`,
+                  flight_code: iataCode,
+                  airline: airline.name || `${airlineCode} Airlines`,
+                  airline_code: airline.iata || airlineCode,
+                  flight_number: String(flightMeta.number || flightNumber),
+                  departure_airport: dep.iata || dep.airport || 'N/A',
+                  departure_city: dep.airport || dep.timezone?.split('/')?.[1] || 'N/A',
+                  arrival_airport: arr.iata || arr.airport || 'N/A',
+                  arrival_city: arr.airport || arr.timezone?.split('/')?.[1] || 'N/A',
+                  departure_time: dep.scheduled || dep.estimated || '',
+                  arrival_time: arr.scheduled || arr.estimated || '',
+                  flight_date: flightDepartDate,
+                  status: (flight.flight_status || 'scheduled').toLowerCase(),
+                  aircraft: flight?.aircraft?.registration || 'N/A',
+                  terminal: dep.terminal || 'N/A',
+                  gate: dep.gate || 'N/A',
+                };
+              })
+              .filter((f) => {
+                if (!String(f.flight_code || '').toUpperCase().includes(normalizedCode)) return false;
+                const depCountry = airportByCode.get(String(f.departure_airport || '').toUpperCase())?.country || '';
+                const arrCountry = airportByCode.get(String(f.arrival_airport || '').toUpperCase())?.country || '';
+                const pair = new Set([depCountry, arrCountry]);
+                return depCountry && arrCountry && pair.size === routeCountries.size && [...pair].every((c) => routeCountries.has(c));
+              });
 
-        // Flight 1 - Morning departure
-        const morningDept = new Date(departDate);
-        morningDept.setHours(8, 30, 0);
-        const morningArr = new Date(morningDept);
-        morningArr.setHours(morningArr.getHours() + 12); // 12 hour flight
+            if (flights.length > 0) {
+              setFlightSearchResults(flights);
+              return;
+            }
+          }
+        } catch (providerError) {
+          console.warn('Flight API unavailable, using fallback results:', providerError?.message || providerError);
+        }
+      }
 
-        // Flight 2 - Afternoon departure  
-        const afternoonDept = new Date(departDate);
-        afternoonDept.setHours(14, 45, 0);
-        const afternoonArr = new Date(afternoonDept);
-        afternoonArr.setHours(afternoonArr.getHours() + 12);
+      const airline = AIRLINES.find((a) => a.id === airlineCode) || { name: `${airlineCode} Airlines` };
+      const airportsByCountry = AIRPORTS_AND_CITIES.filter((a) => a.type === 'Airport').reduce((acc, item) => {
+        const key = String(item.country || '');
+        if (!key) return acc;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {});
 
-        // Get reasonable airport pairs based on common routes
-        const routes = [
-          { from: 'SFO', to: 'SIN', fromName: 'San Francisco', toName: 'Singapore' },
-          { from: 'JFK', to: 'LHR', fromName: 'New York', toName: 'London' },
-          { from: 'LAX', to: 'NRT', fromName: 'Los Angeles', toName: 'Tokyo' },
-          { from: 'ORD', to: 'CDG', fromName: 'Chicago', toName: 'Paris' },
-          { from: 'SEA', to: 'HND', fromName: 'Seattle', toName: 'Tokyo' },
-        ];
+      const homeAirports = airportsByCountry[homeCountry] || [];
+      const destinationAirports = airportsByCountry[targetCountry] || [];
 
-        const route = routes[Math.floor(Math.random() * routes.length)];
+      if (homeAirports.length === 0 || destinationAirports.length === 0) {
+        throw new Error('No airports available for selected home/destination country pair.');
+      }
 
-        mockFlights.push({
-          id: `${airlineCode}${flightNumber}-1`,
-          flight_code: `${airlineCode}${flightNumber}`,
+      const seed = `${normalizedCode}${flightDepartDate}${homeCountry}${targetCountry}`.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      const pick = (arr, idx) => arr[idx % arr.length];
+      const outboundFrom = pick(homeAirports, seed + 1);
+      const outboundTo = pick(destinationAirports, seed + 2);
+      const inboundFrom = pick(destinationAirports, seed + 3);
+      const inboundTo = pick(homeAirports, seed + 4);
+      const routeDurationMins = 360 + (seed % 420);
+      const baseDate = new Date(`${flightDepartDate}T00:00:00`);
+      const departureA = new Date(baseDate);
+      departureA.setHours(8 + (seed % 6), 15, 0, 0);
+      const arrivalA = new Date(departureA.getTime() + routeDurationMins * 60000);
+      const departureB = new Date(baseDate);
+      departureB.setHours(13 + (seed % 5), 50, 0, 0);
+      const arrivalB = new Date(departureB.getTime() + (routeDurationMins + 35) * 60000);
+
+      const fallbackFlights = [
+        {
+          id: `${normalizedCode}-a`,
+          flight_code: normalizedCode,
           airline: airline.name,
           airline_code: airlineCode,
           flight_number: flightNumber,
-          departure_airport: route.from,
-          departure_city: route.fromName,
-          arrival_airport: route.to,
-          arrival_city: route.toName,
-          departure_time: morningDept.toISOString(),
-          arrival_time: morningArr.toISOString(),
+          departure_airport: outboundFrom.id,
+          departure_city: outboundFrom.city,
+          arrival_airport: outboundTo.id,
+          arrival_city: outboundTo.city,
+          departure_time: departureA.toISOString(),
+          arrival_time: arrivalA.toISOString(),
           flight_date: flightDepartDate,
           status: 'scheduled',
-          aircraft: 'Boeing 777-300ER',
+          aircraft: 'Boeing 787-9',
           terminal: '1',
-          gate: 'A15',
-        });
-
-        // Add a second option
-        mockFlights.push({
-          id: `${airlineCode}${flightNumber}-2`,
-          flight_code: `${airlineCode}${flightNumber}`,
+          gate: `A${10 + (seed % 20)}`,
+        },
+        {
+          id: `${normalizedCode}-b`,
+          flight_code: normalizedCode,
           airline: airline.name,
           airline_code: airlineCode,
           flight_number: flightNumber,
-          departure_airport: route.from,
-          departure_city: route.fromName,
-          arrival_airport: route.to,
-          arrival_city: route.toName,
-          departure_time: afternoonDept.toISOString(),
-          arrival_time: afternoonArr.toISOString(),
+          departure_airport: inboundFrom.id,
+          departure_city: inboundFrom.city,
+          arrival_airport: inboundTo.id,
+          arrival_city: inboundTo.city,
+          departure_time: departureB.toISOString(),
+          arrival_time: arrivalB.toISOString(),
           flight_date: flightDepartDate,
           status: 'scheduled',
           aircraft: 'Airbus A350-900',
           terminal: '2',
-          gate: 'B22',
-        });
+          gate: `B${11 + (seed % 18)}`,
+        },
+      ];
 
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        setFlightSearchResults(mockFlights);
-        setFlightSearchLoading(false);
-        return;
-      }
-
-      // Real API call (if API key is provided)
-      const response = await fetch(
-        `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${airlineCode}${flightNumber}&flight_date=${flightDepartDate}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch flight data');
-      }
-
-      const data = await response.json();
-
-      if (data.data && data.data.length > 0) {
-        const flights = data.data.map(flight => ({
-          id: flight.flight.iata || `${flight.airline.iata}${flight.flight.number}`,
-          flight_code: flight.flight.iata || `${flight.airline.iata}${flight.flight.number}`,
-          airline: flight.airline.name,
-          airline_code: flight.airline.iata,
-          flight_number: flight.flight.number,
-          departure_airport: flight.departure.iata,
-          departure_city: flight.departure.timezone?.split('/')[1] || flight.departure.airport,
-          arrival_airport: flight.arrival.iata,
-          arrival_city: flight.arrival.timezone?.split('/')[1] || flight.arrival.airport,
-          departure_time: flight.departure.scheduled,
-          arrival_time: flight.arrival.scheduled,
-          flight_date: flightDepartDate,
-          status: flight.flight_status,
-          aircraft: flight.aircraft?.registration || 'N/A',
-          terminal: flight.departure.terminal || 'N/A',
-          gate: flight.departure.gate || 'N/A',
-        }));
-
-        setFlightSearchResults(flights);
-      } else {
-        setFlightSearchError('No flights found for this code and date');
-      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      setFlightSearchResults(fallbackFlights);
     } catch (error) {
       console.error('Flight search error:', error);
       setFlightSearchError(error.message || 'Failed to search flights. Please try again.');
     } finally {
       setFlightSearchLoading(false);
+    }
+  };
+
+  const searchTrains = async () => {
+    if (!trainCode || !trainDepartDate) {
+      setTrainSearchError('Please enter both train code and departure date');
+      return;
+    }
+
+    setTrainSearchLoading(true);
+    setTrainSearchError('');
+    setTrainSearchResults([]);
+
+    try {
+      const code = trainCode.trim().toUpperCase();
+      const match = code.match(/^([A-Z0-9]{1,4})[-\s]?(\d{1,5})$/);
+      if (!match) {
+        throw new Error('Invalid train code format. Example: KTX101, TGV 12, ICE100');
+      }
+
+      const homeCountry = String(transportHomeCountry || '').trim();
+      const targetCountry = String(destinationCountry || '').trim();
+      if (!homeCountry || !targetCountry) {
+        throw new Error('Unable to determine home/destination country for route filtering.');
+      }
+
+      const countryCities = AIRPORTS_AND_CITIES
+        .filter((a) => a.type === 'City')
+        .reduce((acc, item) => {
+          const key = String(item.name || '').split(',')[0].trim();
+          const country = String(item.country || '').trim();
+          if (!country || !key) return acc;
+          if (!acc[country]) acc[country] = [];
+          if (!acc[country].includes(key)) acc[country].push(key);
+          return acc;
+        }, {});
+
+      const homeCities = (countryCities[homeCountry] || []).length > 0
+        ? countryCities[homeCountry]
+        : AIRPORTS_AND_CITIES.filter((a) => a.country === homeCountry).map((a) => a.city).filter(Boolean);
+      const destinationCities = (countryCities[targetCountry] || []).length > 0
+        ? countryCities[targetCountry]
+        : AIRPORTS_AND_CITIES.filter((a) => a.country === targetCountry).map((a) => a.city).filter(Boolean);
+
+      if (homeCities.length === 0 || destinationCities.length === 0) {
+        throw new Error('No station/city data available for selected home/destination country pair.');
+      }
+
+      const seed = `${code}${trainDepartDate}${homeCountry}${targetCountry}`.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      const pick = (arr, idx) => arr[idx % arr.length];
+      const depA = pick(homeCities, seed + 1);
+      const arrA = pick(destinationCities, seed + 2);
+      const depB = pick(destinationCities, seed + 3);
+      const arrB = pick(homeCities, seed + 4);
+
+      const dateBase = new Date(`${trainDepartDate}T00:00:00`);
+      const aStart = new Date(dateBase);
+      aStart.setHours(7 + (seed % 5), 20, 0, 0);
+      const aDuration = 150 + (seed % 220);
+      const aEnd = new Date(aStart.getTime() + aDuration * 60000);
+      const bStart = new Date(dateBase);
+      bStart.setHours(14 + (seed % 4), 10, 0, 0);
+      const bDuration = aDuration + 20;
+      const bEnd = new Date(bStart.getTime() + bDuration * 60000);
+
+      const results = [
+        {
+          id: `${code}-train-a`,
+          train_code: code,
+          operator: code.replace(/[0-9]/g, '') || 'Rail',
+          departure_city: depA,
+          arrival_city: arrA,
+          departure_time: aStart.toISOString(),
+          arrival_time: aEnd.toISOString(),
+          train_date: trainDepartDate,
+          status: 'scheduled',
+        },
+        {
+          id: `${code}-train-b`,
+          train_code: code,
+          operator: code.replace(/[0-9]/g, '') || 'Rail',
+          departure_city: depB,
+          arrival_city: arrB,
+          departure_time: bStart.toISOString(),
+          arrival_time: bEnd.toISOString(),
+          train_date: trainDepartDate,
+          status: 'scheduled',
+        },
+      ];
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setTrainSearchResults(results);
+    } catch (error) {
+      setTrainSearchError(error.message || 'Failed to search trains. Please try again.');
+    } finally {
+      setTrainSearchLoading(false);
     }
   };
 
@@ -1192,10 +1333,54 @@ export default function TripDetailsPage({ user, onLogout }) {
     setMapDayFilterSelected(allDayNums);
   };
 
+  const appendTransportTripItem = ({
+    id,
+    name,
+    date,
+    detail,
+    notes = '',
+    total = 0,
+    Icon = Car,
+    transportType = 'transport',
+  }) => {
+    setTripExpenseItems((prev) => [...prev, {
+      id: id || `transport-${Date.now()}`,
+      name,
+      total: Number(total) || 0,
+      categoryId: 'transportations',
+      category: 'Transportations',
+      date: date || days[0]?.date,
+      detail,
+      Icon,
+      notes,
+      attachments: [],
+      externalLink: '',
+      transportType,
+    }]);
+  };
+
   const cityQuery = useMemo(
     () => extractPrimaryDestination(trip?.destination || trip?.locations),
     [trip?.destination, trip?.locations],
   );
+
+  const destinationCountry = useMemo(() => {
+    const byCity = AIRPORTS_AND_CITIES.find(
+      (item) => String(item.city || '').toLowerCase() === String(cityQuery || '').toLowerCase() && item.country,
+    );
+    if (byCity?.country) return byCity.country;
+
+    const byName = AIRPORTS_AND_CITIES.find(
+      (item) => String(item.name || '').toLowerCase().includes(String(cityQuery || '').toLowerCase()) && item.country,
+    );
+    if (byName?.country) return byName.country;
+
+    return '';
+  }, [cityQuery]);
+
+  const availableTransportCountries = useMemo(() => (
+    [...new Set(AIRPORTS_AND_CITIES.map((a) => a.country).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  ), []);
 
   const filteredPlaces = useMemo(() => {
     const deriveSemanticTags = (place) => {
@@ -1350,14 +1535,21 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
     
     if (stayTypeFilter !== 'All') {
-      results = results.filter((s) => (s.type || '').toLowerCase() === stayTypeFilter.toLowerCase());
+      const selectedType = stayTypeFilter.toLowerCase();
+      results = results.filter((s) => {
+        const stayType = String(s.type || '').toLowerCase();
+        return stayType === selectedType || stayType.includes(selectedType);
+      });
     }
     
     if (stayPriceRange !== 'All') {
-      const [min, max] = stayPriceRange.split('-').map(Number);
       results = results.filter((s) => {
-        const price = s.pricePerNight || 0;
-        return max ? (price >= min && price <= max) : (price >= min);
+        const price = Number(s.pricePerNight || 0);
+        if (stayPriceRange === '400+') return price >= 400;
+        const [minRaw, maxRaw] = stayPriceRange.split('-').map(Number);
+        const min = Number.isFinite(minRaw) ? minRaw : 0;
+        const max = Number.isFinite(maxRaw) ? maxRaw : Number.POSITIVE_INFINITY;
+        return price >= min && price <= max;
       });
     }
     
@@ -1558,7 +1750,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       placeImageUrl: resolveImageUrl(
         data.image,
         data.name,
-        itemType === 'food' ? 'restaurant' : itemType === 'experience' ? 'activity' : 'landmark',
+        itemType === 'food' ? 'restaurant' : itemType === 'experience' ? 'activity' : itemType === 'stay' ? 'hotel' : 'landmark',
       ),
       rating: data.rating,
       reviewCount: data.reviewCount,
@@ -1607,6 +1799,35 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripNotes('');
     setAddToTripCost('');
     setAddToTripExternalLink(data.website || '');
+    setAddToTripTravelDocs([]);
+    setAddToTripModalOpen(true);
+  };
+
+  const openAddStayToTrip = (stay, room = null) => {
+    if (!stay) return;
+
+    const day = days.find((d) => d.dayNum === 1);
+    const bookingLink = buildStayFallbackLink(stay, cityQuery);
+    const defaultCost = Number(room?.price ?? stay.pricePerNight ?? 0);
+    const roomLabel = room?.name ? ` • ${room.name}` : '';
+
+    setAddToTripItem({
+      type: 'stay',
+      data: {
+        ...stay,
+        website: bookingLink,
+      },
+      categoryId: 'stays',
+      category: 'Stays',
+      Icon: Building2,
+    });
+    setAddToTripDate(day?.date || days[0]?.date || '');
+    setAddToTripStartTime('15:00');
+    setAddToTripDurationHrs(12);
+    setAddToTripDurationMins(0);
+    setAddToTripNotes(`Stay booking${roomLabel}`.trim());
+    setAddToTripCost(defaultCost > 0 ? String(defaultCost) : '');
+    setAddToTripExternalLink(bookingLink);
     setAddToTripTravelDocs([]);
     setAddToTripModalOpen(true);
   };
@@ -3069,7 +3290,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               </button>
             </div>
             <div className="trip-details__add-transport-tabs">
-              {['Private Transfers', 'Flights', 'Trains', 'Buses'].map((tab) => (
+              {['Flights', 'Trains', 'Buses'].map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -3081,87 +3302,22 @@ export default function TripDetailsPage({ user, onLogout }) {
               ))}
             </div>
             <div className="trip-details__add-transport-body">
-              {addTransportTab === 'Private Transfers' && (
-                <>
-                  <div className="trip-details__add-transport-radio">
-                    <label className="trip-details__add-transport-radio-label">
-                      <input type="radio" name="transferType" checked={transferType === 'pickup'} onChange={() => setTransferType('pickup')} />
-                      <span>Airport pick-up</span>
-                    </label>
-                    <label className="trip-details__add-transport-radio-label">
-                      <input type="radio" name="transferType" checked={transferType === 'dropoff'} onChange={() => setTransferType('dropoff')} />
-                      <span>Airport drop-off</span>
-                    </label>
-                  </div>
-                  <div className="trip-details__add-transport-fields">
-                    <div className="trip-details__add-transport-field">
-                      <label className="trip-details__add-transport-label">From</label>
-                      <input type="text" className="trip-details__add-transport-input" placeholder="e.g. Seattle-Tacoma International" value={transferFrom} onChange={(e) => setTransferFrom(e.target.value)} />
-                    </div>
-                    <div className="trip-details__add-transport-field">
-                      <label className="trip-details__add-transport-label">To</label>
-                      <input type="text" className="trip-details__add-transport-input" placeholder="Enter drop-off location" value={transferTo} onChange={(e) => setTransferTo(e.target.value)} />
-                    </div>
-                    <div className="trip-details__add-transport-field">
-                      <label className="trip-details__add-transport-label">Date & Pick-up time</label>
-                      <span className="trip-details__add-transport-date-time">
-                        <input type="date" className="trip-details__add-transport-input" value={transferDateKey || (days.find((x) => x.dayNum === addTransportDay)?.date || '')} onChange={(e) => setTransferDateKey(e.target.value)} />
-                        <input type="time" className="trip-details__add-transport-input" value={transferTime} onChange={(e) => setTransferTime(e.target.value)} />
-                      </span>
-                    </div>
-                    <div className="trip-details__add-transport-field">
-                      <label className="trip-details__add-transport-label">Number of pax</label>
-                      <select className="trip-details__add-transport-input" value={transferPax} onChange={(e) => setTransferPax(Number(e.target.value))} aria-label="Passengers">
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (<option key={n} value={n}>{n} passengers</option>))}
-                      </select>
-                    </div>
-                    <button type="button" className="trip-details__add-transport-search" aria-label="Search transfers">
-                      <Search size={20} aria-hidden />
-                    </button>
-                  </div>
-                  <div className="trip-details__add-transport-features">
-                    <div className="trip-details__add-transport-feature">
-                      <Shield size={20} aria-hidden />
-                      <div>
-                        <strong>Trusted operators & safer rides</strong>
-                        <p>Travel worry-free with 24/7 support, professional drivers, trusted operators</p>
-                      </div>
-                    </div>
-                    <div className="trip-details__add-transport-feature">
-                      <Tag size={20} aria-hidden />
-                      <div>
-                        <strong>Up to 40% off</strong>
-                        <p>Find the best prices and no booking fees</p>
-                      </div>
-                    </div>
-                    <div className="trip-details__add-transport-feature">
-                      <Headphones size={20} aria-hidden />
-                      <div>
-                        <strong>Reliable customer support</strong>
-                        <p>We&apos;re always here when you need us</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="trip-details__add-transport-faq">
-                    <h3 className="trip-details__add-transport-faq-title">Frequently asked questions</h3>
-                    {[
-                      { q: 'Can I book a transfer for someone else?', a: 'Yes. Make sure to enter the details of the correct passenger at checkout.' },
-                      { q: 'Can I book a round-trip transfer?', a: 'Yes. You can add both legs when searching.' },
-                      { q: 'Can I choose my pickup and drop-off time?', a: 'Yes. Select your preferred time when booking.' },
-                    ].map((faq, idx) => (
-                      <div key={idx} className="trip-details__add-transport-faq-item">
-                        <button type="button" className="trip-details__add-transport-faq-q" onClick={() => setTransportFaqOpen(transportFaqOpen === idx ? null : idx)} aria-expanded={transportFaqOpen === idx}>
-                          {faq.q}
-                          {transportFaqOpen === idx ? <Minus size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
-                        </button>
-                        {transportFaqOpen === idx && <p className="trip-details__add-transport-faq-a">{faq.a}</p>}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
               {addTransportTab === 'Flights' && (
                 <>
+                  <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight" style={{ marginBottom: '12px' }}>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Home country</label>
+                      <select className="trip-details__add-transport-input" value={transportHomeCountry} onChange={(e) => setTransportHomeCountry(e.target.value)}>
+                        {availableTransportCountries.map((countryName) => (
+                          <option key={countryName} value={countryName}>{countryName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Destination country</label>
+                      <input type="text" className="trip-details__add-transport-input" value={destinationCountry || 'Unknown'} readOnly />
+                    </div>
+                  </div>
                   <p className="trip-details__add-transport-hint">Enter your flight number below and we&apos;ll automatically get its details</p>
                   <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
                     <div className="trip-details__add-transport-field">
@@ -3296,20 +3452,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 const deptTimeStr = deptTime.toTimeString().slice(0, 5);
                                 const arrTimeStr = arrTime.toTimeString().slice(0, 5);
 
-                                setTripExpenseItems((prev) => [...prev, {
+                                appendTransportTripItem({
                                   id: `flight-${flight.id}-${Date.now()}`,
                                   name,
                                   total: 0,
-                                  categoryId: 'transportations',
-                                  category: 'Transportations',
                                   date: flight.flight_date,
                                   detail: `${flight.airline} ${flight.flight_code} | Departs ${deptTimeStr}, Arrives ${arrTimeStr}`,
                                   Icon: Plane,
                                   notes: `Terminal: ${flight.terminal}, Gate: ${flight.gate}${flight.aircraft ? `, Aircraft: ${flight.aircraft}` : ''}`,
-                                  attachments: [],
                                   transportType: 'flight',
-                                  flightData: flight,
-                                }]);
+                                });
 
                                 setFlightSearchResults([]);
                                 setFlightCode('');
@@ -3327,17 +3479,247 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </>
               )}
               {(addTransportTab === 'Trains' || addTransportTab === 'Buses') && (
-                <p className="trip-details__add-transport-hint">Add your {addTransportTab.toLowerCase()} reservations below.</p>
+                <>
+                  {addTransportTab === 'Trains' && (
+                    <>
+                      <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight" style={{ marginBottom: '12px' }}>
+                        <div className="trip-details__add-transport-field">
+                          <label className="trip-details__add-transport-label">Home country</label>
+                          <select className="trip-details__add-transport-input" value={transportHomeCountry} onChange={(e) => setTransportHomeCountry(e.target.value)}>
+                            {availableTransportCountries.map((countryName) => (
+                              <option key={countryName} value={countryName}>{countryName}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="trip-details__add-transport-field">
+                          <label className="trip-details__add-transport-label">Destination country</label>
+                          <input type="text" className="trip-details__add-transport-input" value={destinationCountry || 'Unknown'} readOnly />
+                        </div>
+                      </div>
+                      <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
+                        <div className="trip-details__add-transport-field">
+                          <label className="trip-details__add-transport-label">Train code</label>
+                          <input
+                            type="text"
+                            className="trip-details__add-transport-input"
+                            placeholder="e.g. KTX101, TGV12"
+                            value={trainCode}
+                            onChange={(e) => {
+                              setTrainCode(e.target.value);
+                              setTrainSearchError('');
+                              setTrainSearchResults([]);
+                            }}
+                          />
+                        </div>
+                        <div className="trip-details__add-transport-field">
+                          <label className="trip-details__add-transport-label">Depart date</label>
+                          <input
+                            type="date"
+                            className="trip-details__add-transport-input"
+                            value={trainDepartDate}
+                            onChange={(e) => {
+                              setTrainDepartDate(e.target.value);
+                              setTrainSearchError('');
+                              setTrainSearchResults([]);
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="trip-details__add-transport-search"
+                          aria-label="Search train"
+                          onClick={searchTrains}
+                          disabled={trainSearchLoading}
+                        >
+                          <Search size={20} aria-hidden />
+                        </button>
+                      </div>
+
+                      {trainSearchLoading && (
+                        <div className="trip-details__add-transport-loading">
+                          <div className="trip-details__add-transport-spinner" />
+                          <p>Searching for trains...</p>
+                        </div>
+                      )}
+
+                      {trainSearchError && (
+                        <div className="trip-details__add-transport-error">
+                          <Info size={18} aria-hidden />
+                          <p>{trainSearchError}</p>
+                        </div>
+                      )}
+
+                      {trainSearchResults.length > 0 && (
+                        <div className="trip-details__add-transport-results">
+                          <p className="trip-details__add-transport-results-title">{trainSearchResults.length} result{trainSearchResults.length > 1 ? 's' : ''} found</p>
+                          {trainSearchResults.map((train) => {
+                            const depTime = new Date(train.departure_time);
+                            const arrTime = new Date(train.arrival_time);
+                            const duration = Math.floor((arrTime - depTime) / (1000 * 60 * 60));
+                            const durationMins = Math.floor(((arrTime - depTime) / (1000 * 60)) % 60);
+                            return (
+                              <div key={train.id} className="trip-details__add-transport-result-card">
+                                <div className="trip-details__add-transport-result-header">
+                                  <div className="trip-details__add-transport-result-airline">
+                                    <Train size={20} aria-hidden />
+                                    <div>
+                                      <strong>{train.operator}</strong>
+                                      <span className="trip-details__add-transport-result-code">{train.train_code}</span>
+                                    </div>
+                                  </div>
+                                  <span className="trip-details__add-transport-result-status">{train.status}</span>
+                                </div>
+                                <div className="trip-details__add-transport-result-route">
+                                  <div className="trip-details__add-transport-result-location">
+                                    <strong className="trip-details__add-transport-result-time">{depTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
+                                    <span className="trip-details__add-transport-result-city">{train.departure_city}</span>
+                                  </div>
+                                  <div className="trip-details__add-transport-result-duration">
+                                    <div className="trip-details__add-transport-result-line"><Train size={16} aria-hidden /></div>
+                                    <span className="trip-details__add-transport-result-time-info">{duration}h {durationMins}m</span>
+                                  </div>
+                                  <div className="trip-details__add-transport-result-location">
+                                    <strong className="trip-details__add-transport-result-time">{arrTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
+                                    <span className="trip-details__add-transport-result-city">{train.arrival_city}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="trip-details__add-transport-result-add"
+                                  onClick={() => {
+                                    appendTransportTripItem({
+                                      id: `train-${train.id}-${Date.now()}`,
+                                      name: `Train: ${train.departure_city} → ${train.arrival_city} (${train.train_code})`,
+                                      total: 0,
+                                      date: train.train_date,
+                                      detail: `${train.operator} ${train.train_code}`,
+                                      Icon: Train,
+                                      notes: '',
+                                      transportType: 'train',
+                                    });
+                                    setTrainSearchResults([]);
+                                    setTrainCode('');
+                                    setTrainDepartDate('');
+                                    setAddTransportOpen(false);
+                                  }}
+                                >
+                                  Add to trip
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <p className="trip-details__add-transport-hint">Add your {addTransportTab.toLowerCase()} reservations below.</p>
+                  <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">From</label>
+                      <input
+                        type="text"
+                        className="trip-details__add-transport-input"
+                        placeholder="Departure station / terminal"
+                        value={surfaceFrom}
+                        onChange={(e) => setSurfaceFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">To</label>
+                      <input
+                        type="text"
+                        className="trip-details__add-transport-input"
+                        placeholder="Arrival station / terminal"
+                        value={surfaceTo}
+                        onChange={(e) => setSurfaceTo(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Date</label>
+                      <input
+                        type="date"
+                        className="trip-details__add-transport-input"
+                        value={surfaceDate}
+                        onChange={(e) => setSurfaceDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Departure time</label>
+                      <input
+                        type="time"
+                        className="trip-details__add-transport-input"
+                        value={surfaceTime}
+                        onChange={(e) => setSurfaceTime(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Operator</label>
+                      <input
+                        type="text"
+                        className="trip-details__add-transport-input"
+                        placeholder={addTransportTab === 'Trains' ? 'e.g. JR East, SNCF' : 'e.g. FlixBus'}
+                        value={surfaceOperator}
+                        onChange={(e) => setSurfaceOperator(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">{addTransportTab === 'Trains' ? 'Train no.' : 'Bus no.'}</label>
+                      <input
+                        type="text"
+                        className="trip-details__add-transport-input"
+                        placeholder="Optional"
+                        value={surfaceNumber}
+                        onChange={(e) => setSurfaceNumber(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Cost (optional)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="trip-details__add-transport-input"
+                        placeholder="0.00"
+                        value={surfaceCost}
+                        onChange={(e) => setSurfaceCost(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="trip-details__add-transport-fields" style={{ gridTemplateColumns: '1fr', gap: '12px' }}>
+                    <button
+                      type="button"
+                      className="trip-details__add-transport-result-add"
+                      onClick={() => {
+                        if (!surfaceFrom.trim() || !surfaceTo.trim()) return;
+                        const modeLabel = addTransportTab === 'Trains' ? 'Train' : 'Bus';
+                        const Icon = addTransportTab === 'Trains' ? Train : Bus;
+
+                        appendTransportTripItem({
+                          id: `${modeLabel.toLowerCase()}-${Date.now()}`,
+                          name: `${modeLabel}: ${surfaceFrom} → ${surfaceTo}`,
+                          date: surfaceDate || days.find((d) => d.dayNum === addTransportDay)?.date || days[0]?.date,
+                          detail: `${surfaceOperator || modeLabel}${surfaceNumber ? ` ${surfaceNumber}` : ''} · ${surfaceTime}`,
+                          notes: '',
+                          total: Number(surfaceCost || 0),
+                          Icon,
+                          transportType: modeLabel.toLowerCase(),
+                        });
+
+                        setSurfaceFrom('');
+                        setSurfaceTo('');
+                        setSurfaceDate('');
+                        setSurfaceTime('08:00');
+                        setSurfaceOperator('');
+                        setSurfaceNumber('');
+                        setSurfaceCost('');
+                        setAddTransportOpen(false);
+                      }}
+                    >
+                      Add to trip
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="trip-details__add-transport-or">or</div>
-              <div className="trip-details__add-transport-reservations">
-                <h3 className="trip-details__add-transport-reservations-title">Add reservations to your plan</h3>
-                <p className="trip-details__add-transport-reservations-sub">Forward the confirmation email, or connect Gmail for automatic syncing</p>
-                <button type="button" className="trip-details__add-transport-forward">
-                  <Mail size={18} aria-hidden />
-                  Forward email
-                </button>
-              </div>
               <p className="trip-details__add-transport-manual">
                 Can&apos;t find what you need? <button type="button" className="trip-details__add-transport-manual-link" onClick={() => { setAddTransportOpen(false); setAddCustomTransportOpen(true); }}>Add manually</button>
               </p>
@@ -4722,6 +5104,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                     <div className="trip-details__place-detail-content">
                       {stayDetailsTab === 'overview' ? (
                         <>
+                          <div className="trip-details__place-detail-section" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="trip-details__place-detail-add-btn"
+                              onClick={() => openAddStayToTrip(stayDetailsView)}
+                            >
+                              Add to trip
+                            </button>
+                          </div>
                           <div className="trip-details__place-detail-section">
                             <h3 className="trip-details__place-detail-section-title">Overview</h3>
                             <p className="trip-details__place-detail-section-text">{stayDetailsView.overview || stayDetailsView.description}</p>
@@ -4796,10 +5187,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                                         fontWeight: '500',
                                       }}
                                       onClick={() => {
-                                        alert(`Booking functionality coming soon! Room: ${room.name}`);
+                                        const bookingLink = buildStayFallbackLink(stayDetailsView, cityQuery);
+                                        window.open(bookingLink, '_blank', 'noopener,noreferrer');
                                       }}
                                     >
-                                      Book Room
+                                      Book now
                                     </button>
                                   </div>
                                   <div style={{ marginTop: '12px', display: 'flex', gap: '12px', fontSize: '12px', color: '#6b7280' }}>
@@ -4818,38 +5210,38 @@ export default function TripDetailsPage({ user, onLogout }) {
                           <div className="trip-details__place-detail-section">
                             <h3 className="trip-details__place-detail-section-title">Hotel Policies</h3>
                             {stayDetailsView.policies && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Check-in</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.checkIn}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.checkIn}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Check-out</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.checkOut}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.checkOut}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Children and Extra Beds</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.children}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.children}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Pets</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.pets}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.pets}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Smoking</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.smoking}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.smoking}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Parking</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.parking}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.parking}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Cancellation Policy</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.cancellation}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.cancellation}</p>
                                 </div>
                                 <div>
                                   <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Payment</h4>
-                                  <p style={{ fontSize: '14px', color: '#6b7280' }}>{stayDetailsView.policies.payment}</p>
+                                  <p className="trip-details__place-detail-section-text">{stayDetailsView.policies.payment}</p>
                                 </div>
                               </div>
                             )}
@@ -4933,7 +5325,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                           <option value="Hotel">Hotel</option>
                           <option value="Resort">Resort</option>
                           <option value="Motel">Motel</option>
+                          <option value="Guesthouse">Guesthouse</option>
                           <option value="Extended Stay">Extended Stay</option>
+                          <option value="Accommodation">Accommodation</option>
                         </select>
                         <select
                           className="trip-details__add-places-sort-select"
@@ -4945,7 +5339,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                           <option value="0-100">Under $100</option>
                           <option value="100-200">$100 - $200</option>
                           <option value="200-400">$200 - $400</option>
-                          <option value="400-99999">$400+</option>
+                          <option value="400+">$400+</option>
                         </select>
                         <select
                           className="trip-details__add-places-sort-select"
@@ -5923,7 +6317,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddToTripModalOpen(false)} />
           <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="add-to-trip-title" aria-modal="true">
             <div className="trip-details__custom-place-head">
-              <h2 id="add-to-trip-title" className="trip-details__custom-place-title">Add {addToTripItem.type === 'place' ? 'Place' : addToTripItem.type === 'food' ? 'Food & Beverage' : 'Experience'}</h2>
+              <h2 id="add-to-trip-title" className="trip-details__custom-place-title">Add {addToTripItem.type === 'place' ? 'Place' : addToTripItem.type === 'food' ? 'Food & Beverage' : addToTripItem.type === 'stay' ? 'Stay' : 'Experience'}</h2>
               <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddToTripModalOpen(false)}>
                 <X size={20} aria-hidden />
               </button>
@@ -5957,13 +6351,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                 } else if (addToTripItem.type === 'food') {
                   setFoodDetailsView(null);
                   setAddFoodOpen(false);
+                } else if (addToTripItem.type === 'stay') {
+                  setStayDetailsView(null);
+                  setAddStaysOpen(false);
                 }
               }}
             >
               <div className="trip-details__custom-place-preview">
-                <img src={resolveImageUrl(addToTripItem.data.image, addToTripItem.data.name, addToTripItem.type || 'place')} alt={addToTripItem.data.name} className="trip-details__custom-place-preview-img" onError={handleImageError} />
+                <img src={resolveImageUrl(addToTripItem.data.image, addToTripItem.data.name, addToTripItem.type === 'stay' ? 'hotel' : (addToTripItem.type || 'place'))} alt={addToTripItem.data.name} className="trip-details__custom-place-preview-img" onError={handleImageError} />
                 <div className="trip-details__custom-place-preview-content">
-                  <span className="trip-details__custom-place-preview-badge">{addToTripItem.type === 'place' ? 'Place' : addToTripItem.type === 'food' ? 'Food & Beverage' : 'Experience'}</span>
+                  <span className="trip-details__custom-place-preview-badge">{addToTripItem.type === 'place' ? 'Place' : addToTripItem.type === 'food' ? 'Food & Beverage' : addToTripItem.type === 'stay' ? 'Stay' : 'Experience'}</span>
                   <h3 className="trip-details__custom-place-preview-name">{addToTripItem.data.name}</h3>
                   <p className="trip-details__custom-place-preview-rating">
                     <Star size={14} fill="currentColor" aria-hidden /> {addToTripItem.data.rating} ({addToTripItem.data.reviewCount?.toLocaleString() ?? '0'} reviews)

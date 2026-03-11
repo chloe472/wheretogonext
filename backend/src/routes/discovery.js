@@ -22,6 +22,7 @@ console.log('[Discovery] Google Places API Key configured:', Boolean(GOOGLE_PLAC
 
 const GOOGLE_GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
 const GOOGLE_PLACES_NEARBY_URL = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+const GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
 const GOOGLE_PLACE_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
 const GOOGLE_PLACE_PHOTO_URL = 'https://maps.googleapis.com/maps/api/place/photo';
 
@@ -299,7 +300,120 @@ async function googleGeocodeDestination(destination) {
   };
 }
 
-async function fetchGooglePlacesNearby(lat, lon, radius = 18000, limit = 200) {
+async function fetchGoogleNearbyPages({ lat, lon, radius, type, maxPages = 3 }) {
+  const results = [];
+  let pageToken = '';
+  let page = 0;
+  let tokenRetries = 0;
+
+  while (page < maxPages) {
+    const params = pageToken
+      ? new URLSearchParams({
+        pagetoken: pageToken,
+        key: GOOGLE_PLACES_API_KEY,
+      })
+      : new URLSearchParams({
+        location: `${lat},${lon}`,
+        radius: String(Math.min(radius, 50000)),
+        type,
+        key: GOOGLE_PLACES_API_KEY,
+      });
+
+    // Google next_page_token can take a short time to become active.
+    if (pageToken) {
+      await sleep(1800);
+    }
+
+    try {
+      const res = await fetchWithTimeout(`${GOOGLE_PLACES_NEARBY_URL}?${params.toString()}`, {}, 15000);
+      if (!res.ok) break;
+
+      const data = await res.json();
+      if (data.status === 'OK' && Array.isArray(data.results)) {
+        results.push(...data.results);
+      } else if (data.status === 'INVALID_REQUEST' && pageToken && tokenRetries < 2) {
+        tokenRetries += 1;
+        await sleep(1200);
+        continue;
+      } else if (data.status !== 'ZERO_RESULTS') {
+        console.warn(`[Google Places] Nearby ${type} returned status: ${data.status}`);
+      }
+
+      page += 1;
+      tokenRetries = 0;
+      pageToken = data.next_page_token || '';
+      if (!pageToken) break;
+    } catch (error) {
+      console.warn(`Google Places Nearby error for type ${type}:`, error.message);
+      break;
+    }
+  }
+
+  return results;
+}
+
+async function fetchGoogleTextSearchPages({ query, lat, lon, radius = 18000, maxPages = 2 }) {
+  const results = [];
+  let pageToken = '';
+  let page = 0;
+  let tokenRetries = 0;
+
+  while (page < maxPages) {
+    const params = pageToken
+      ? new URLSearchParams({
+        pagetoken: pageToken,
+        key: GOOGLE_PLACES_API_KEY,
+      })
+      : new URLSearchParams({
+        query,
+        location: `${lat},${lon}`,
+        radius: String(Math.min(radius, 50000)),
+        key: GOOGLE_PLACES_API_KEY,
+      });
+
+    if (pageToken) {
+      await sleep(1800);
+    }
+
+    try {
+      const res = await fetchWithTimeout(`${GOOGLE_PLACES_TEXT_SEARCH_URL}?${params.toString()}`, {}, 15000);
+      if (!res.ok) break;
+
+      const data = await res.json();
+      if (data.status === 'OK' && Array.isArray(data.results)) {
+        results.push(...data.results);
+      } else if (data.status === 'INVALID_REQUEST' && pageToken && tokenRetries < 2) {
+        tokenRetries += 1;
+        await sleep(1200);
+        continue;
+      } else if (data.status !== 'ZERO_RESULTS') {
+        console.warn(`[Google Places] Text search '${query}' returned status: ${data.status}`);
+      }
+
+      page += 1;
+      tokenRetries = 0;
+      pageToken = data.next_page_token || '';
+      if (!pageToken) break;
+    } catch (error) {
+      console.warn(`Google Places Text Search error for query '${query}':`, error.message);
+      break;
+    }
+  }
+
+  return results;
+}
+
+function buildNearbyGridCenters(lat, lon, offsetDeg = 0.01) {
+  return [
+    { lat, lon, label: 'center' },
+    { lat: lat + offsetDeg, lon, label: 'north' },
+    { lat: lat - offsetDeg, lon, label: 'south' },
+    { lat, lon: lon + offsetDeg, label: 'east' },
+    { lat, lon: lon - offsetDeg, label: 'west' },
+  ];
+}
+
+async function fetchGooglePlacesNearby(lat, lon, radius = 18000, limit = 200, destination = '') {
   if (!GOOGLE_PLACES_API_KEY) {
     console.warn('GOOGLE_PLACES_API_KEY not set, falling back to Overpass');
     return fetchOverpassAround(lat, lon, radius);
@@ -319,7 +433,6 @@ async function fetchGooglePlacesNearby(lat, lon, radius = 18000, limit = 200) {
     'zoo',
     'stadium',
     'shopping_mall',
-    'landmark',
   ];
 
   // Fetch food & beverage places separately (get MORE food results - ~150 for food)
@@ -334,33 +447,22 @@ async function fetchGooglePlacesNearby(lat, lon, radius = 18000, limit = 200) {
     'food',
   ];
 
+  const placeTarget = Math.max(80, Math.min(140, Math.floor(limit * 1.2)));
+  const foodTarget = Math.max(100, Math.min(170, Math.floor(limit * 1.5)));
+
   // Fetch places first
   for (const type of placeTypes) {
     if (allResults.filter(r => {
       const types = Array.isArray(r.types) ? r.types : [];
       return types.some(t => placeTypes.includes(t));
-    }).length >= 120) break;
+    }).length >= placeTarget) break;
 
-    try {
-      const params = new URLSearchParams({
-        location: `${lat},${lon}`,
-        radius: String(Math.min(radius, 50000)),
-        type,
-        key: GOOGLE_PLACES_API_KEY,
-      });
-
-      const res = await fetchWithTimeout(`${GOOGLE_PLACES_NEARBY_URL}?${params.toString()}`, {}, 15000);
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      if (data.status === 'OK' && Array.isArray(data.results)) {
-        allResults.push(...data.results);
-      }
-
-      await sleep(100);
-    } catch (error) {
-      console.warn(`Google Places Nearby error for type ${type}:`, error.message);
+    const maxPages = ['tourist_attraction', 'museum', 'point_of_interest'].includes(type) ? 2 : 1;
+    const typeResults = await fetchGoogleNearbyPages({ lat, lon, radius, type, maxPages });
+    if (typeResults.length > 0) {
+      allResults.push(...typeResults);
     }
+    await sleep(70);
   }
 
   // Fetch food places - get MORE results for food
@@ -368,27 +470,67 @@ async function fetchGooglePlacesNearby(lat, lon, radius = 18000, limit = 200) {
     if (allResults.filter(r => {
       const types = Array.isArray(r.types) ? r.types : [];
       return types.some(t => foodTypes.includes(t));
-    }).length >= 150) break;
+    }).length >= foodTarget) break;
 
-    try {
-      const params = new URLSearchParams({
-        location: `${lat},${lon}`,
-        radius: String(Math.min(radius, 50000)),
-        type,
-        key: GOOGLE_PLACES_API_KEY,
-      });
+    const maxPages = ['restaurant', 'cafe', 'bar'].includes(type) ? 2 : 1;
+    const typeResults = await fetchGoogleNearbyPages({ lat, lon, radius, type, maxPages });
+    if (typeResults.length > 0) {
+      allResults.push(...typeResults);
+    }
+    await sleep(70);
+  }
 
-      const res = await fetchWithTimeout(`${GOOGLE_PLACES_NEARBY_URL}?${params.toString()}`, {}, 15000);
-      if (!res.ok) continue;
+  // If place coverage is still low, use text search as a broader fallback for landmarks.
+  const hasPlaceCoverage = allResults.filter((r) => {
+    const types = Array.isArray(r.types) ? r.types : [];
+    return types.some((t) => placeTypes.includes(t));
+  }).length;
 
-      const data = await res.json();
-      if (data.status === 'OK' && Array.isArray(data.results)) {
-        allResults.push(...data.results);
+  // For large cities, one center can miss iconic landmarks in outer districts.
+  // Run a lightweight 5-point grid search for core attraction-focused types.
+  if (hasPlaceCoverage < Math.floor(placeTarget * 0.8)) {
+    const gridRadius = Math.max(3000, Math.min(5000, Math.floor(radius * 0.28)));
+    const centers = buildNearbyGridCenters(lat, lon, 0.01);
+    const corePlaceTypes = ['tourist_attraction', 'point_of_interest', 'museum'];
+
+    for (const center of centers) {
+      for (const type of corePlaceTypes) {
+        const typeResults = await fetchGoogleNearbyPages({
+          lat: center.lat,
+          lon: center.lon,
+          radius: gridRadius,
+          type,
+          maxPages: 1,
+        });
+        if (typeResults.length > 0) {
+          allResults.push(...typeResults);
+        }
+        await sleep(70);
       }
+    }
+  }
 
-      await sleep(100);
-    } catch (error) {
-      console.warn(`Google Places Nearby error for type ${type}:`, error.message);
+  if (hasPlaceCoverage < placeTarget) {
+    const city = String(destination || '').trim();
+    const textQueries = [
+      city ? `${city} tourist attractions` : '',
+      city ? `${city} landmarks` : '',
+      city ? `${city} Dongdaemun Design Plaza` : '',
+      city ? `${city} Lotte World Tower` : '',
+    ].filter(Boolean);
+
+    for (const query of textQueries) {
+      const textResults = await fetchGoogleTextSearchPages({
+        query,
+        lat,
+        lon,
+        radius,
+        maxPages: 1,
+      });
+      if (textResults.length > 0) {
+        allResults.push(...textResults);
+      }
+      await sleep(70);
     }
   }
 
@@ -1584,18 +1726,63 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
     })
     .slice(0, 60);
 
-  const enrichedStays = normalized.map((stay) => {
-    const hotelType = stay.types.includes('resort_hotel') ? 'Resort' 
-      : stay.types.includes('extended_stay_hotel') ? 'Extended Stay'
-      : stay.types.includes('motel') ? 'Motel'
-      : stay.types.includes('hotel') ? 'Hotel'
-      : 'Accommodation';
+  const buildStayMapsUrl = (stay) => {
+    if (stay.googlePlaceId) {
+      return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(stay.googlePlaceId)}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${stay.name} ${stay.address || destination}`)}`;
+  };
 
-    const basePrice = stay.priceLevel === 1 ? 80 
-      : stay.priceLevel === 2 ? 140 
-      : stay.priceLevel === 3 ? 220 
-      : stay.priceLevel === 4 ? 380 
-      : 600;
+  const buildStayBookingUrl = (stay) => {
+    const query = `${stay.name || ''} ${destination || ''}`.trim();
+    return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(query)}`;
+  };
+
+  const enrichedStays = normalized.map((stay) => {
+    const nameLower = String(stay.name || '').toLowerCase();
+    const typeList = Array.isArray(stay.types) ? stay.types : [];
+    const hasKeyword = (pattern) => pattern.test(nameLower);
+
+    const hotelType = typeList.includes('resort_hotel') || hasKeyword(/\bresort\b|beach club|spa resort/)
+      ? 'Resort'
+      : typeList.includes('extended_stay_hotel') || hasKeyword(/serviced apartment|residence|residences|aparthotel|suite hotel|extended stay/)
+        ? 'Extended Stay'
+        : typeList.includes('motel') || hasKeyword(/\bmotel\b|motor inn/)
+          ? 'Motel'
+          : hasKeyword(/hostel|guesthouse|guest house|pension|hanok stay/)
+            ? 'Guesthouse'
+            : typeList.includes('hotel') || hasKeyword(/\bhotel\b|intercontinental|marriott|hyatt|hilton|sheraton|novotel|lotte/)
+              ? 'Hotel'
+              : typeList.includes('lodging')
+                ? 'Hotel'
+                : 'Accommodation';
+
+    const defaultPriceByType = {
+      Guesthouse: 70,
+      Motel: 95,
+      Accommodation: 130,
+      Hotel: 165,
+      'Extended Stay': 185,
+      Resort: 260,
+    };
+
+    const levelBase = {
+      1: 85,
+      2: 135,
+      3: 210,
+      4: 320,
+      5: 480,
+    };
+
+    const level = Number.isFinite(stay.priceLevel) ? Number(stay.priceLevel) : 0;
+    const hash = stableHash(`${stay.id}|${destination}`);
+    const jitter = (hash % 35) - 17;
+    const qualityLift = Math.round(clamp((Number(stay.rating || 0) - 3.5) / 1.5, 0, 1) * 70);
+    const demandLift = Math.round(clamp(Math.log10(Number(stay.reviewCount || 0) + 1) / 5, 0, 1) * 45);
+
+    const seededBase = levelBase[level] || defaultPriceByType[hotelType] || 130;
+    const computedPrice = Math.max(45, Math.round((seededBase + qualityLift + demandLift + jitter) / 5) * 5);
+    const basePrice = computedPrice;
 
     const roomTypes = [
       {
@@ -1665,6 +1852,9 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
       type: hotelType,
       pricePerNight: basePrice,
       currency: 'USD',
+      website: '',
+      mapsUrl: buildStayMapsUrl(stay),
+      bookingUrl: buildStayBookingUrl(stay),
       image: stay.photoReference ? `http://localhost:5000/api/discovery/photo?reference=${stay.photoReference}&maxwidth=800` : '',
       images: stay.photoReferences?.length > 0 
         ? stay.photoReferences.map(ref => `http://localhost:5000/api/discovery/photo?reference=${ref}&maxwidth=800`) 
@@ -1730,7 +1920,7 @@ router.get('/destination', async (req, res) => {
     try {
       if (useGooglePlaces) {
         geo = await googleGeocodeDestination(destination);
-        const googlePlaces = await fetchGooglePlacesNearby(geo.lat, geo.lon, 18000, limit * 2);
+        const googlePlaces = await fetchGooglePlacesNearby(geo.lat, geo.lon, 18000, limit * 2, destination);
         placesResults = googlePlaces
           .map((place) => normalizeGooglePlace(place, destination))
           .filter(Boolean);
@@ -1755,11 +1945,26 @@ router.get('/destination', async (req, res) => {
           warning: 'Live provider is temporarily unavailable. Showing recently cached results.',
         });
       }
+
+      // Try to gracefully fall back to Nominatim geocoding if Google geocoding failed
+      try {
+        console.warn('[Discovery] Falling back to Nominatim geocoding after provider error');
+        geo = await geocodeDestination(destination);
+      } catch (fallbackErr) {
+        console.warn('[Discovery] Nominatim fallback failed:', fallbackErr?.message || fallbackErr);
+      }
+
       providerWarning = 'Live provider is busy right now. Showing limited results. Please retry in a moment.';
       placesResults = [];
     }
 
     const normalized = uniqueByName(placesResults);
+
+    // Debug: log normalized sample to inspect ratings and counts when troubleshooting
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Discovery] Normalized items sample:', normalized.slice(0, 6).map((i) => ({ id: i.id, rating: i.rating || 0, types: i.types?.slice(0,3) })));
+      console.log('[Discovery] Normalized count:', normalized.length);
+    }
 
     const ranked = normalized
       .map((item) => ({
@@ -1768,7 +1973,14 @@ router.get('/destination', async (req, res) => {
           ? (item.rating * 10 + Math.log10(item.reviewCount + 1) * 5)
           : scoreElement(item, geo.lat, geo.lon),
       }))
-      .filter((item) => useGooglePlaces ? item.rating >= 3.8 : item.score >= 9)
+      // When using Google Places, allow slightly lower-rated items and include unrated items (rating === 0)
+      .filter((item) => {
+        if (useGooglePlaces) {
+          const rating = Number(item.rating || 0);
+          return rating === 0 || rating >= 3.6;
+        }
+        return item.score >= 9;
+      })
       .sort((a, b) => b.score - a.score);
 
     const placeBase = ranked

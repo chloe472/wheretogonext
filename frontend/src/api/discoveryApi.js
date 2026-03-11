@@ -57,12 +57,12 @@ export async function fetchDiscoveryData(destination, limit = 24) {
   try {
     let data;
     try {
-      data = await requestDiscovery(destination, limit, 18000);
+      data = await requestDiscovery(destination, limit, 30000);
     } catch (firstError) {
       const shouldRetry = firstError?.name === 'AbortError' || firstError?.status === 429;
       if (!shouldRetry) throw firstError;
       const reducedLimit = Math.max(8, Math.min(16, Math.floor(limit / 2)));
-      data = await requestDiscovery(destination, reducedLimit, 20000);
+      data = await requestDiscovery(destination, reducedLimit, 35000);
     }
 
     writeCachedDiscovery(destination, data);
