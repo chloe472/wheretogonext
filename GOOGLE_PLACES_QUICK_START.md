@@ -98,11 +98,7 @@ All changes are in `backend/src/routes/discovery.js`:
 
 The app automatically uses Google Places when `GOOGLE_PLACES_API_KEY` is set in `backend/.env`.
 
-Current configuration:
-
-```
-GOOGLE_PLACES_API_KEY=AIzaSyAgXNQqSGQoxnJNEeXnJMJjb0k8YMurlmI
-```
+Current configuration:```
 
 ### Smart Fallback
 
