@@ -2110,7 +2110,7 @@ router.get('/destination', async (req, res) => {
       rawTags: undefined,
     }));
 
-    const experiences = places.slice(0, Math.min(10, places.length)).map((p, idx) => {
+    const experiences = places.slice(0, Math.min(30, places.length)).map((p, idx) => {
       const durationHours = inferDurationHours(p.type);
       const basePrice = 25 + idx * 12;
       return {

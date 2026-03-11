@@ -334,6 +334,46 @@
   background: var(--wtg-surface);
   border-right: 1px solid var(--wtg-border);
   padding: 0.75rem;
+  padding-right: 1rem;
+  position: relative;
+}
+
+.trip-details__day-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px; /* larger hit area for easier dragging */
+  height: 100%;
+  border: none;
+  background: transparent; /* removed grey gradient per request */
+  cursor: col-resize;
+  z-index: 12;
+  padding: 0;
+}
+
+.trip-details__day-resize-handle::after {
+  content: '⇆'; /* expanding left/right arrows */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(100, 116, 139, 0.45);
+  transition: color 0.12s, transform 0.12s;
+  pointer-events: none; /* allow handle to receive pointer events */
+}
+
+.trip-details__day-col:hover .trip-details__day-resize-handle::after,
+.trip-details__day-resize-handle:hover::after {
+  color: rgba(100, 116, 139, 0.95);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.trip-details--day-resizing,
+.trip-details--day-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .trip-details__day-header {
@@ -656,6 +696,9 @@
   font-weight: 700;
   color: var(--wtg-text);
   line-height: 1.3;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .trip-details__itinerary-name--transport {
@@ -672,6 +715,36 @@
 .trip-details__itinerary-time--transport {
   font-size: 0.78rem;
   color: #64748b;
+}
+
+.trip-details__itinerary-meta {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--wtg-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.trip-details__itinerary-meta-line {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--wtg-text-muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.trip-details__itinerary-meta-link {
+  color: var(--wtg-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-underline-offset: 2px;
+}
+
+.trip-details__itinerary-meta-link:hover {
+  text-decoration-thickness: 2px;
 }
 
 .trip-details__itinerary-edit-btn {
@@ -3072,6 +3145,10 @@
   font-size: 0.875rem;
 }
 
+.trip-details__calendar-day-col .trip-details__itinerary-meta-line {
+  font-size: 0.74rem;
+}
+
 /* Add Places modal */
 .trip-details__add-places-modal {
   position: fixed;
@@ -5255,6 +5332,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }

@@ -64,7 +64,6 @@ import {
 } from '../data/mockPlaces';
 import {
   searchFoodAddressSuggestions,
-  FOOD_DIETARY_FILTERS,
   FOOD_SORT_OPTIONS,
 } from '../data/mockFoodAndBeverages';
 import {
@@ -84,6 +83,15 @@ import './TripDetailsPage.css';
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FOOD_FILTER_OPTIONS = [
+  'All',
+  'Top Rated (4.5+)',
+  'Budget ($-$$)',
+  'Cafe',
+  'Late Night',
+  'Vegetarian / Vegan',
+  'Muslim-Friendly',
+];
 
 function formatDayDate(dateStr) {
   if (!dateStr) return '';
@@ -240,6 +248,9 @@ function formatDurationMinutes(totalMins) {
 const CALENDAR_START_HOUR = 6;
 const CALENDAR_HOURS = 12;
 const CALENDAR_ROW_HEIGHT = 48;
+const DAY_COLUMN_DEFAULT_WIDTH = 240;
+const DAY_COLUMN_MIN_WIDTH = 220;
+const DAY_COLUMN_MAX_WIDTH = 720;
 
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
@@ -559,10 +570,10 @@ const ADD_TO_TRIP_OPTIONS = [
     color: '#7c3aed',
   },
   {
-    id: 'community',
-    label: 'Community Itineraries',
-    description: 'See suggestions from trips published by other travellers',
-    Icon: Users,
+    id: 'routeIdeas',
+    label: 'Smart Itinerary Generator',
+    description: 'Builds day-by-day routes using popularity ranking and nearby-place clustering',
+    Icon: Route,
     color: '#0ea5e9',
   },
   {
@@ -747,15 +758,6 @@ const AIRLINES = [
   { id: 'CX', name: 'Cathay Pacific' },
 ];
 
-const VEHICLE_TYPES = [
-  { value: 'Bus', label: 'Bus' },
-  { value: 'Car', label: 'Car' },
-  { value: 'Ferry', label: 'Ferry' },
-  { value: 'Flight', label: 'Flight' },
-  { value: 'Train', label: 'Train' },
-  { value: 'Others', label: 'Others' },
-];
-
 function searchAirportsAndCities(query, limit = 8) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
@@ -913,6 +915,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [itineraryDetailsView, setItineraryDetailsView] = useState(null);
   const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
   const [addCustomFoodOpen, setAddCustomFoodOpen] = useState(false);
+  const [addCustomExperienceOpen, setAddCustomExperienceOpen] = useState(false);
   const [addPlacesDay, setAddPlacesDay] = useState(1);
   const [addFoodDay, setAddFoodDay] = useState(1);
   const [addToTripModalOpen, setAddToTripModalOpen] = useState(false);
@@ -975,6 +978,17 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [customFoodDurationMins, setCustomFoodDurationMins] = useState(0);
   const [customPlaceNote, setCustomPlaceNote] = useState('');
   const [customFoodNote, setCustomFoodNote] = useState('');
+  const [customExperienceName, setCustomExperienceName] = useState('');
+  const [customExperienceType, setCustomExperienceType] = useState('Attraction');
+  const [customExperienceAddress, setCustomExperienceAddress] = useState('');
+  const [customExperienceDateKey, setCustomExperienceDateKey] = useState('');
+  const [customExperienceStartTime, setCustomExperienceStartTime] = useState('07:00');
+  const [customExperienceDurationHrs, setCustomExperienceDurationHrs] = useState(2);
+  const [customExperienceDurationMins, setCustomExperienceDurationMins] = useState(0);
+  const [customExperienceNote, setCustomExperienceNote] = useState('');
+  const [customExperienceCost, setCustomExperienceCost] = useState('');
+  const [customExperienceExternalLink, setCustomExperienceExternalLink] = useState('');
+  const [customExperienceTravelDocs, setCustomExperienceTravelDocs] = useState([]);
   const [customPlaceCost, setCustomPlaceCost] = useState('');
   const [customFoodCost, setCustomFoodCost] = useState('');
   const [customPlaceImage, setCustomPlaceImage] = useState(null);
@@ -1054,6 +1068,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [openDayMenuKey, setOpenDayMenuKey] = useState(null);
   const [dayColors, setDayColors] = useState({});
   const [dayColorPickerDay, setDayColorPickerDay] = useState(null);
+  const [dayColumnWidths, setDayColumnWidths] = useState({});
   const [optimizeRouteModalOpen, setOptimizeRouteModalOpen] = useState(false);
   const [optimizeRouteDay, setOptimizeRouteDay] = useState(null);
   const [optimizeRouteStartId, setOptimizeRouteStartId] = useState('');
@@ -1072,6 +1087,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   });
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryError, setDiscoveryError] = useState('');
+  const dayResizeSessionRef = useRef(null);
 
   useEffect(() => {
     if (!whereModalOpen) return;
@@ -1604,6 +1620,46 @@ export default function TripDetailsPage({ user, onLogout }) {
     setMapDayFilterSelected(allDayNums);
   };
 
+  const getDayColumnWidth = (dayNum) => Number(dayColumnWidths[dayNum] || DAY_COLUMN_DEFAULT_WIDTH);
+
+  const getResizeClientX = (evt) => {
+    if (evt?.touches?.[0]?.clientX != null) return Number(evt.touches[0].clientX);
+    if (evt?.changedTouches?.[0]?.clientX != null) return Number(evt.changedTouches[0].clientX);
+    return Number(evt?.clientX || 0);
+  };
+
+  const beginDayColumnResize = (dayNum, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = getResizeClientX(event);
+    const startWidth = getDayColumnWidth(dayNum);
+    dayResizeSessionRef.current = { dayNum, startX, startWidth };
+    document.body.classList.add('trip-details--day-resizing');
+
+    const handleResizeMove = (moveEvent) => {
+      const session = dayResizeSessionRef.current;
+      if (!session) return;
+      const deltaX = getResizeClientX(moveEvent) - session.startX;
+      const nextWidth = Math.max(DAY_COLUMN_MIN_WIDTH, Math.min(DAY_COLUMN_MAX_WIDTH, session.startWidth + deltaX));
+      setDayColumnWidths((prev) => ({ ...prev, [session.dayNum]: nextWidth }));
+    };
+
+    const handleResizeEnd = () => {
+      dayResizeSessionRef.current = null;
+      document.body.classList.remove('trip-details--day-resizing');
+      window.removeEventListener('mousemove', handleResizeMove);
+      window.removeEventListener('mouseup', handleResizeEnd);
+      window.removeEventListener('touchmove', handleResizeMove);
+      window.removeEventListener('touchend', handleResizeEnd);
+    };
+
+    window.addEventListener('mousemove', handleResizeMove);
+    window.addEventListener('mouseup', handleResizeEnd);
+    window.addEventListener('touchmove', handleResizeMove, { passive: false });
+    window.addEventListener('touchend', handleResizeEnd, { passive: false });
+  };
+
   const appendTransportTripItem = ({
     id,
     name,
@@ -1742,8 +1798,30 @@ export default function TripDetailsPage({ user, onLogout }) {
       );
     }
     if (foodDietaryFilter && foodDietaryFilter !== 'All') {
-      const tag = foodDietaryFilter.toLowerCase();
-      results = results.filter((f) => Array.isArray(f.dietaryTags) && f.dietaryTags.some((d) => String(d).toLowerCase().includes(tag)));
+      const selected = String(foodDietaryFilter).toLowerCase();
+      results = results.filter((f) => {
+        const tags = Array.isArray(f.dietaryTags) ? f.dietaryTags.map((d) => String(d).toLowerCase()) : [];
+        const amenity = String(f.amenityType || f.type || '').toLowerCase();
+        const price = String(f.priceLevel || '').trim();
+        const rating = Number(f.rating || 0);
+        const opening = String(f.openingHoursRaw || '').toLowerCase();
+
+        if (selected === 'top rated (4.5+)') return rating >= 4.5;
+        if (selected === 'budget ($-$$)') return price === '$' || price === '$$' || Number(f.priceLevel) <= 2;
+        if (selected === 'cafe') return amenity.includes('cafe') || tags.some((t) => t.includes('cafe'));
+        if (selected === 'late night') {
+          return tags.some((t) => t.includes('late night'))
+            || opening.includes('24')
+            || opening.includes('late');
+        }
+        if (selected === 'vegetarian / vegan') {
+          return tags.some((t) => t.includes('vegetarian') || t.includes('vegan'));
+        }
+        if (selected === 'muslim-friendly') {
+          return tags.some((t) => t.includes('muslim'));
+        }
+        return true;
+      });
     }
     if (foodSortBy === 'Rating') {
       results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -1769,22 +1847,24 @@ export default function TripDetailsPage({ user, onLogout }) {
       results = results.filter((e) => (e.type || '').toLowerCase().includes(type));
     }
     if (experiencePriceRange && experiencePriceRange !== 'All') {
+      const normalizedPriceFilter = String(experiencePriceRange).toLowerCase();
       results = results.filter((e) => {
         const price = Number(e.price || 0);
-        if (experiencePriceRange === 'US$0 - US$50') return price < 50;
-        if (experiencePriceRange === 'US$50 - US$100') return price >= 50 && price < 100;
-        if (experiencePriceRange === 'US$100 - US$200') return price >= 100 && price < 200;
-        if (experiencePriceRange === 'US$200+') return price >= 200;
+        if (normalizedPriceFilter.includes('0') && normalizedPriceFilter.includes('50')) return price < 50;
+        if (normalizedPriceFilter.includes('50') && normalizedPriceFilter.includes('100')) return price >= 50 && price < 100;
+        if (normalizedPriceFilter.includes('100') && normalizedPriceFilter.includes('200')) return price >= 100 && price < 200;
+        if (normalizedPriceFilter.includes('200+')) return price >= 200;
         return true;
       });
     }
     if (experienceDurationFilter && experienceDurationFilter !== 'All') {
+      const normalizedDurationFilter = String(experienceDurationFilter).toLowerCase();
       results = results.filter((e) => {
         const hrs = Number(e.durationHours || 0);
-        if (experienceDurationFilter === 'Under 4 hours') return hrs < 4;
-        if (experienceDurationFilter === '4-8 hours') return hrs >= 4 && hrs <= 8;
-        if (experienceDurationFilter === '8-12 hours') return hrs > 8 && hrs <= 12;
-        if (experienceDurationFilter === '12+ hours') return hrs > 12;
+        if (normalizedDurationFilter.includes('under 4') || normalizedDurationFilter.includes('less than 4')) return hrs < 4;
+        if (normalizedDurationFilter.includes('4-8')) return hrs >= 4 && hrs <= 8;
+        if (normalizedDurationFilter.includes('8-12')) return hrs > 8 && hrs <= 12;
+        if (normalizedDurationFilter.includes('12+') || normalizedDurationFilter.includes('full day')) return hrs > 12;
         return true;
       });
     }
@@ -1792,8 +1872,12 @@ export default function TripDetailsPage({ user, onLogout }) {
       results = [...results].sort((a, b) => (a.price || 0) - (b.price || 0));
     } else if (experienceSortBy === 'Price: High to Low') {
       results = [...results].sort((a, b) => (b.price || 0) - (a.price || 0));
-    } else if (experienceSortBy === 'Highest Rated') {
+    } else if (experienceSortBy === 'Highest Rated' || experienceSortBy === 'Rating') {
       results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (experienceSortBy === 'Most reviewed') {
+      results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+    } else if (experienceSortBy === 'Duration') {
+      results = [...results].sort((a, b) => (a.durationHours || 0) - (b.durationHours || 0));
     }
     return results;
   }, [discoveryData?.experiences, experienceSearchQuery, experienceTypeFilter, experiencePriceRange, experienceDurationFilter, experienceSortBy]);
@@ -1812,7 +1896,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
     
     if (stayTypeFilter !== 'All') {
-      const selectedType = stayTypeFilter.toLowerCase();
+      const selectedType = String(stayTypeFilter).toLowerCase();
       results = results.filter((s) => {
         const stayType = String(s.type || '').toLowerCase();
         return stayType === selectedType || stayType.includes(selectedType);
@@ -1848,89 +1932,196 @@ export default function TripDetailsPage({ user, onLogout }) {
     return results;
   }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayPriceRange, staySortBy]);
 
-  const communityItineraries = useMemo(() => {
-    const source = Array.isArray(discoveryData?.communityItineraries) ? discoveryData.communityItineraries : [];
-    if (source.length === 0) return [];
+  const stayTypeOptions = useMemo(() => {
+    const source = Array.isArray(discoveryData?.stays) ? discoveryData.stays : [];
+    const normalized = source
+      .map((stay) => String(stay?.type || '').trim())
+      .filter(Boolean);
+    const deduped = [...new Set(normalized)].sort((a, b) => a.localeCompare(b));
+    if (deduped.length > 0) return ['All', ...deduped];
+    return ['All', 'Hotel', 'Resort', 'Motel', 'Guesthouse', 'Extended Stay', 'Accommodation'];
+  }, [discoveryData?.stays]);
 
+  const routeIdeas = useMemo(() => {
     const placePool = Array.isArray(discoveryData?.places) && discoveryData.places.length > 0
       ? discoveryData.places
       : filteredPlaces;
+    if (!Array.isArray(placePool) || placePool.length === 0) return [];
 
-    const placeById = new Map(placePool.map((place) => [String(place.id), place]));
-    const placeByName = new Map(
-      placePool
-        .filter((place) => place?.name)
-        .map((place) => [String(place.name).trim().toLowerCase(), place]),
-    );
-
-    const getSeedPlaces = (start, count) => {
-      if (placePool.length === 0) return [];
-      const out = [];
-      for (let offset = 0; offset < count; offset += 1) {
-        out.push(placePool[(start + offset) % placePool.length]);
-      }
-      return out;
-    };
-
-    return source.map((itinerary, itineraryIndex) => {
-      const dayMatch = String(itinerary.duration || '').match(/\d+/);
-      const parsedDays = Math.max(1, parseInt(dayMatch?.[0] || '3', 10));
-      const desiredStops = Math.min(12, Math.max(4, parsedDays * 3));
-      const sourcePlaces = Array.isArray(itinerary.places) && itinerary.places.length > 0
-        ? itinerary.places
-        : getSeedPlaces(itineraryIndex * 2, desiredStops);
-
-      const normalizedPlaces = sourcePlaces.map((rawPlace, placeIndex) => {
-        const rawId = rawPlace?.id ?? rawPlace?.placeId ?? rawPlace?.sourceId ?? '';
-        const rawName = String(rawPlace?.name || '').trim();
-        const matchedPlace = (rawId && placeById.get(String(rawId))) || (rawName ? placeByName.get(rawName.toLowerCase()) : null) || null;
-        const dayNumValue = Number(rawPlace?.dayNum || rawPlace?.day || matchedPlace?.dayNum || Math.floor(placeIndex / 3) + 1);
-        const durationHrs = Number(rawPlace?.durationHrs || matchedPlace?.durationHrs || 2);
-
+    const normalizedPlaces = placePool
+      .filter((place) => place && place.lat != null && place.lng != null)
+      .map((place, index) => {
+        const rating = Number(place.rating || 0);
+        const reviewCount = Number(place.reviewCount || 0);
+        const score = rating * 100 + Math.log10(reviewCount + 1) * 50;
         return {
-          id: rawId || matchedPlace?.id || `${itinerary.id || `community-${itineraryIndex + 1}`}-place-${placeIndex + 1}`,
-          name: rawName || matchedPlace?.name || `Stop ${placeIndex + 1}`,
-          lat: rawPlace?.lat ?? matchedPlace?.lat,
-          lng: rawPlace?.lng ?? matchedPlace?.lng,
-          image: rawPlace?.image || matchedPlace?.image || itinerary.image,
-          address: rawPlace?.address || matchedPlace?.address || cityQuery,
-          rating: rawPlace?.rating ?? matchedPlace?.rating ?? 4.4,
-          reviewCount: rawPlace?.reviewCount ?? matchedPlace?.reviewCount ?? 0,
-          overview: rawPlace?.overview || matchedPlace?.overview || matchedPlace?.description || `${rawName || matchedPlace?.name || 'This place'} is a popular stop in ${cityQuery}.`,
-          website: rawPlace?.website || matchedPlace?.website || '',
-          tags: Array.isArray(rawPlace?.tags) && rawPlace.tags.length > 0
-            ? rawPlace.tags
-            : (Array.isArray(matchedPlace?.tags) && matchedPlace.tags.length > 0 ? matchedPlace.tags : [itinerary.type || 'Place']),
-          dayNum: Number.isFinite(dayNumValue) && dayNumValue > 0 ? dayNumValue : 1,
-          durationLabel: rawPlace?.duration || matchedPlace?.estimatedDuration || `${durationHrs} hr`,
-          note: rawPlace?.note || `I stopped by ${rawName || matchedPlace?.name || 'this place'} and really enjoyed the vibe here.`,
+          ...place,
+          _idx: index,
+          _score: score,
+          _rating: rating,
+          _reviewCount: reviewCount,
         };
       });
 
-      const itineraryTags = Array.isArray(itinerary.tags) && itinerary.tags.length > 0
-        ? itinerary.tags
-        : [itinerary.type, 'Community'].filter(Boolean);
+    if (normalizedPlaces.length === 0) return [];
 
-      const authorProfile = {
-        name: itinerary?.author?.name || itinerary.creator || 'Traveler',
-        travelStyle: itinerary?.author?.travelStyle || itinerary.travelStyle || itinerary.type || 'Community traveler',
-        interests: Array.isArray(itinerary?.author?.interests) && itinerary.author.interests.length > 0
-          ? itinerary.author.interests
-          : itineraryTags.slice(0, 3),
-        avatar: itinerary?.author?.avatar || itinerary.creatorAvatar || '',
-      };
-
-      return {
-        ...itinerary,
-        creator: authorProfile.name,
-        author: authorProfile,
-        places: normalizedPlaces,
-        tags: itineraryTags,
-        views: Number(itinerary.views || itinerary.viewCount || 0),
-        countriesCount: Number(itinerary.countriesCount || 1),
-      };
+    const rankedPlaces = [...normalizedPlaces].sort((a, b) => {
+      if (b._score !== a._score) return b._score - a._score;
+      return (b._rating || 0) - (a._rating || 0);
     });
-  }, [discoveryData?.communityItineraries, discoveryData?.places, filteredPlaces, cityQuery]);
+
+    const CLUSTER_DISTANCE_KM = 2;
+    const clusters = [];
+    rankedPlaces.forEach((place) => {
+      let bestClusterIdx = -1;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (let i = 0; i < clusters.length; i += 1) {
+        const cluster = clusters[i];
+        const dist = distanceBetween(place, { lat: cluster.centerLat, lng: cluster.centerLng });
+        if (dist <= CLUSTER_DISTANCE_KM && dist < bestDistance) {
+          bestDistance = dist;
+          bestClusterIdx = i;
+        }
+      }
+
+      if (bestClusterIdx >= 0) {
+        const cluster = clusters[bestClusterIdx];
+        cluster.members.push(place);
+        cluster.totalScore += place._score;
+        cluster.centerLat = cluster.members.reduce((sum, p) => sum + Number(p.lat || 0), 0) / cluster.members.length;
+        cluster.centerLng = cluster.members.reduce((sum, p) => sum + Number(p.lng || 0), 0) / cluster.members.length;
+      } else {
+        clusters.push({
+          id: `cluster-${clusters.length + 1}`,
+          centerLat: Number(place.lat || 0),
+          centerLng: Number(place.lng || 0),
+          totalScore: place._score,
+          members: [place],
+        });
+      }
+    });
+
+    const rankedClusters = clusters
+      .map((cluster) => ({
+        ...cluster,
+        members: [...cluster.members].sort((a, b) => b._score - a._score),
+      }))
+      .sort((a, b) => {
+        if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+        return b.members.length - a.members.length;
+      });
+
+    const tripDayCount = Math.max(1, Number(days?.length || 0) || 3);
+    const maxFeasibleDays = Math.max(1, Math.floor(rankedPlaces.length / 3));
+    const dayCount = Math.max(1, Math.min(tripDayCount, maxFeasibleDays, 7));
+
+    const dayBuckets = Array.from({ length: dayCount }, (_, idx) => ({
+      dayNum: idx + 1,
+      title: `Day ${idx + 1}`,
+      places: [],
+      clusterIds: [],
+    }));
+
+    rankedClusters.forEach((cluster, idx) => {
+      const bucket = dayBuckets[idx % dayBuckets.length];
+      bucket.clusterIds.push(cluster.id);
+      bucket.places.push(...cluster.members);
+    });
+
+    const getPlaceKey = (place) => String(place?.id || `idx-${place?._idx || '0'}`);
+    const usedIds = new Set();
+    const orderedDayPlaces = dayBuckets.map((bucket) => {
+      const localPool = bucket.places.filter((place) => !usedIds.has(getPlaceKey(place)));
+      if (localPool.length === 0) {
+        return { ...bucket, ordered: [] };
+      }
+
+      const seed = [...localPool].sort((a, b) => b._score - a._score)[0];
+      const remaining = localPool.filter((place) => getPlaceKey(place) !== getPlaceKey(seed));
+      const ordered = [seed];
+      let current = seed;
+
+      while (remaining.length > 0 && ordered.length < 5) {
+        let nearestIdx = 0;
+        let nearestDist = distanceBetween(current, remaining[0]);
+        for (let i = 1; i < remaining.length; i += 1) {
+          const dist = distanceBetween(current, remaining[i]);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestIdx = i;
+          }
+        }
+        const next = remaining.splice(nearestIdx, 1)[0];
+        ordered.push(next);
+        current = next;
+      }
+
+      ordered.forEach((place) => usedIds.add(getPlaceKey(place)));
+      return { ...bucket, ordered };
+    });
+
+    const leftovers = rankedPlaces.filter((place) => !usedIds.has(getPlaceKey(place)));
+    for (let i = 0; i < orderedDayPlaces.length; i += 1) {
+      while (orderedDayPlaces[i].ordered.length < 3 && leftovers.length > 0) {
+        const currentList = orderedDayPlaces[i].ordered;
+        if (currentList.length === 0) {
+          currentList.push(leftovers.shift());
+          continue;
+        }
+        const anchor = currentList[currentList.length - 1];
+        let nearestIdx = 0;
+        let nearestDist = distanceBetween(anchor, leftovers[0]);
+        for (let j = 1; j < leftovers.length; j += 1) {
+          const dist = distanceBetween(anchor, leftovers[j]);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestIdx = j;
+          }
+        }
+        currentList.push(leftovers.splice(nearestIdx, 1)[0]);
+      }
+    }
+
+    const itineraryPlaces = orderedDayPlaces
+      .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => ({
+        id: `smart-itinerary-${source.id || source._idx || `${bucket.dayNum}-${index}`}`,
+        name: source.name || `Stop ${index + 1}`,
+        lat: source.lat,
+        lng: source.lng,
+        image: source.image,
+        address: source.address || cityQuery,
+        rating: source._rating || 4.2,
+        reviewCount: source._reviewCount || 0,
+        overview: source.overview || source.description || `${source.name || 'This stop'} is selected based on proximity and popularity.`,
+        website: source.website || '',
+        tags: Array.isArray(source.tags) && source.tags.length > 0 ? source.tags : ['Smart-picked'],
+        dayNum: bucket.dayNum,
+        dayTitle: `Day ${bucket.dayNum}`,
+        durationLabel: source.estimatedDuration || `${Math.max(1, Math.min(4, Number(source.durationHours || 2)))} hr`,
+      })))
+      .slice(0, dayCount * 5);
+
+    return [{
+      id: 'smart-itinerary-generator',
+      title: `${cityQuery}: Smart Itinerary Generator`,
+      destination: cityQuery,
+      duration: `${dayCount} days`,
+      type: 'Smart-generated',
+      creator: 'Smart Itinerary Generator',
+      author: {
+        name: 'AI Route Planner',
+        travelStyle: 'Popularity-ranked, cluster-based itinerary',
+        interests: ['Top-rated', 'Nearby routing', 'Efficient days'],
+        avatar: '',
+      },
+      image: itineraryPlaces[0]?.image || '',
+      tags: ['Popularity-ranked', 'Clustered by 2km', 'Nearest-neighbor ordered'],
+      views: 0,
+      countriesCount: 1,
+      places: itineraryPlaces,
+    }];
+  }, [discoveryData?.places, filteredPlaces, cityQuery, days?.length]);
 
   const mapCenter = useMemo(() => {
     if (Array.isArray(discoveryData?.center) && discoveryData.center.length === 2) {
@@ -1988,7 +2179,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     const placeMarkers = toDiscoveryMarkers(sourcePlaces, 'place', 24);
     const foodMarkers = toDiscoveryMarkers(sourceFoods, 'food', 24);
-    const experienceMarkers = toDiscoveryMarkers(sourceExperiences, 'experience', 20);
+    const experienceMarkers = toDiscoveryMarkers(sourceExperiences, 'experience', 30);
 
     if (mapFilter === 'Food & Beverages') return foodMarkers;
     if (mapFilter === 'Experiences') return experienceMarkers;
@@ -2141,16 +2332,16 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddPlacesOpen(true);
   };
 
-  const openCommunityBrowseAll = () => {
+  const openRouteIdeasBrowseAll = () => {
     setAddFoodOpen(false);
     setAddExperiencesOpen(false);
     setPlaceDetailsView(null);
     setFoodDetailsView(null);
     setExperienceDetailsView(null);
     setPlaceDetailsTab('overview');
-    const firstItinerary = Array.isArray(communityItineraries) ? communityItineraries[0] : null;
+    const firstItinerary = Array.isArray(routeIdeas) ? routeIdeas[0] : null;
     if (firstItinerary) {
-      openCommunityItineraryDetails(firstItinerary);
+      openRouteIdeaDetails(firstItinerary);
     } else {
       setItineraryDetailsView(null);
       setSelectedPlaceMarkerId(null);
@@ -2158,7 +2349,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddPlacesOpen(true);
   };
 
-  const openCommunityItineraryDetails = (itinerary) => {
+  const openRouteIdeaDetails = (itinerary) => {
     if (!itinerary) return;
     const firstPlace = Array.isArray(itinerary.places) ? itinerary.places.find((place) => place?.id) : null;
     setPlaceDetailsView(null);
@@ -2181,6 +2372,75 @@ export default function TripDetailsPage({ user, onLogout }) {
     setPlaceDetailsTab('overview');
     setSelectedPlaceMarkerId(nextPlace.id);
     setPlaceDetailsView(nextPlace);
+  };
+
+  const addEntireItineraryToTrip = (itineraryPlaces = []) => {
+    if (!Array.isArray(itineraryPlaces) || itineraryPlaces.length === 0) {
+      window.alert('No places found in this itinerary.');
+      return;
+    }
+
+    const normalize = (value) => String(value || '').trim().toLowerCase();
+    const dayDateByNum = new Map((days || []).map((d) => [Number(d.dayNum), d.date]));
+    const dayCounts = new Map();
+
+    const existingKeys = new Set(
+      (tripExpenseItems || []).map((item) => {
+        const latKey = Number(item?.lat || 0).toFixed(4);
+        const lngKey = Number(item?.lng || 0).toFixed(4);
+        return `${normalize(item?.name)}|${String(item?.date || '')}|${latKey}|${lngKey}`;
+      }),
+    );
+
+    const placesSorted = [...itineraryPlaces].sort((a, b) => Number(a?.dayNum || 1) - Number(b?.dayNum || 1));
+    const toAppend = [];
+
+    placesSorted.forEach((place, idx) => {
+      const dayNum = Math.max(1, Number(place?.dayNum || 1));
+      const fallbackDay = days[idx % Math.max(days.length, 1)]?.date || days[0]?.date || '';
+      const itemDate = dayDateByNum.get(dayNum) || fallbackDay;
+      const daySlot = dayCounts.get(dayNum) || 0;
+      dayCounts.set(dayNum, daySlot + 1);
+
+      const startMinutes = Math.min(20 * 60, 9 * 60 + (daySlot * 120));
+      const startH = String(Math.floor(startMinutes / 60)).padStart(2, '0');
+      const startM = String(startMinutes % 60).padStart(2, '0');
+      const latKey = Number(place?.lat || 0).toFixed(4);
+      const lngKey = Number(place?.lng || 0).toFixed(4);
+      const dedupeKey = `${normalize(place?.name)}|${String(itemDate || '')}|${latKey}|${lngKey}`;
+      if (existingKeys.has(dedupeKey)) return;
+
+      existingKeys.add(dedupeKey);
+      toAppend.push({
+        id: `place-${place?.id || idx}-${Date.now()}-${idx}`,
+        name: place?.name || `Place ${idx + 1}`,
+        total: 0,
+        categoryId: 'places',
+        category: 'Places',
+        date: itemDate,
+        detail: place?.address || place?.name || cityQuery,
+        Icon: Camera,
+        lat: place?.lat,
+        lng: place?.lng,
+        notes: '',
+        attachments: [],
+        startTime: `${startH}:${startM}`,
+        durationHrs: 2,
+        durationMins: 0,
+        externalLink: place?.website || '',
+        placeImageUrl: resolveImageUrl(place?.image, place?.name, 'landmark'),
+        rating: place?.rating,
+        reviewCount: place?.reviewCount,
+      });
+    });
+
+    if (toAppend.length === 0) {
+      window.alert('These itinerary places are already in your trip.');
+      return;
+    }
+
+    setTripExpenseItems((prev) => [...prev, ...toAppend]);
+    window.alert(`Added ${toAppend.length} place${toAppend.length === 1 ? '' : 's'} to your itinerary page.`);
   };
 
   return (
@@ -2378,7 +2638,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const isDayMenuOpen = openDayMenuKey === day.dayNum;
                 const dayColor = dayColors[day.dayNum] ?? DAY_COLOR_OPTIONS[0];
                 return (
-                  <section key={day.dayNum} className="trip-details__day-col">
+                  <section
+                    key={day.dayNum}
+                    className="trip-details__day-col"
+                    style={{ width: getDayColumnWidth(day.dayNum), flexBasis: getDayColumnWidth(day.dayNum) }}
+                  >
                     <div className="trip-details__day-header">
                       <div className="trip-details__day-heading">
                         <GripVertical size={14} className="trip-details__grip" aria-hidden />
@@ -2502,6 +2766,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                         )}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      className="trip-details__day-resize-handle"
+                      aria-label={`Resize Day ${day.dayNum} column`}
+                      onMouseDown={(e) => beginDayColumnResize(day.dayNum, e)}
+                      onTouchStart={(e) => beginDayColumnResize(day.dayNum, e)}
+                    />
                     <div className="trip-details__day-summary" style={dayColor ? { borderLeftColor: dayColor } : undefined}>
                       <span className="trip-details__day-summary-text">Day {day.dayNum}: {day.label} · {durationStr}</span>
                       <Info size={14} className="trip-details__day-summary-icon" aria-hidden />
@@ -2530,6 +2801,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const transportMeta = transportTimes.dep && transportTimes.arr
                           ? `Dep ${transportTimes.dep} - Arr ${transportTimes.arr}`
                           : (timeRange ? `Dep ${timeRange}` : 'Time not available');
+                        const itemNotes = String(item.notes || '').trim();
+                        const itemHasCost = Number(item.total || 0) > 0;
+                        const itemExternalLink = String(item.externalLink || '').trim();
+                        const itemAttachments = Array.isArray(item.attachments) ? item.attachments : [];
+                        const hasMetaDetails = Boolean(itemNotes || itemHasCost || itemExternalLink || itemAttachments.length > 0);
                         const segmentKey = `${day.date}-${idx}`;
                         const mode = transportModeBySegment[segmentKey] || 'driving';
                         const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
@@ -2565,6 +2841,39 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <span className={`trip-details__itinerary-time ${isTransportItem ? 'trip-details__itinerary-time--transport' : ''}`}>
                                     {isTransportItem ? transportMeta : timeRange}
                                   </span>
+                                ) : null}
+                                {hasMetaDetails ? (
+                                  <div className="trip-details__itinerary-meta">
+                                    {itemNotes ? (
+                                      <p className="trip-details__itinerary-meta-line">
+                                        <strong>Note:</strong> {itemNotes}
+                                      </p>
+                                    ) : null}
+                                    {itemHasCost ? (
+                                      <p className="trip-details__itinerary-meta-line">
+                                        <strong>Cost:</strong> {currency} {Number(item.total).toFixed(2)}
+                                      </p>
+                                    ) : null}
+                                    {itemExternalLink ? (
+                                      <p className="trip-details__itinerary-meta-line">
+                                        <strong>Link:</strong>{' '}
+                                        <a
+                                          href={itemExternalLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="trip-details__itinerary-meta-link"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          {itemExternalLink.replace(/^https?:\/\//, '')}
+                                        </a>
+                                      </p>
+                                    ) : null}
+                                    {itemAttachments.length > 0 ? (
+                                      <p className="trip-details__itinerary-meta-line">
+                                        <strong>Docs:</strong> {itemAttachments.map((doc) => doc?.name || 'Attachment').join(', ')}
+                                      </p>
+                                    ) : null}
+                                  </div>
                                 ) : null}
                               </div>
                               {!isTransportItem ? (
@@ -4099,7 +4408,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               )}
               {addTransportTab === 'Flights' && (
                 <p className="trip-details__add-transport-manual">
-                  Can&apos;t find what you need? <button type="button" className="trip-details__add-transport-manual-link" onClick={() => { setAddTransportOpen(false); setAddCustomTransportOpen(true); }}>Add manually</button>
+                  Can&apos;t find what you need? <button type="button" className="trip-details__add-transport-manual-link" onClick={() => { setAddTransportOpen(false); setCustomTransportVehicle('Flight'); setAddCustomTransportOpen(true); }}>Add manually</button>
                 </p>
               )}
             </div>
@@ -4112,7 +4421,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddCustomTransportOpen(false)} />
           <div className="trip-details__custom-transport-modal" role="dialog" aria-labelledby="custom-transport-title" aria-modal="true">
             <div className="trip-details__custom-transport-head">
-              <h2 id="custom-transport-title" className="trip-details__custom-transport-title">Add Custom Transport</h2>
+              <h2 id="custom-transport-title" className="trip-details__custom-transport-title">Add Manual Flight</h2>
               <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddCustomTransportOpen(false)}>
                 <X size={20} aria-hidden />
               </button>
@@ -4122,23 +4431,33 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const costNum = parseFloat(customTransportCost) || 0;
-                const name = customTransportVehicle === 'Flight'
-                  ? `${customTransportFrom || 'From'} → ${customTransportTo || 'To'}${customTransportFlightNumber ? ` (${customTransportFlightNumber})` : ''}`
-                  : (customTransportVehicle === 'Train' || customTransportVehicle === 'Bus')
-                    ? (customTransportName || `${customTransportVehicle}: ${customTransportFrom || 'From'} → ${customTransportTo || 'To'}`)
-                    : `${customTransportVehicle}${customTransportFrom ? `: ${customTransportFrom}` : ''}`;
-                const TransportIcon = customTransportVehicle === 'Flight' ? Plane : customTransportVehicle === 'Train' ? Train : customTransportVehicle === 'Bus' ? Bus : customTransportVehicle === 'Ferry' ? Ship : Car;
+                const detailParts = [
+                  customTransportAirline || 'Flight',
+                  customTransportFlightNumber ? `Flight ${customTransportFlightNumber}` : '',
+                  customTransportDepartureTime ? `Dep ${customTransportDepartureTime}` : '',
+                  customTransportArrivalDate || customTransportArrivalTime
+                    ? `Arr ${customTransportArrivalDate || customTransportDepartureDate || ''} ${customTransportArrivalTime || ''}`.trim()
+                    : '',
+                ].filter(Boolean);
                 setTripExpenseItems((prev) => [...prev, {
                   id: `transport-${Date.now()}`,
-                  name,
+                  name: `${customTransportFrom || 'From'} → ${customTransportTo || 'To'}${customTransportFlightNumber ? ` (${customTransportFlightNumber})` : ''}`,
                   total: costNum,
                   categoryId: 'transportations',
                   category: 'Transportations',
                   date: customTransportDepartureDate || days[0]?.date,
-                  detail: customTransportNote || customTransportVehicle,
-                  Icon: TransportIcon,
-                  notes: '',
-                  attachments: [],
+                  detail: detailParts.join(' · '),
+                  Icon: Plane,
+                  startTime: customTransportDepartureTime || '08:00',
+                  notes: [customTransportConfirmation ? `Confirmation: ${customTransportConfirmation}` : '', customTransportNote].filter(Boolean).join(' | '),
+                  externalLink: customTransportExternalLink,
+                  attachments: customTransportTravelDocs.map((file, idx) => ({
+                    id: `transport-doc-${Date.now()}-${idx}`,
+                    name: file?.name || `Document ${idx + 1}`,
+                    size: file?.size || 0,
+                    type: file?.type || '',
+                  })),
+                  transportType: 'flight',
                 }]);
                 setAddCustomTransportOpen(false);
                 setCustomTransportName('');
@@ -4147,7 +4466,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setCustomTransportAirline('');
                 setCustomTransportFlightNumber('');
                 setCustomTransportDepartureDate('');
+                setCustomTransportDepartureTime('08:00');
                 setCustomTransportArrivalDate('');
+                setCustomTransportArrivalTime('18:00');
                 setCustomTransportDurationHrs(1);
                 setCustomTransportDurationMins(0);
                 setCustomTransportConfirmation('');
@@ -4166,10 +4487,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </label>
               </div>
               <label className="trip-details__custom-transport-label">
-                Vehicle <span className="trip-details__custom-transport-required">*</span>
-                <select className="trip-details__custom-transport-select" value={customTransportVehicle} onChange={(e) => setCustomTransportVehicle(e.target.value)} required>
-                  {VEHICLE_TYPES.map((v) => (<option key={v.value} value={v.value}>{v.label}</option>))}
-                </select>
+                Transport type
+                <input type="text" className="trip-details__custom-transport-input" value="Flight" readOnly />
               </label>
               {(customTransportVehicle === 'Train' || customTransportVehicle === 'Bus') && (
                 <>
@@ -4455,12 +4774,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                     </div>
                   </label>
                   <label className="trip-details__custom-transport-label">
-                    Airline
+                    Airline (type manually or pick suggestion)
                     <div className="trip-details__custom-transport-autofill-wrap">
                       <input
                         type="text"
                         className="trip-details__custom-transport-input"
-                        placeholder="Select airline"
+                        placeholder="e.g. Singapore Airlines"
                         value={customTransportAirline}
                         onChange={(e) => { setCustomTransportAirline(e.target.value); setTransportAirlineSuggestionsOpen(true); }}
                         onFocus={() => setTransportAirlineSuggestionsOpen(true)}
@@ -4584,7 +4903,7 @@ export default function TripDetailsPage({ user, onLogout }) {
             const dayNumValue = Number(place?.dayNum || place?.day || Math.floor(index / 3) + 1);
             return {
               ...place,
-              id: place?.id || `${itineraryDetailsView.id || 'community-itinerary'}-place-${index + 1}`,
+              id: place?.id || `${itineraryDetailsView.id || 'smart-itinerary'}-place-${index + 1}`,
               dayNum: Number.isFinite(dayNumValue) && dayNumValue > 0 ? dayNumValue : 1,
             };
           })
@@ -4658,17 +4977,26 @@ export default function TripDetailsPage({ user, onLogout }) {
                       )}
                       <div className="trip-details__itinerary-detail-meta">
                         <span className="trip-details__itinerary-detail-creator">
-                          <Users size={16} aria-hidden /> {itineraryDetailsView.creator}
+                          <Route size={16} aria-hidden /> {itineraryDetailsView.creator}
                         </span>
-                        <span className="trip-details__itinerary-detail-stat">{Number(itineraryDetailsView.views || itineraryDetailsView.likes || 0).toLocaleString()} views</span>
+                        <span className="trip-details__itinerary-detail-stat">Smart-generated route</span>
                         <span className="trip-details__itinerary-detail-stat">{itineraryDetailsView.duration}</span>
-                        <span className="trip-details__itinerary-detail-stat">{Number(itineraryDetailsView.countriesCount || 1)} country</span>
+                        <span className="trip-details__itinerary-detail-stat">{cityQuery}</span>
                         <span className="trip-details__itinerary-detail-stat">{itineraryPlaces.length} places</span>
                       </div>
                       <div className="trip-details__itinerary-detail-tags">
                         {(Array.isArray(itineraryDetailsView.tags) ? itineraryDetailsView.tags : [itineraryDetailsView.type]).filter(Boolean).slice(0, 5).map((tag) => (
                           <span key={tag} className="trip-details__itinerary-detail-tag">{tag}</span>
                         ))}
+                      </div>
+                      <div className="trip-details__place-detail-add-wrap">
+                        <button
+                          type="button"
+                          className="trip-details__place-detail-add-btn"
+                          onClick={() => addEntireItineraryToTrip(itineraryPlaces)}
+                        >
+                          Add entire itinerary to trip
+                        </button>
                       </div>
                     </div>
                     <div className="trip-details__itinerary-detail-content">
@@ -4708,7 +5036,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                     <Clock size={14} aria-hidden /> Duration: {place.durationLabel || '2 hr'}
                                   </div>
                                   <div className="trip-details__itinerary-detail-place-note">
-                                    <strong>Note:</strong> {place.note || place.overview || 'Community recommendation from this itinerary.'}
+                                    {place.overview || 'Suggested stop from this smart itinerary.'}
                                   </div>
                                 </div>
                               </div>
@@ -5292,9 +5620,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                             className="trip-details__add-places-sort-select"
                             value={foodDietaryFilter}
                             onChange={(e) => setFoodDietaryFilter(e.target.value)}
-                            aria-label="Filter by dietary needs"
+                            aria-label="Filter food and beverage results"
                           >
-                            {FOOD_DIETARY_FILTERS.map((filter) => (
+                            {FOOD_FILTER_OPTIONS.map((filter) => (
                               <option key={filter} value={filter}>{filter}</option>
                             ))}
                           </select>
@@ -5698,15 +6026,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                           className="trip-details__add-places-sort-select"
                           value={stayTypeFilter}
                           onChange={(e) => setStayTypeFilter(e.target.value)}
-                          aria-label="Filter by hotel type"
+                          aria-label="Filter by accommodation type"
                         >
-                          <option value="All">All Types</option>
-                          <option value="Hotel">Hotel</option>
-                          <option value="Resort">Resort</option>
-                          <option value="Motel">Motel</option>
-                          <option value="Guesthouse">Guesthouse</option>
-                          <option value="Extended Stay">Extended Stay</option>
-                          <option value="Accommodation">Accommodation</option>
+                          {stayTypeOptions.map((type) => (
+                            <option key={type} value={type}>{type === 'All' ? 'All Types' : type}</option>
+                          ))}
                         </select>
                         <select
                           className="trip-details__add-places-sort-select"
@@ -6028,6 +6352,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <div className="trip-details__add-food-toolbar">
                         <p className="trip-details__add-places-results">{experiences.length} results found</p>
                         <div className="trip-details__add-food-toolbar-actions">
+                            <select
+                              className="trip-details__add-places-sort-select"
+                              value={experienceTypeFilter}
+                              onChange={(e) => setExperienceTypeFilter(e.target.value)}
+                              aria-label="Filter by experience type"
+                            >
+                              {EXPERIENCE_TYPES.map((type) => (
+                                <option key={type} value={type}>{type}</option>
+                              ))}
+                            </select>
                           <select
                             className="trip-details__add-places-sort-select"
                             value={experiencePriceRange}
@@ -6072,6 +6406,31 @@ export default function TripDetailsPage({ user, onLogout }) {
                       )}
 
                       <div className="trip-details__add-places-grid">
+                        <button
+                          type="button"
+                          className="trip-details__add-places-card trip-details__add-places-card--manual"
+                          onClick={() => {
+                            const day = days.find((d) => d.dayNum === (addSheetDay || 1));
+                            setCustomExperienceName('');
+                            setCustomExperienceType('Attraction');
+                            setCustomExperienceAddress('');
+                            setCustomExperienceDateKey(day?.date || days[0]?.date || '');
+                            setCustomExperienceStartTime('07:00');
+                            setCustomExperienceDurationHrs(2);
+                            setCustomExperienceDurationMins(0);
+                            setCustomExperienceNote('');
+                            setCustomExperienceCost('');
+                            setCustomExperienceExternalLink('');
+                            setCustomExperienceTravelDocs([]);
+                            setAddCustomExperienceOpen(true);
+                          }}
+                        >
+                          <div className="trip-details__add-places-card-manual-icon">
+                            <Ticket size={24} aria-hidden />
+                          </div>
+                          <span className="trip-details__add-places-card-manual-text">Can&apos;t find what you need? Add manually.</span>
+                        </button>
+
                         {experiences.map((experience) => (
                           <div
                             key={experience.id}
@@ -6146,6 +6505,132 @@ export default function TripDetailsPage({ user, onLogout }) {
           </>
         );
       })()}
+
+      {addCustomExperienceOpen && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setAddCustomExperienceOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="custom-experience-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="custom-experience-title" className="trip-details__custom-place-title">Add Custom Experience</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setAddCustomExperienceOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const [fallbackLat, fallbackLng] = mapCenter;
+                const costNum = parseFloat(customExperienceCost) || 0;
+                setTripExpenseItems((prev) => [...prev, {
+                  id: `experience-${Date.now()}`,
+                  name: customExperienceName,
+                  total: costNum,
+                  categoryId: 'experiences',
+                  category: 'Experience',
+                  date: customExperienceDateKey,
+                  detail: `${customExperienceType} · ${customExperienceAddress}`,
+                  Icon: Ticket,
+                  lat: fallbackLat,
+                  lng: fallbackLng,
+                  notes: customExperienceNote || '',
+                  attachments: customExperienceTravelDocs.map((file, idx) => ({
+                    id: `experience-doc-${Date.now()}-${idx}`,
+                    name: file?.name || `Document ${idx + 1}`,
+                    size: file?.size || 0,
+                    type: file?.type || '',
+                  })),
+                  startTime: customExperienceStartTime,
+                  durationHrs: customExperienceDurationHrs,
+                  durationMins: customExperienceDurationMins,
+                  externalLink: customExperienceExternalLink || '',
+                  placeImageUrl: '',
+                }]);
+                setAddCustomExperienceOpen(false);
+              }}
+            >
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Experience name <span className="trip-details__custom-place-required">*</span>
+                  <input type="text" className="trip-details__custom-place-input" placeholder="Enter experience name" value={customExperienceName} onChange={(e) => setCustomExperienceName(e.target.value)} required />
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Experience type <span className="trip-details__custom-place-required">*</span>
+                  <select className="trip-details__custom-place-select" value={customExperienceType} onChange={(e) => setCustomExperienceType(e.target.value)} required>
+                    {EXPERIENCE_TYPES.filter((type) => type !== 'All').map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="trip-details__custom-place-label">
+                Address / meeting point <span className="trip-details__custom-place-required">*</span>
+                <input type="text" className="trip-details__custom-place-input" placeholder="Enter meeting point or location" value={customExperienceAddress} onChange={(e) => setCustomExperienceAddress(e.target.value)} required />
+              </label>
+              <div className="trip-details__custom-place-row">
+                <label className="trip-details__custom-place-label">
+                  Date <span className="trip-details__custom-place-required">*</span>
+                  <select className="trip-details__custom-place-select" value={customExperienceDateKey} onChange={(e) => setCustomExperienceDateKey(e.target.value)} required>
+                    <option value="">Select day</option>
+                    {days.map((d) => (
+                      <option key={d.date} value={d.date}>Day {d.dayNum}: {d.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="trip-details__custom-place-label">
+                  Start time <span className="trip-details__custom-place-required">*</span>
+                  <input type="time" className="trip-details__custom-place-input" value={customExperienceStartTime} onChange={(e) => setCustomExperienceStartTime(e.target.value)} required />
+                </label>
+              </div>
+              <label className="trip-details__custom-place-label">
+                Duration <span className="trip-details__custom-place-required">*</span>
+                <div className="trip-details__custom-place-duration">
+                  <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customExperienceDurationHrs} onChange={(e) => setCustomExperienceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
+                  <span> hr </span>
+                  <input type="number" min={0} max={59} className="trip-details__custom-place-duration-input" value={customExperienceDurationMins} onChange={(e) => setCustomExperienceDurationMins(Number(e.target.value) || 0)} aria-label="Minutes" />
+                  <span> mins</span>
+                </div>
+              </label>
+              <label className="trip-details__custom-place-label">
+                Note (Optional)
+                <textarea className="trip-details__custom-place-textarea" placeholder="Enter your note..." value={customExperienceNote} onChange={(e) => setCustomExperienceNote(e.target.value)} rows={3} />
+              </label>
+              <label className="trip-details__custom-place-label">
+                Cost (Optional)
+                <input type="number" step="0.01" min={0} className="trip-details__custom-place-input" placeholder="0" value={customExperienceCost} onChange={(e) => setCustomExperienceCost(e.target.value)} />
+                <span className="trip-details__custom-place-currency-hint">{currency} — adds to trip budget</span>
+              </label>
+              <label className="trip-details__custom-place-label">
+                External link (Optional)
+                <input type="url" className="trip-details__custom-place-input" placeholder="https://" value={customExperienceExternalLink} onChange={(e) => setCustomExperienceExternalLink(e.target.value)} />
+              </label>
+              <label className="trip-details__custom-place-label">
+                Travel Documents
+                <p className="trip-details__custom-place-docs-hint">Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.</p>
+                <input
+                  id="custom-experience-docs"
+                  type="file"
+                  multiple
+                  accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
+                  className="trip-details__custom-place-file-input"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []).slice(0, 3);
+                    setCustomExperienceTravelDocs(files);
+                  }}
+                />
+                <button type="button" className="trip-details__custom-place-attach" onClick={() => document.getElementById('custom-experience-docs')?.click()}>
+                  <Paperclip size={18} aria-hidden /> Attach files
+                  {customExperienceTravelDocs.length > 0 && <span className="trip-details__custom-place-attach-count"> ({customExperienceTravelDocs.length})</span>}
+                </button>
+              </label>
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__modal-cancel" onClick={() => setAddCustomExperienceOpen(false)}>Cancel</button>
+                <button type="submit" className="trip-details__custom-place-submit">Add to trip</button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
 
       {addCustomPlaceOpen && (
         <>
@@ -6668,8 +7153,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                       } else if (id === 'transportation') {
                         setAddTransportDay(addSheetDay ?? 1);
                         setAddTransportOpen(true);
-                      } else if (id === 'community') {
-                        openCommunityBrowseAll();
+                      } else if (id === 'routeIdeas') {
+                        openRouteIdeasBrowseAll();
                       }
                       setAddSheetDay(null);
                       setAddSheetFromCalendar(false);
