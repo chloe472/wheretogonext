@@ -51,8 +51,6 @@ We use **two separate API keys** following security best practices:
 
 **Update this line:**
 
-```env
-VITE_GOOGLE_MAPS_API_KEY=AIzaSyC6UmfWTKcuEZsWUUgcHnrdZs19jIUj69o
 ```
 
 **✅ Status:** Already updated
@@ -65,8 +63,6 @@ VITE_GOOGLE_MAPS_API_KEY=AIzaSyC6UmfWTKcuEZsWUUgcHnrdZs19jIUj69o
 
 **Keep as is (NO CHANGE):**
 
-```env
-GOOGLE_PLACES_API_KEY=AIzaSyAgXNQqSGQoxnJNEeXnJMJjb0k8YMurlmI
 ```
 
 **✅ Status:** Already correct - backend key stays the same
