@@ -337,8 +337,107 @@ function formatTimeRange(item) {
   return start;
 }
 
-/** Mock travel time/distance between two items (in production would use routing API). */
-function getTravelBetween(fromItem, toItem, mode) {
+function getTransportTimesFromDetail(detail = '') {
+  const text = String(detail || '');
+  const match = text.match(/Departs?\s*(\d{1,2}:\d{2}).*Arrives?\s*(\d{1,2}:\d{2})/i);
+  if (!match) return { dep: '', arr: '' };
+  return { dep: match[1], arr: match[2] };
+}
+
+/** Helper to wait for Google Maps SDK to load */
+function waitForGoogleMaps() {
+  return new Promise((resolve) => {
+    if (window.google && window.google.maps && window.google.maps.DistanceMatrixService) {
+      resolve(true);
+      return;
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 30; // 6 seconds max wait
+    const checkInterval = setInterval(() => {
+      attempts++;
+      if (window.google && window.google.maps && window.google.maps.DistanceMatrixService) {
+        clearInterval(checkInterval);
+        resolve(true);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkInterval);
+        resolve(false);
+      }
+    }, 200);
+  });
+}
+
+/** Get travel time and distance using Google Maps JavaScript SDK for accurate routing. */
+async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache) {
+  const lat1 = fromItem.lat ?? 0;
+  const lng1 = fromItem.lng ?? 0;
+  const lat2 = toItem.lat ?? 0;
+  const lng2 = toItem.lng ?? 0;
+  
+  // Generate cache key
+  const cacheKey = `${lat1},${lng1}|${lat2},${lng2}|${mode}`;
+  
+  // Check cache first
+  if (cache[cacheKey]) {
+    return cache[cacheKey];
+  }
+  
+  // Wait for Google Maps SDK to load
+  const isLoaded = await waitForGoogleMaps();
+  if (!isLoaded) {
+    return getTravelBetweenFallback(fromItem, toItem, mode);
+  }
+  
+  return new Promise((resolve) => {
+    try {
+      const service = new google.maps.DistanceMatrixService();
+      const origin = new google.maps.LatLng(lat1, lng1);
+      const destination = new google.maps.LatLng(lat2, lng2);
+      
+      // Map our mode to Google's travel mode
+      const googleMode = {
+        walking: google.maps.TravelMode.WALKING,
+        cycling: google.maps.TravelMode.BICYCLING,
+        driving: google.maps.TravelMode.DRIVING,
+        public: google.maps.TravelMode.TRANSIT
+      }[mode] || google.maps.TravelMode.DRIVING;
+      
+      service.getDistanceMatrix({
+        origins: [origin],
+        destinations: [destination],
+        travelMode: googleMode,
+      }, (response, status) => {
+        if (status === 'OK' && response?.rows?.[0]?.elements?.[0]?.status === 'OK') {
+          const element = response.rows[0].elements[0];
+          const distanceMeters = element.distance.value;
+          const durationSeconds = element.duration.value;
+          
+          const distKm = Math.round((distanceMeters / 1000) * 10) / 10;
+          const totalMins = Math.ceil(durationSeconds / 60);
+          const hrs = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
+          
+          const durationStr = hrs > 0 ? `${hrs} hr ${mins} min` : `${mins} min`;
+          const result = { duration: durationStr, durationMins: totalMins, distance: `${distKm} km` };
+          
+          // Cache the result
+          setCache(prev => ({ ...prev, [cacheKey]: result }));
+          
+          resolve(result);
+        } else {
+          // Fallback to haversine calculation if API fails
+          resolve(getTravelBetweenFallback(fromItem, toItem, mode));
+        }
+      });
+    } catch (error) {
+      console.error('Distance Matrix SDK error:', error);
+      resolve(getTravelBetweenFallback(fromItem, toItem, mode));
+    }
+  });
+}
+
+/** Fallback travel time calculation using straight-line distance (Haversine formula). */
+function getTravelBetweenFallback(fromItem, toItem, mode) {
   const lat1 = fromItem.lat ?? 47.6;
   const lng1 = fromItem.lng ?? -122.3;
   const lat2 = toItem.lat ?? 47.61;
@@ -349,12 +448,35 @@ function getTravelBetween(fromItem, toItem, mode) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distKmRounded = Math.max(0.1, Math.round(distKm * 10) / 10);
+  // Add 30% buffer to straight-line distance to approximate actual route distance
+  const routeDistKm = Math.round(distKmRounded * 1.3 * 10) / 10;
   const minPerKm = { walking: 12, cycling: 4, driving: 2.5, public: 5 }[mode] || 5;
-  const totalMins = Math.round(distKm * minPerKm);
+  const totalMins = Math.round(routeDistKm * minPerKm);
   const mins = totalMins % 60;
   const hrs = Math.floor(totalMins / 60);
   const durationStr = hrs > 0 ? `${hrs} hr ${mins} min` : `${mins} min`;
-  return { duration: durationStr, durationMins: totalMins, distance: `${distKmRounded} km` };
+  return { duration: durationStr, durationMins: totalMins, distance: `${routeDistKm} km` };
+}
+
+/** Get travel time/distance between two items - tries Google Maps SDK first, falls back to calculation. */
+function getTravelBetween(fromItem, toItem, mode, cache, setCache) {
+  // Generate cache key
+  const cacheKey = `${fromItem.lat},${fromItem.lng}|${toItem.lat},${toItem.lng}|${mode}`;
+  
+  // Return cached result if available
+  if (cache && cache[cacheKey]) {
+    return cache[cacheKey];
+  }
+  
+  // Start async fetch in background if Google Maps is available
+  if (typeof window !== 'undefined' && window.google && cache !== undefined && setCache) {
+    getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache).catch(err => {
+      console.error('Error fetching travel data:', err);
+    });
+  }
+  
+  // Return fallback calculation immediately for initial render
+  return getTravelBetweenFallback(fromItem, toItem, mode);
 }
 
 const EXPENSE_CATEGORIES = [
@@ -649,12 +771,71 @@ function searchAirportsAndCities(query, limit = 8) {
   }).slice(0, limit);
 }
 
+function searchLocationsForSurfaceTransport(query, limit = 10) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  // Search by city name, country, or full name - prioritize cities over airports
+  const results = AIRPORTS_AND_CITIES.filter((a) => {
+    const nameMatch = a.name.toLowerCase().includes(q);
+    const idMatch = a.id && a.id.toLowerCase().includes(q);
+    const cityMatch = a.city && a.city.toLowerCase().includes(q);
+    const countryMatch = a.country && a.country.toLowerCase().includes(q);
+
+    return nameMatch || idMatch || cityMatch || countryMatch;
+  });
+
+  // Sort: Cities first, then Airports
+  const sorted = results.sort((a, b) => {
+    if (a.type === 'City' && b.type !== 'City') return -1;
+    if (a.type !== 'City' && b.type === 'City') return 1;
+    return 0;
+  });
+
+  return sorted.slice(0, limit);
+}
+
 function searchAirlines(query, limit = 8) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
   return AIRLINES.filter(
     (a) => a.name.toLowerCase().includes(q) || (a.id && a.id.toLowerCase().includes(q))
   ).slice(0, limit);
+}
+
+// Fetch Google Places Autocomplete predictions
+async function fetchPlacesPredictions(input, callback) {
+  if (!input || !input.trim()) {
+    callback([]);
+    return;
+  }
+
+  try {
+    // Wait for Google Maps SDK
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+      console.warn('Google Maps Places library not loaded yet');
+      callback([]);
+      return;
+    }
+
+    const service = new window.google.maps.places.AutocompleteService();
+    service.getPlacePredictions(
+      {
+        input: input,
+        types: ['establishment', 'geocode'], // Include all types of locations
+      },
+      (predictions, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+          callback(predictions);
+        } else {
+          callback([]);
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Error fetching places predictions:', error);
+    callback([]);
+  }
 }
 
 export default function TripDetailsPage({ user, onLogout }) {
@@ -813,8 +994,13 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [transferPax, setTransferPax] = useState(2);
   const [surfaceFrom, setSurfaceFrom] = useState('');
   const [surfaceTo, setSurfaceTo] = useState('');
+  const [surfaceFromSuggestionsOpen, setSurfaceFromSuggestionsOpen] = useState(false);
+  const [surfaceToSuggestionsOpen, setSurfaceToSuggestionsOpen] = useState(false);
+  const [surfaceFromPredictions, setSurfaceFromPredictions] = useState([]);
+  const [surfaceToPredictions, setSurfaceToPredictions] = useState([]);
   const [surfaceDate, setSurfaceDate] = useState('');
   const [surfaceTime, setSurfaceTime] = useState('08:00');
+  const [surfaceArrivalTime, setSurfaceArrivalTime] = useState('18:00');
   const [surfaceOperator, setSurfaceOperator] = useState('');
   const [surfaceNumber, setSurfaceNumber] = useState('');
   const [surfaceCost, setSurfaceCost] = useState('');
@@ -824,11 +1010,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [flightSearchResults, setFlightSearchResults] = useState([]);
   const [flightSearchLoading, setFlightSearchLoading] = useState(false);
   const [flightSearchError, setFlightSearchError] = useState('');
-  const [trainCode, setTrainCode] = useState('');
-  const [trainDepartDate, setTrainDepartDate] = useState('');
-  const [trainSearchResults, setTrainSearchResults] = useState([]);
-  const [trainSearchLoading, setTrainSearchLoading] = useState(false);
-  const [trainSearchError, setTrainSearchError] = useState('');
   const [addCustomTransportOpen, setAddCustomTransportOpen] = useState(false);
   const [customTransportVehicle, setCustomTransportVehicle] = useState('Bus');
   const [customTransportFrom, setCustomTransportFrom] = useState('');
@@ -866,7 +1047,10 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [transportModeBySegment, setTransportModeBySegment] = useState({});
   const [openTravelDropdownKey, setOpenTravelDropdownKey] = useState(null);
   const [publicTransportModalOpen, setPublicTransportModalOpen] = useState(false);
-  const [publicTransportSegment, setPublicTransportSegment] = useState({ fromName: '', toName: '' });
+  const [publicTransportSegment, setPublicTransportSegment] = useState({ fromName: '', toName: '', fromLat: null, fromLng: null, toLat: null, toLng: null });
+  const [publicTransportDirections, setPublicTransportDirections] = useState(null);
+  const [publicTransportLoading, setPublicTransportLoading] = useState(false);
+  const [travelTimeCache, setTravelTimeCache] = useState({});
   const [openDayMenuKey, setOpenDayMenuKey] = useState(null);
   const [dayColors, setDayColors] = useState({});
   const [dayColorPickerDay, setDayColorPickerDay] = useState(null);
@@ -997,6 +1181,91 @@ export default function TripDetailsPage({ user, onLogout }) {
     updateTrip(tripId, { tripExpenseItems });
   }, [tripId, tripExpenseItems]);
 
+  // Fetch transit directions when public transport modal opens
+  useEffect(() => {
+    if (!publicTransportModalOpen || !publicTransportSegment.fromLat || !publicTransportSegment.toLat) {
+      return;
+    }
+    
+    const fetchTransitDirections = () => {
+      setPublicTransportLoading(true);
+      setPublicTransportDirections(null);
+      
+      // Wait for Google Maps SDK to load
+      const waitForGoogleMaps = (callback, maxAttempts = 20) => {
+        let attempts = 0;
+        const checkInterval = setInterval(() => {
+          attempts++;
+          if (window.google && window.google.maps && window.google.maps.DirectionsService) {
+            clearInterval(checkInterval);
+            callback();
+          } else if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            console.error('Google Maps SDK failed to load after', attempts, 'attempts');
+            setPublicTransportLoading(false);
+          }
+        }, 200);
+      };
+      
+      waitForGoogleMaps(() => {
+        try {
+          const service = new google.maps.DirectionsService();
+          const origin = new google.maps.LatLng(publicTransportSegment.fromLat, publicTransportSegment.fromLng);
+          const destination = new google.maps.LatLng(publicTransportSegment.toLat, publicTransportSegment.toLng);
+          
+          console.log('Requesting transit directions from', publicTransportSegment.fromLat, publicTransportSegment.fromLng, 'to', publicTransportSegment.toLat, publicTransportSegment.toLng);
+          
+          // Set departure time to now (required for transit to work properly)
+          const departureTime = new Date();
+          departureTime.setMinutes(departureTime.getMinutes() + 5); // 5 minutes from now
+          
+          service.route({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              departureTime: departureTime,
+              modes: [google.maps.TransitMode.BUS, google.maps.TransitMode.RAIL, google.maps.TransitMode.SUBWAY, google.maps.TransitMode.TRAIN, google.maps.TransitMode.TRAM],
+              routingPreference: google.maps.TransitRoutePreference.FEWER_TRANSFERS
+            },
+            provideRouteAlternatives: false,
+          }, (result, status) => {
+            console.log('Transit directions response:', status, result);
+            
+            if (status === 'OK' && result?.routes?.[0]) {
+              const route = result.routes[0];
+              const steps = route.legs?.[0]?.steps || [];
+              const hasTransit = steps.some(step => step.travel_mode === 'TRANSIT');
+              
+              console.log('Transit route found:', route);
+              console.log('Steps:', steps.map(s => ({ mode: s.travel_mode, duration: s.duration?.text })));
+              console.log('Has transit steps:', hasTransit);
+              
+              if (hasTransit) {
+                setPublicTransportDirections(route);
+              } else {
+                console.warn('Route returned only walking steps - no transit available');
+                setPublicTransportDirections(null);
+              }
+            } else if (status === 'ZERO_RESULTS') {
+              console.log('No transit routes available between these locations');
+              setPublicTransportDirections(null);
+            } else {
+              console.error('Transit directions error:', status, result);
+              setPublicTransportDirections(null);
+            }
+            setPublicTransportLoading(false);
+          });
+        } catch (error) {
+          console.error('Error fetching transit directions:', error);
+          setPublicTransportLoading(false);
+        }
+      });
+    };
+    
+    fetchTransitDirections();
+  }, [publicTransportModalOpen, publicTransportSegment]);
+
   if (!trip) {
     return (
       <div className="trip-details trip-details--missing">
@@ -1064,55 +1333,151 @@ export default function TripDetailsPage({ user, onLogout }) {
           .filter((item) => item.type === 'Airport')
           .map((item) => [String(item.id || '').toUpperCase(), item]),
       );
-      const apiKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY || '';
+      const apiKey = import.meta.env.VITE_AIRLABS_API_KEY || '';
 
       if (apiKey) {
         try {
-          const response = await fetch(
-            `https://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${normalizedCode}&flight_date=${flightDepartDate}`,
+          // Airlabs sometimes omits timing fields in /flights, but /flight usually includes full schedule details.
+          // Try /flight first for one detailed match, then fallback to /flights.
+          let apiFlights = [];
+
+          const detailedResponse = await fetch(
+            `https://airlabs.co/api/v9/flight?api_key=${apiKey}&flight_iata=${normalizedCode}`,
           );
-          if (!response.ok) {
-            throw new Error(`Flight provider error (${response.status})`);
+          if (detailedResponse.ok) {
+            const detailedData = await detailedResponse.json();
+            if (detailedData?.response && !Array.isArray(detailedData.response)) {
+              apiFlights = [detailedData.response];
+            }
           }
-          const data = await response.json();
-          const apiFlights = Array.isArray(data?.data) ? data.data : [];
+
+          if (apiFlights.length === 0) {
+            const listResponse = await fetch(
+              `https://airlabs.co/api/v9/flights?api_key=${apiKey}&flight_iata=${normalizedCode}`,
+            );
+            if (!listResponse.ok) {
+              throw new Error(`Flight provider error (${listResponse.status})`);
+            }
+            const listData = await listResponse.json();
+            apiFlights = Array.isArray(listData?.response) ? listData.response : [];
+          }
+          
           if (apiFlights.length > 0) {
             const flights = apiFlights
               .map((flight) => {
-                const dep = flight?.departure || {};
-                const arr = flight?.arrival || {};
-                const airline = flight?.airline || {};
-                const flightMeta = flight?.flight || {};
-                const iataCode = flightMeta.iata || `${airline.iata || airlineCode}${flightMeta.number || flightNumber}`;
+                const iataCode = flight.flight_iata || normalizedCode;
+                const depAirport = airportByCode.get(String(flight.dep_iata || '').toUpperCase());
+                const arrAirport = airportByCode.get(String(flight.arr_iata || '').toUpperCase());
+                
+                // Normalize provider values; Airlabs can return strings, unix timestamps, or alternate field names.
+                const toIsoLike = (value) => {
+                  if (value == null || value === '') return '';
+                  if (typeof value === 'number') {
+                    const ms = value < 1e12 ? value * 1000 : value;
+                    return new Date(ms).toISOString();
+                  }
+                  const raw = String(value).trim();
+                  if (!raw) return '';
+                  if (/^\d+$/.test(raw)) {
+                    const num = Number(raw);
+                    const ms = num < 1e12 ? num * 1000 : num;
+                    return new Date(ms).toISOString();
+                  }
+                  if (raw.includes('T')) return raw;
+                  return raw.replace(' ', 'T');
+                };
+
+                const toHHmm = (value) => {
+                  const isoLike = toIsoLike(value);
+                  if (!isoLike) return '';
+                  const match = isoLike.match(/T(\d{2}):(\d{2})/);
+                  if (match) return `${match[1]}:${match[2]}`;
+                  const fallback = isoLike.match(/(\d{2}):(\d{2})/);
+                  return fallback ? `${fallback[1]}:${fallback[2]}` : '';
+                };
+
+                // Prefer local fields for display, then fallback to UTC/schedule/actual/estimated variants.
+                const depDisplaySource =
+                  flight.dep_time ||
+                  flight.dep_estimated ||
+                  flight.dep_scheduled ||
+                  flight.dep_actual ||
+                  flight.dep_estimated_utc ||
+                  flight.dep_actual_utc ||
+                  flight.dep_time_utc ||
+                  flight.departure_time ||
+                  flight.departure_scheduled ||
+                  flight.departure_estimated ||
+                  flight.departure_actual ||
+                  flight.updated ||
+                  flight.dep_time_ts ||
+                  '';
+                const arrDisplaySource =
+                  flight.arr_time ||
+                  flight.arr_estimated ||
+                  flight.arr_scheduled ||
+                  flight.arr_actual ||
+                  flight.arr_estimated_utc ||
+                  flight.arr_actual_utc ||
+                  flight.arr_time_utc ||
+                  flight.arrival_time ||
+                  flight.arrival_scheduled ||
+                  flight.arrival_estimated ||
+                  flight.arrival_actual ||
+                  flight.arr_time_ts ||
+                  '';
+
+                const depTimeLocal = toHHmm(depDisplaySource);
+                const arrTimeLocal = toHHmm(arrDisplaySource);
+
+                // Prefer UTC fields for duration math to avoid timezone ambiguity.
+                let durationMinutes = 0;
+                const depUtcSource = flight.dep_time_utc || flight.dep_estimated_utc || flight.dep_actual_utc || flight.dep_time_ts || depDisplaySource;
+                const arrUtcSource = flight.arr_time_utc || flight.arr_estimated_utc || flight.arr_actual_utc || flight.arr_time_ts || arrDisplaySource;
+                const depIso = toIsoLike(depUtcSource);
+                const arrIso = toIsoLike(arrUtcSource);
+                if (depIso && arrIso) {
+                  const depDate = new Date(depIso);
+                  const arrDate = new Date(arrIso);
+                  const diff = Math.round((arrDate.getTime() - depDate.getTime()) / (1000 * 60));
+                  durationMinutes = Number.isFinite(diff) && diff > 0 ? diff : 0;
+                }
+                
                 return {
-                  id: `${iataCode}-${dep.scheduled || dep.estimated || Date.now()}`,
+                  id: `${iataCode}-${depIso || depTimeLocal || Date.now()}`,
                   flight_code: iataCode,
-                  airline: airline.name || `${airlineCode} Airlines`,
-                  airline_code: airline.iata || airlineCode,
-                  flight_number: String(flightMeta.number || flightNumber),
-                  departure_airport: dep.iata || dep.airport || 'N/A',
-                  departure_city: dep.airport || dep.timezone?.split('/')?.[1] || 'N/A',
-                  arrival_airport: arr.iata || arr.airport || 'N/A',
-                  arrival_city: arr.airport || arr.timezone?.split('/')?.[1] || 'N/A',
-                  departure_time: dep.scheduled || dep.estimated || '',
-                  arrival_time: arr.scheduled || arr.estimated || '',
+                  airline: flight.airline_name || `${flight.airline_iata || airlineCode} Airlines`,
+                  airline_code: flight.airline_iata || airlineCode,
+                  flight_number: String(flight.flight_number || flightNumber),
+                  departure_airport: flight.dep_iata || 'N/A',
+                  departure_city: depAirport?.city || flight.dep_city || flight.dep_name || flight.dep_iata || 'N/A',
+                  arrival_airport: flight.arr_iata || 'N/A',
+                  arrival_city: arrAirport?.city || flight.arr_city || flight.arr_name || flight.arr_iata || 'N/A',
+                  departure_time: depTimeLocal || '--:--',
+                  arrival_time: arrTimeLocal || '--:--',
                   flight_date: flightDepartDate,
-                  status: (flight.flight_status || 'scheduled').toLowerCase(),
-                  aircraft: flight?.aircraft?.registration || 'N/A',
-                  terminal: dep.terminal || 'N/A',
-                  gate: dep.gate || 'N/A',
+                  status: (flight.status || 'scheduled').toLowerCase(),
+                  aircraft: flight.aircraft_icao || flight.model || 'N/A',
+                  terminal: flight.dep_terminal || 'N/A',
+                  gate: flight.dep_gate || 'N/A',
+                  durationMinutes,
                 };
               })
               .filter((f) => {
                 if (!String(f.flight_code || '').toUpperCase().includes(normalizedCode)) return false;
                 const depCountry = airportByCode.get(String(f.departure_airport || '').toUpperCase())?.country || '';
                 const arrCountry = airportByCode.get(String(f.arrival_airport || '').toUpperCase())?.country || '';
+                
+                // If we can't determine countries, include the flight anyway
+                if (!depCountry || !arrCountry) return true;
+                
                 const pair = new Set([depCountry, arrCountry]);
-                return depCountry && arrCountry && pair.size === routeCountries.size && [...pair].every((c) => routeCountries.has(c));
+                return pair.size === routeCountries.size && [...pair].every((c) => routeCountries.has(c));
               });
 
             if (flights.length > 0) {
               setFlightSearchResults(flights);
+              setFlightSearchLoading(false);
               return;
             }
           }
@@ -1163,13 +1528,14 @@ export default function TripDetailsPage({ user, onLogout }) {
           departure_city: outboundFrom.city,
           arrival_airport: outboundTo.id,
           arrival_city: outboundTo.city,
-          departure_time: departureA.toISOString(),
-          arrival_time: arrivalA.toISOString(),
+          departure_time: `${String(departureA.getHours()).padStart(2, '0')}:${String(departureA.getMinutes()).padStart(2, '0')}`,
+          arrival_time: `${String(arrivalA.getHours()).padStart(2, '0')}:${String(arrivalA.getMinutes()).padStart(2, '0')}`,
           flight_date: flightDepartDate,
           status: 'scheduled',
           aircraft: 'Boeing 787-9',
           terminal: '1',
           gate: `A${10 + (seed % 20)}`,
+          durationMinutes: routeDurationMins,
         },
         {
           id: `${normalizedCode}-b`,
@@ -1181,13 +1547,14 @@ export default function TripDetailsPage({ user, onLogout }) {
           departure_city: inboundFrom.city,
           arrival_airport: inboundTo.id,
           arrival_city: inboundTo.city,
-          departure_time: departureB.toISOString(),
-          arrival_time: arrivalB.toISOString(),
+          departure_time: `${String(departureB.getHours()).padStart(2, '0')}:${String(departureB.getMinutes()).padStart(2, '0')}`,
+          arrival_time: `${String(arrivalB.getHours()).padStart(2, '0')}:${String(arrivalB.getMinutes()).padStart(2, '0')}`,
           flight_date: flightDepartDate,
           status: 'scheduled',
           aircraft: 'Airbus A350-900',
           terminal: '2',
           gate: `B${11 + (seed % 18)}`,
+          durationMinutes: routeDurationMins + 35,
         },
       ];
 
@@ -1198,102 +1565,6 @@ export default function TripDetailsPage({ user, onLogout }) {
       setFlightSearchError(error.message || 'Failed to search flights. Please try again.');
     } finally {
       setFlightSearchLoading(false);
-    }
-  };
-
-  const searchTrains = async () => {
-    if (!trainCode || !trainDepartDate) {
-      setTrainSearchError('Please enter both train code and departure date');
-      return;
-    }
-
-    setTrainSearchLoading(true);
-    setTrainSearchError('');
-    setTrainSearchResults([]);
-
-    try {
-      const code = trainCode.trim().toUpperCase();
-      const match = code.match(/^([A-Z0-9]{1,4})[-\s]?(\d{1,5})$/);
-      if (!match) {
-        throw new Error('Invalid train code format. Example: KTX101, TGV 12, ICE100');
-      }
-
-      const homeCountry = String(transportHomeCountry || '').trim();
-      const targetCountry = String(destinationCountry || '').trim();
-      if (!homeCountry || !targetCountry) {
-        throw new Error('Unable to determine home/destination country for route filtering.');
-      }
-
-      const countryCities = AIRPORTS_AND_CITIES
-        .filter((a) => a.type === 'City')
-        .reduce((acc, item) => {
-          const key = String(item.name || '').split(',')[0].trim();
-          const country = String(item.country || '').trim();
-          if (!country || !key) return acc;
-          if (!acc[country]) acc[country] = [];
-          if (!acc[country].includes(key)) acc[country].push(key);
-          return acc;
-        }, {});
-
-      const homeCities = (countryCities[homeCountry] || []).length > 0
-        ? countryCities[homeCountry]
-        : AIRPORTS_AND_CITIES.filter((a) => a.country === homeCountry).map((a) => a.city).filter(Boolean);
-      const destinationCities = (countryCities[targetCountry] || []).length > 0
-        ? countryCities[targetCountry]
-        : AIRPORTS_AND_CITIES.filter((a) => a.country === targetCountry).map((a) => a.city).filter(Boolean);
-
-      if (homeCities.length === 0 || destinationCities.length === 0) {
-        throw new Error('No station/city data available for selected home/destination country pair.');
-      }
-
-      const seed = `${code}${trainDepartDate}${homeCountry}${targetCountry}`.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-      const pick = (arr, idx) => arr[idx % arr.length];
-      const depA = pick(homeCities, seed + 1);
-      const arrA = pick(destinationCities, seed + 2);
-      const depB = pick(destinationCities, seed + 3);
-      const arrB = pick(homeCities, seed + 4);
-
-      const dateBase = new Date(`${trainDepartDate}T00:00:00`);
-      const aStart = new Date(dateBase);
-      aStart.setHours(7 + (seed % 5), 20, 0, 0);
-      const aDuration = 150 + (seed % 220);
-      const aEnd = new Date(aStart.getTime() + aDuration * 60000);
-      const bStart = new Date(dateBase);
-      bStart.setHours(14 + (seed % 4), 10, 0, 0);
-      const bDuration = aDuration + 20;
-      const bEnd = new Date(bStart.getTime() + bDuration * 60000);
-
-      const results = [
-        {
-          id: `${code}-train-a`,
-          train_code: code,
-          operator: code.replace(/[0-9]/g, '') || 'Rail',
-          departure_city: depA,
-          arrival_city: arrA,
-          departure_time: aStart.toISOString(),
-          arrival_time: aEnd.toISOString(),
-          train_date: trainDepartDate,
-          status: 'scheduled',
-        },
-        {
-          id: `${code}-train-b`,
-          train_code: code,
-          operator: code.replace(/[0-9]/g, '') || 'Rail',
-          departure_city: depB,
-          arrival_city: arrB,
-          departure_time: bStart.toISOString(),
-          arrival_time: bEnd.toISOString(),
-          train_date: trainDepartDate,
-          status: 'scheduled',
-        },
-      ];
-
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setTrainSearchResults(results);
-    } catch (error) {
-      setTrainSearchError(error.message || 'Failed to search trains. Please try again.');
-    } finally {
-      setTrainSearchLoading(false);
     }
   };
 
@@ -1338,6 +1609,9 @@ export default function TripDetailsPage({ user, onLogout }) {
     name,
     date,
     detail,
+    startTime = '',
+    durationHrs = 0,
+    durationMins = 0,
     notes = '',
     total = 0,
     Icon = Car,
@@ -1351,6 +1625,9 @@ export default function TripDetailsPage({ user, onLogout }) {
       category: 'Transportations',
       date: date || days[0]?.date,
       detail,
+      startTime,
+      durationHrs,
+      durationMins,
       Icon,
       notes,
       attachments: [],
@@ -2241,12 +2518,24 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const style = getCategoryStyle(item);
                         const IconComponent = item.Icon || Camera;
                         const timeRange = formatTimeRange(item);
+                        const isTransportItem = item.categoryId === 'transportations' || Boolean(item.transportType);
+                        const transportTypeLabel = item.transportType
+                          ? `${String(item.transportType).charAt(0).toUpperCase()}${String(item.transportType).slice(1)}`
+                          : 'Transport';
+                        const transportTitle = `Transport (${transportTypeLabel})`;
+                        const transportRoute = (String(item.name || '')
+                          .replace(/^[A-Za-z]+:\s*/, '')
+                          .replace(/\s*→\s*/g, ' to ')) || 'Route not available';
+                        const transportTimes = getTransportTimesFromDetail(item.detail);
+                        const transportMeta = transportTimes.dep && transportTimes.arr
+                          ? `Dep ${transportTimes.dep} - Arr ${transportTimes.arr}`
+                          : (timeRange ? `Dep ${timeRange}` : 'Time not available');
                         const segmentKey = `${day.date}-${idx}`;
                         const mode = transportModeBySegment[segmentKey] || 'driving';
                         const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
                         const TravelSegmentIcon = travelModeInfo.Icon;
                         const nextItem = getSortedDayItems(tripExpenseItems, day.date)[idx + 1];
-                        const travelToNext = nextItem ? getTravelBetween(item, nextItem, mode) : null;
+                        const travelToNext = nextItem ? getTravelBetween(item, nextItem, mode, travelTimeCache, setTravelTimeCache) : null;
                         const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
                         return (
                           <div key={item.id} className="trip-details__itinerary-block">
@@ -2267,21 +2556,27 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   </span>
                                 )}
                               </div>
-                              <div className="trip-details__itinerary-card-body">
+                              <div className={`trip-details__itinerary-card-body ${isTransportItem ? 'trip-details__itinerary-card-body--transport' : ''}`}>
                                 <span className="trip-details__itinerary-category" style={{ color: style.color }}>
-                                  {style.label}
+                                  {isTransportItem ? transportTitle : style.label}
                                 </span>
-                                <h4 className="trip-details__itinerary-name">{item.name}</h4>
-                                {timeRange && <span className="trip-details__itinerary-time">{timeRange}</span>}
+                                <h4 className={`trip-details__itinerary-name ${isTransportItem ? 'trip-details__itinerary-name--transport' : ''}`}>{isTransportItem ? transportRoute : item.name}</h4>
+                                {(isTransportItem ? transportMeta : timeRange) ? (
+                                  <span className={`trip-details__itinerary-time ${isTransportItem ? 'trip-details__itinerary-time--transport' : ''}`}>
+                                    {isTransportItem ? transportMeta : timeRange}
+                                  </span>
+                                ) : null}
                               </div>
-                              <button
-                                type="button"
-                                className="trip-details__itinerary-edit-btn"
-                                aria-label="Edit"
-                                onClick={(e) => { e.stopPropagation(); isEditableItineraryItem(item) && setEditPlaceItem(item); }}
-                              >
-                                <FileText size={16} aria-hidden />
-                              </button>
+                              {!isTransportItem ? (
+                                <button
+                                  type="button"
+                                  className="trip-details__itinerary-edit-btn"
+                                  aria-label="Edit"
+                                  onClick={(e) => { e.stopPropagation(); isEditableItineraryItem(item) && setEditPlaceItem(item); }}
+                                >
+                                  <FileText size={16} aria-hidden />
+                                </button>
+                              ) : null}
                             </div>
                             {nextItem && travelToNext && (
                               <div className="trip-details__travel-segment-wrap">
@@ -2311,13 +2606,20 @@ export default function TripDetailsPage({ user, onLogout }) {
                                               setTransportModeBySegment((prev) => ({ ...prev, [segmentKey]: m.id }));
                                               setOpenTravelDropdownKey(null);
                                               if (m.id === 'public') {
-                                                setPublicTransportSegment({ fromName: item.name, toName: nextItem.name });
+                                                setPublicTransportSegment({ 
+                                                  fromName: item.name, 
+                                                  toName: nextItem.name,
+                                                  fromLat: item.lat,
+                                                  fromLng: item.lng,
+                                                  toLat: nextItem.lat,
+                                                  toLng: nextItem.lng
+                                                });
                                                 setPublicTransportModalOpen(true);
                                               }
                                             }}
                                           >
                                             <m.Icon size={18} aria-hidden />
-                                            <span>{m.id === 'public' ? `${m.label}` : `${m.label} · ${getTravelBetween(item, nextItem, m.id).duration}`}</span>
+                                            <span>{m.id === 'public' ? `${m.label}` : `${m.label} · ${getTravelBetween(item, nextItem, m.id, travelTimeCache, setTravelTimeCache).duration}`}</span>
                                             {mode === m.id && <Check size={18} className="trip-details__travel-check" aria-hidden />}
                                           </button>
                                         </li>
@@ -3189,52 +3491,126 @@ export default function TripDetailsPage({ user, onLogout }) {
             </div>
             <h2 id="public-transport-title" className="trip-details__public-transport-title">Public Transport Directions</h2>
             <p className="trip-details__public-transport-subtitle">See detailed MRT, bus, and train routes between places.</p>
-            <div className="trip-details__public-transport-route">
-              <div className="trip-details__public-transport-step">
-                <span className="trip-details__public-transport-dot" aria-hidden />
-                <div>
-                  <strong className="trip-details__public-transport-step-title">Departure location</strong>
-                  <p className="trip-details__public-transport-step-detail">{publicTransportSegment.fromName || 'Departure address'}</p>
+            
+            {publicTransportLoading && (
+              <div className="trip-details__public-transport-loading">
+                <p>Loading transit directions...</p>
+              </div>
+            )}
+            
+            {!publicTransportLoading && !publicTransportDirections && (
+              <div className="trip-details__public-transport-error">
+                <p>No public transport routes available for this journey.</p>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--wtg-text-muted)' }}>
+                  This could happen if the locations are too far apart, in different transit systems, or don't have direct public transport connections. Try using driving, walking, or cycling instead.
+                </p>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--wtg-text-muted)' }}>
+                  <em>Note: Check your browser console (F12) for technical details.</em>
+                </p>
+              </div>
+            )}
+            
+            {!publicTransportLoading && publicTransportDirections && (
+              <div className="trip-details__public-transport-route">
+                {/* Departure location */}
+                <div className="trip-details__public-transport-step">
+                  <span className="trip-details__public-transport-dot" aria-hidden />
+                  <div>
+                    <strong className="trip-details__public-transport-step-title">Departure location</strong>
+                    <p className="trip-details__public-transport-step-detail">{publicTransportSegment.fromName || 'Departure address'}</p>
+                  </div>
+                </div>
+                
+                {/* Render each step from directions */}
+                {publicTransportDirections.legs?.[0]?.steps?.map((step, stepIdx) => {
+                  const travelMode = step.travel_mode;
+                  const isTransit = travelMode === 'TRANSIT';
+                  const isWalking = travelMode === 'WALKING';
+                  const transitDetails = step.transit_details || step.transitDetails || step.transit || null;
+                  const distance = step.distance?.text || '';
+                  const duration = step.duration?.text || '';
+                  
+                  return (
+                    <div key={stepIdx}>
+                      <div className="trip-details__public-transport-connector" />
+                      
+                      {isWalking && (
+                        <div className="trip-details__public-transport-step trip-details__public-transport-step--walk">
+                          <Footprints size={18} aria-hidden />
+                          <span>Walk</span>
+                          <span className="trip-details__public-transport-step-meta">
+                            {duration} ({distance})
+                          </span>
+                        </div>
+                      )}
+                      
+                      {isTransit && transitDetails && (
+                        <>
+                          {/* Departure station */}
+                          <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
+                          <div className="trip-details__public-transport-step">
+                            <span className="trip-details__public-transport-dot trip-details__public-transport-dot--highlight" aria-hidden />
+                            <strong className="trip-details__public-transport-step-title">
+                              {transitDetails.departure_stop?.name || transitDetails.departureStop?.name || 'Station'}
+                            </strong>
+                          </div>
+                          
+                          {/* Transit leg */}
+                          <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
+                          <div className="trip-details__public-transport-step trip-details__public-transport-step--transit">
+                            {(() => {
+                              const vehicleType = (transitDetails.line?.vehicle?.type || '').toLowerCase();
+                              const TransitIcon = vehicleType.includes('bus') ? Bus : Train;
+                              return <TransitIcon size={18} aria-hidden />;
+                            })()}
+                            {transitDetails.line?.short_name && (
+                              <span 
+                                className="trip-details__public-transport-line"
+                                style={{
+                                  backgroundColor: transitDetails.line.color
+                                    ? (transitDetails.line.color.startsWith('#') ? transitDetails.line.color : `#${transitDetails.line.color}`)
+                                    : '#dc2626',
+                                  color: transitDetails.line.text_color
+                                    ? (transitDetails.line.text_color.startsWith('#') ? transitDetails.line.text_color : `#${transitDetails.line.text_color}`)
+                                    : '#ffffff'
+                                }}
+                              >
+                                {transitDetails.line.short_name}
+                              </span>
+                            )}
+                            <span>
+                              {transitDetails.line?.name || transitDetails.line?.vehicle?.name || 'Transit'}
+                            </span>
+                            <span className="trip-details__public-transport-step-meta">
+                              {duration} ({distance})
+                              {(transitDetails.num_stops || transitDetails.numStops) && ` • ${transitDetails.num_stops || transitDetails.numStops} stops`}
+                            </span>
+                          </div>
+                          
+                          {/* Arrival station */}
+                          <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
+                          <div className="trip-details__public-transport-step">
+                            <span className="trip-details__public-transport-dot" aria-hidden />
+                            <strong className="trip-details__public-transport-step-title">
+                              {transitDetails.arrival_stop?.name || transitDetails.arrivalStop?.name || 'Station'}
+                            </strong>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {/* Final connector and arrival location */}
+                <div className="trip-details__public-transport-step">
+                  <span className="trip-details__public-transport-dot" aria-hidden />
+                  <div>
+                    <strong className="trip-details__public-transport-step-title">Arrival location</strong>
+                    <p className="trip-details__public-transport-step-detail">{publicTransportSegment.toName || 'Arrival address'}</p>
+                  </div>
                 </div>
               </div>
-              <div className="trip-details__public-transport-connector" />
-              <div className="trip-details__public-transport-step trip-details__public-transport-step--walk">
-                <Footprints size={18} aria-hidden />
-                <span>Walk</span>
-                <span className="trip-details__public-transport-step-meta">About 06 min (450 m)</span>
-              </div>
-              <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
-              <div className="trip-details__public-transport-step">
-                <span className="trip-details__public-transport-dot trip-details__public-transport-dot--highlight" aria-hidden />
-                <strong className="trip-details__public-transport-step-title">Station A</strong>
-              </div>
-              <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
-              <div className="trip-details__public-transport-step trip-details__public-transport-step--transit">
-                <Train size={18} aria-hidden />
-                <span className="trip-details__public-transport-line">A</span>
-                <span>MRT lines name</span>
-                <span className="trip-details__public-transport-step-meta">19 min (2.3 km) (15 stops)</span>
-              </div>
-              <div className="trip-details__public-transport-connector trip-details__public-transport-connector--highlight" />
-              <div className="trip-details__public-transport-step">
-                <span className="trip-details__public-transport-dot" aria-hidden />
-                <strong className="trip-details__public-transport-step-title">Station B</strong>
-              </div>
-              <div className="trip-details__public-transport-connector" />
-              <div className="trip-details__public-transport-step trip-details__public-transport-step--walk">
-                <Footprints size={18} aria-hidden />
-                <span>Walk</span>
-                <span className="trip-details__public-transport-step-meta">About 05 min (400 m)</span>
-              </div>
-              <div className="trip-details__public-transport-connector" />
-              <div className="trip-details__public-transport-step">
-                <span className="trip-details__public-transport-dot" aria-hidden />
-                <div>
-                  <strong className="trip-details__public-transport-step-title">Arrival location</strong>
-                  <p className="trip-details__public-transport-step-detail">{publicTransportSegment.toName || 'Arrival address'}</p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </>
       )}
@@ -3388,14 +3764,33 @@ export default function TripDetailsPage({ user, onLogout }) {
                     <div className="trip-details__add-transport-results">
                       <p className="trip-details__add-transport-results-title">{flightSearchResults.length} result{flightSearchResults.length > 1 ? 's' : ''} found</p>
                       {flightSearchResults.map((flight) => {
-                        const deptTime = new Date(flight.departure_time);
-                        const arrTime = new Date(flight.arrival_time);
-                        const duration = Math.floor((arrTime - deptTime) / (1000 * 60 * 60));
-                        const durationMins = Math.floor(((arrTime - deptTime) / (1000 * 60)) % 60);
+                        // Times are already formatted as HH:MM from the mapping
+                        const depTimeStr = flight.departure_time || '--:--';
+                        const arrTimeStr = flight.arrival_time || '--:--';
+                        
+                        // Calculate display duration
+                        let durationText = '';
+                        if (flight.durationMinutes && flight.durationMinutes > 0) {
+                          const hours = Math.floor(flight.durationMinutes / 60);
+                          const mins = flight.durationMinutes % 60;
+                          durationText = `${hours}h ${mins}m`;
+                        }
+                        
+                        // Format status for display. If selected date is in the future,
+                        // treat provider "landed/arrived" as scheduled to avoid confusing UX.
+                        const rawStatus = String(flight.status || 'scheduled').toUpperCase();
+                        const now = new Date();
+                        const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                        const isFutureFlightDate = Boolean(flight.flight_date && flight.flight_date > todayYmd);
+                        const normalizedStatus = (isFutureFlightDate && (rawStatus === 'LANDED' || rawStatus === 'ARRIVED'))
+                          ? 'SCHEDULED'
+                          : rawStatus;
+                        const statusClass = normalizedStatus.toLowerCase();
+                        const statusText = normalizedStatus;
 
                         return (
-                          <div key={flight.id} className="trip-details__add-transport-result-card">
-                            <div className="trip-details__add-transport-result-header">
+                          <div key={flight.id} className="trip-details__add-transport-result-card trip-details__add-transport-result-card--compact">
+                            <div className="trip-details__add-transport-result-header trip-details__add-transport-result-header--compact">
                               <div className="trip-details__add-transport-result-airline">
                                 <Plane size={20} aria-hidden />
                                 <div>
@@ -3403,15 +3798,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <span className="trip-details__add-transport-result-code">{flight.flight_code}</span>
                                 </div>
                               </div>
-                              <span className={`trip-details__add-transport-result-status trip-details__add-transport-result-status--${flight.status}`}>
-                                {flight.status}
+                              <span className={`trip-details__add-transport-result-status trip-details__add-transport-result-status--${statusClass}`}>
+                                {statusText}
                               </span>
                             </div>
 
-                            <div className="trip-details__add-transport-result-route">
+                            <div className="trip-details__add-transport-result-route trip-details__add-transport-result-route--compact">
                               <div className="trip-details__add-transport-result-location">
                                 <strong className="trip-details__add-transport-result-time">
-                                  {deptTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                  {depTimeStr}
                                 </strong>
                                 <span className="trip-details__add-transport-result-airport">{flight.departure_airport}</span>
                                 <span className="trip-details__add-transport-result-city">{flight.departure_city}</span>
@@ -3425,52 +3820,53 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <Plane size={16} aria-hidden />
                                 </div>
                                 <span className="trip-details__add-transport-result-time-info">
-                                  {duration}h {durationMins}m
+                                  {durationText}
                                 </span>
                               </div>
 
                               <div className="trip-details__add-transport-result-location">
                                 <strong className="trip-details__add-transport-result-time">
-                                  {arrTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                  {arrTimeStr}
                                 </strong>
                                 <span className="trip-details__add-transport-result-airport">{flight.arrival_airport}</span>
                                 <span className="trip-details__add-transport-result-city">{flight.arrival_city}</span>
                               </div>
+
+                              <button
+                                type="button"
+                                className="trip-details__add-transport-result-add trip-details__add-transport-result-add--compact"
+                                onClick={() => {
+                                  const name = `${flight.departure_airport} → ${flight.arrival_airport} (${flight.flight_code})`;
+
+                                  appendTransportTripItem({
+                                    id: `flight-${flight.id}-${Date.now()}`,
+                                    name,
+                                    total: 0,
+                                    date: flight.flight_date,
+                                    detail: `${flight.airline} ${flight.flight_code} | Departs ${depTimeStr}, Arrives ${arrTimeStr}`,
+                                    startTime: depTimeStr || '',
+                                    durationHrs: Math.floor((flight.durationMinutes || 0) / 60),
+                                    durationMins: (flight.durationMinutes || 0) % 60,
+                                    Icon: Plane,
+                                    notes: `Terminal: ${flight.terminal}, Gate: ${flight.gate}${flight.aircraft ? `, Aircraft: ${flight.aircraft}` : ''}`,
+                                    transportType: 'flight',
+                                  });
+
+                                  setFlightSearchResults([]);
+                                  setFlightCode('');
+                                  setFlightDepartDate('');
+                                  setAddTransportOpen(false);
+                                }}
+                              >
+                                Add to trip
+                              </button>
                             </div>
 
-                            {flight.aircraft && (
-                              <div className="trip-details__add-transport-result-aircraft">
+                            {flight.aircraft && flight.aircraft !== 'N/A' ? (
+                              <div className="trip-details__add-transport-result-aircraft trip-details__add-transport-result-aircraft--compact">
                                 <span>Aircraft: {flight.aircraft}</span>
                               </div>
-                            )}
-
-                            <button
-                              type="button"
-                              className="trip-details__add-transport-result-add"
-                              onClick={() => {
-                                const name = `${flight.departure_airport} → ${flight.arrival_airport} (${flight.flight_code})`;
-                                const deptTimeStr = deptTime.toTimeString().slice(0, 5);
-                                const arrTimeStr = arrTime.toTimeString().slice(0, 5);
-
-                                appendTransportTripItem({
-                                  id: `flight-${flight.id}-${Date.now()}`,
-                                  name,
-                                  total: 0,
-                                  date: flight.flight_date,
-                                  detail: `${flight.airline} ${flight.flight_code} | Departs ${deptTimeStr}, Arrives ${arrTimeStr}`,
-                                  Icon: Plane,
-                                  notes: `Terminal: ${flight.terminal}, Gate: ${flight.gate}${flight.aircraft ? `, Aircraft: ${flight.aircraft}` : ''}`,
-                                  transportType: 'flight',
-                                });
-
-                                setFlightSearchResults([]);
-                                setFlightCode('');
-                                setFlightDepartDate('');
-                                setAddTransportOpen(false);
-                              }}
-                            >
-                              Add to trip
-                            </button>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -3480,159 +3876,127 @@ export default function TripDetailsPage({ user, onLogout }) {
               )}
               {(addTransportTab === 'Trains' || addTransportTab === 'Buses') && (
                 <>
-                  {addTransportTab === 'Trains' && (
-                    <>
-                      <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight" style={{ marginBottom: '12px' }}>
-                        <div className="trip-details__add-transport-field">
-                          <label className="trip-details__add-transport-label">Home country</label>
-                          <select className="trip-details__add-transport-input" value={transportHomeCountry} onChange={(e) => setTransportHomeCountry(e.target.value)}>
-                            {availableTransportCountries.map((countryName) => (
-                              <option key={countryName} value={countryName}>{countryName}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="trip-details__add-transport-field">
-                          <label className="trip-details__add-transport-label">Destination country</label>
-                          <input type="text" className="trip-details__add-transport-input" value={destinationCountry || 'Unknown'} readOnly />
-                        </div>
-                      </div>
-                      <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
-                        <div className="trip-details__add-transport-field">
-                          <label className="trip-details__add-transport-label">Train code</label>
-                          <input
-                            type="text"
-                            className="trip-details__add-transport-input"
-                            placeholder="e.g. KTX101, TGV12"
-                            value={trainCode}
-                            onChange={(e) => {
-                              setTrainCode(e.target.value);
-                              setTrainSearchError('');
-                              setTrainSearchResults([]);
-                            }}
-                          />
-                        </div>
-                        <div className="trip-details__add-transport-field">
-                          <label className="trip-details__add-transport-label">Depart date</label>
-                          <input
-                            type="date"
-                            className="trip-details__add-transport-input"
-                            value={trainDepartDate}
-                            onChange={(e) => {
-                              setTrainDepartDate(e.target.value);
-                              setTrainSearchError('');
-                              setTrainSearchResults([]);
-                            }}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          className="trip-details__add-transport-search"
-                          aria-label="Search train"
-                          onClick={searchTrains}
-                          disabled={trainSearchLoading}
-                        >
-                          <Search size={20} aria-hidden />
-                        </button>
-                      </div>
-
-                      {trainSearchLoading && (
-                        <div className="trip-details__add-transport-loading">
-                          <div className="trip-details__add-transport-spinner" />
-                          <p>Searching for trains...</p>
-                        </div>
-                      )}
-
-                      {trainSearchError && (
-                        <div className="trip-details__add-transport-error">
-                          <Info size={18} aria-hidden />
-                          <p>{trainSearchError}</p>
-                        </div>
-                      )}
-
-                      {trainSearchResults.length > 0 && (
-                        <div className="trip-details__add-transport-results">
-                          <p className="trip-details__add-transport-results-title">{trainSearchResults.length} result{trainSearchResults.length > 1 ? 's' : ''} found</p>
-                          {trainSearchResults.map((train) => {
-                            const depTime = new Date(train.departure_time);
-                            const arrTime = new Date(train.arrival_time);
-                            const duration = Math.floor((arrTime - depTime) / (1000 * 60 * 60));
-                            const durationMins = Math.floor(((arrTime - depTime) / (1000 * 60)) % 60);
-                            return (
-                              <div key={train.id} className="trip-details__add-transport-result-card">
-                                <div className="trip-details__add-transport-result-header">
-                                  <div className="trip-details__add-transport-result-airline">
-                                    <Train size={20} aria-hidden />
-                                    <div>
-                                      <strong>{train.operator}</strong>
-                                      <span className="trip-details__add-transport-result-code">{train.train_code}</span>
-                                    </div>
-                                  </div>
-                                  <span className="trip-details__add-transport-result-status">{train.status}</span>
-                                </div>
-                                <div className="trip-details__add-transport-result-route">
-                                  <div className="trip-details__add-transport-result-location">
-                                    <strong className="trip-details__add-transport-result-time">{depTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
-                                    <span className="trip-details__add-transport-result-city">{train.departure_city}</span>
-                                  </div>
-                                  <div className="trip-details__add-transport-result-duration">
-                                    <div className="trip-details__add-transport-result-line"><Train size={16} aria-hidden /></div>
-                                    <span className="trip-details__add-transport-result-time-info">{duration}h {durationMins}m</span>
-                                  </div>
-                                  <div className="trip-details__add-transport-result-location">
-                                    <strong className="trip-details__add-transport-result-time">{arrTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
-                                    <span className="trip-details__add-transport-result-city">{train.arrival_city}</span>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="trip-details__add-transport-result-add"
-                                  onClick={() => {
-                                    appendTransportTripItem({
-                                      id: `train-${train.id}-${Date.now()}`,
-                                      name: `Train: ${train.departure_city} → ${train.arrival_city} (${train.train_code})`,
-                                      total: 0,
-                                      date: train.train_date,
-                                      detail: `${train.operator} ${train.train_code}`,
-                                      Icon: Train,
-                                      notes: '',
-                                      transportType: 'train',
-                                    });
-                                    setTrainSearchResults([]);
-                                    setTrainCode('');
-                                    setTrainDepartDate('');
-                                    setAddTransportOpen(false);
-                                  }}
-                                >
-                                  Add to trip
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  )}
                   <p className="trip-details__add-transport-hint">Add your {addTransportTab.toLowerCase()} reservations below.</p>
                   <div className="trip-details__add-transport-fields trip-details__add-transport-fields--flight">
                     <div className="trip-details__add-transport-field">
                       <label className="trip-details__add-transport-label">From</label>
-                      <input
-                        type="text"
-                        className="trip-details__add-transport-input"
-                        placeholder="Departure station / terminal"
-                        value={surfaceFrom}
-                        onChange={(e) => setSurfaceFrom(e.target.value)}
-                      />
+                      <div className="trip-details__custom-transport-autofill-wrap">
+                        <input
+                          type="text"
+                          className="trip-details__add-transport-input"
+                          placeholder="City, station, or terminal"
+                          value={surfaceFrom}
+                          onChange={(e) => { 
+                            const value = e.target.value;
+                            setSurfaceFrom(value); 
+                            setSurfaceFromSuggestionsOpen(true);
+                            fetchPlacesPredictions(value, setSurfaceFromPredictions);
+                          }}
+                          onFocus={() => setSurfaceFromSuggestionsOpen(true)}
+                          onBlur={() => setTimeout(() => setSurfaceFromSuggestionsOpen(false), 200)}
+                        />
+                        {surfaceFromSuggestionsOpen && surfaceFrom.trim() && (
+                          <ul className="trip-details__custom-transport-suggestions">
+                            {surfaceFromPredictions.length > 0 ? (
+                              surfaceFromPredictions.map((prediction) => (
+                                <li key={prediction.place_id}>
+                                  <button
+                                    type="button"
+                                    className="trip-details__custom-transport-suggestion-item"
+                                    onMouseDown={() => {
+                                      setSurfaceFrom(prediction.description);
+                                      setSurfaceFromSuggestionsOpen(false);
+                                      setSurfaceFromPredictions([]);
+                                    }}
+                                  >
+                                    <MapPin size={16} aria-hidden />
+                                    <div className="trip-details__custom-transport-suggestion-text">
+                                      <span className="trip-details__custom-transport-suggestion-name">{prediction.structured_formatting?.main_text || prediction.description}</span>
+                                      <span className="trip-details__custom-transport-suggestion-type">{prediction.structured_formatting?.secondary_text || 'Location'}</span>
+                                    </div>
+                                  </button>
+                                </li>
+                              ))
+                            ) : (
+                              <li>
+                                <button
+                                  type="button"
+                                  className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                  onMouseDown={() => {
+                                    setSurfaceFromSuggestionsOpen(false);
+                                  }}
+                                >
+                                  <MapPin size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{surfaceFrom}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                  </div>
+                                </button>
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
                     </div>
                     <div className="trip-details__add-transport-field">
                       <label className="trip-details__add-transport-label">To</label>
-                      <input
-                        type="text"
-                        className="trip-details__add-transport-input"
-                        placeholder="Arrival station / terminal"
-                        value={surfaceTo}
-                        onChange={(e) => setSurfaceTo(e.target.value)}
-                      />
+                      <div className="trip-details__custom-transport-autofill-wrap">
+                        <input
+                          type="text"
+                          className="trip-details__add-transport-input"
+                          placeholder="City, station, or terminal"
+                          value={surfaceTo}
+                          onChange={(e) => { 
+                            const value = e.target.value;
+                            setSurfaceTo(value); 
+                            setSurfaceToSuggestionsOpen(true);
+                            fetchPlacesPredictions(value, setSurfaceToPredictions);
+                          }}
+                          onFocus={() => setSurfaceToSuggestionsOpen(true)}
+                          onBlur={() => setTimeout(() => setSurfaceToSuggestionsOpen(false), 200)}
+                        />
+                        {surfaceToSuggestionsOpen && surfaceTo.trim() && (
+                          <ul className="trip-details__custom-transport-suggestions">
+                            {surfaceToPredictions.length > 0 ? (
+                              surfaceToPredictions.map((prediction) => (
+                                <li key={prediction.place_id}>
+                                  <button
+                                    type="button"
+                                    className="trip-details__custom-transport-suggestion-item"
+                                    onMouseDown={() => {
+                                      setSurfaceTo(prediction.description);
+                                      setSurfaceToSuggestionsOpen(false);
+                                      setSurfaceToPredictions([]);
+                                    }}
+                                  >
+                                    <MapPin size={16} aria-hidden />
+                                    <div className="trip-details__custom-transport-suggestion-text">
+                                      <span className="trip-details__custom-transport-suggestion-name">{prediction.structured_formatting?.main_text || prediction.description}</span>
+                                      <span className="trip-details__custom-transport-suggestion-type">{prediction.structured_formatting?.secondary_text || 'Location'}</span>
+                                    </div>
+                                  </button>
+                                </li>
+                              ))
+                            ) : (
+                              <li>
+                                <button
+                                  type="button"
+                                  className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom"
+                                  onMouseDown={() => {
+                                    setSurfaceToSuggestionsOpen(false);
+                                  }}
+                                >
+                                  <MapPin size={16} aria-hidden />
+                                  <div className="trip-details__custom-transport-suggestion-text">
+                                    <span className="trip-details__custom-transport-suggestion-name">{surfaceTo}</span>
+                                    <span className="trip-details__custom-transport-suggestion-type">Custom location</span>
+                                  </div>
+                                </button>
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
                     </div>
                     <div className="trip-details__add-transport-field">
                       <label className="trip-details__add-transport-label">Date</label>
@@ -3650,6 +4014,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                         className="trip-details__add-transport-input"
                         value={surfaceTime}
                         onChange={(e) => setSurfaceTime(e.target.value)}
+                      />
+                    </div>
+                    <div className="trip-details__add-transport-field">
+                      <label className="trip-details__add-transport-label">Arrival time</label>
+                      <input
+                        type="time"
+                        className="trip-details__add-transport-input"
+                        value={surfaceArrivalTime}
+                        onChange={(e) => setSurfaceArrivalTime(e.target.value)}
                       />
                     </div>
                     <div className="trip-details__add-transport-field">
@@ -3698,7 +4071,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                           id: `${modeLabel.toLowerCase()}-${Date.now()}`,
                           name: `${modeLabel}: ${surfaceFrom} → ${surfaceTo}`,
                           date: surfaceDate || days.find((d) => d.dayNum === addTransportDay)?.date || days[0]?.date,
-                          detail: `${surfaceOperator || modeLabel}${surfaceNumber ? ` ${surfaceNumber}` : ''} · ${surfaceTime}`,
+                          detail: `${surfaceOperator || modeLabel}${surfaceNumber ? ` ${surfaceNumber}` : ''} · Dep ${surfaceTime} - Arr ${surfaceArrivalTime}`,
+                          startTime: surfaceTime || '',
                           notes: '',
                           total: Number(surfaceCost || 0),
                           Icon,
@@ -3707,8 +4081,11 @@ export default function TripDetailsPage({ user, onLogout }) {
 
                         setSurfaceFrom('');
                         setSurfaceTo('');
+                        setSurfaceFromSuggestionsOpen(false);
+                        setSurfaceToSuggestionsOpen(false);
                         setSurfaceDate('');
                         setSurfaceTime('08:00');
+                        setSurfaceArrivalTime('18:00');
                         setSurfaceOperator('');
                         setSurfaceNumber('');
                         setSurfaceCost('');
@@ -3720,9 +4097,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                   </div>
                 </>
               )}
-              <p className="trip-details__add-transport-manual">
-                Can&apos;t find what you need? <button type="button" className="trip-details__add-transport-manual-link" onClick={() => { setAddTransportOpen(false); setAddCustomTransportOpen(true); }}>Add manually</button>
-              </p>
+              {addTransportTab === 'Flights' && (
+                <p className="trip-details__add-transport-manual">
+                  Can&apos;t find what you need? <button type="button" className="trip-details__add-transport-manual-link" onClick={() => { setAddTransportOpen(false); setAddCustomTransportOpen(true); }}>Add manually</button>
+                </p>
+              )}
             </div>
           </div>
         </>
