@@ -1,0 +1,85 @@
+.trip-header-container {
+  position: fixed;
+  top: 70px;
+  left: 0;
+  width: 100%;
+  padding: 1.5rem 2rem;
+  background: #fff;
+  border-bottom: 2px solid #eee;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+  border-radius: 0;
+  z-index: 999;
+  margin-bottom: 0;
+}
+
+body > #root {
+  padding-top: 180px;
+}
+
+.trip-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0 30px 30px 30px;
+  border-bottom: 2px solid #eee;
+}
+
+.trip-info h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.trip-meta {
+  color: #666;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-assistant {
+  background: #FF6B6B;
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ai-assistant:hover {
+  opacity: 0.85;
+}
+
+.trip-tabs {
+  margin-top: 1.5rem;
+  margin-left: 4rem;
+  display: flex;
+  gap: 2.5rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative;
+  color: #666;
+}
+
+.tab.active {
+  border-bottom: px solid #FF6B6B;
+  color: #000;
+}
+
+.tab:hover {
+  opacity: 0.8;
+}
