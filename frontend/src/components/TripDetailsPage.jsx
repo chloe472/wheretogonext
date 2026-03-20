@@ -6,8 +6,8 @@ import {
   Trash2,
   GripVertical,
   MoreVertical,
-  MapPin,
   Plus,
+  MapPin,
   ZoomIn,
   Filter,
   Info,
@@ -166,7 +166,16 @@ function getCategoryStyle(item) {
 
 function isEditableItineraryItem(item) {
   const raw = String(item?.categoryId || item?.category || '').toLowerCase();
-  return raw === 'places' || raw === 'place' || raw === 'food' || raw === 'food & beverage';
+  return raw === 'places'
+    || raw === 'place'
+    || raw === 'food'
+    || raw === 'food & beverage'
+    || raw === 'stays'
+    || raw === 'stay'
+    || raw === 'experiences'
+    || raw === 'experience'
+    || raw === 'transportations'
+    || raw === 'transportation';
 }
 
 function parseFoodHours(value) {
@@ -245,12 +254,61 @@ function formatDurationMinutes(totalMins) {
   return m > 0 ? `${h} hr ${String(m).padStart(2, '0')} min` : `${h} hr`;
 }
 
-const CALENDAR_START_HOUR = 6;
-const CALENDAR_HOURS = 12;
+const CALENDAR_START_HOUR = 0;
+const CALENDAR_HOURS = 24;
 const CALENDAR_ROW_HEIGHT = 48;
-const DAY_COLUMN_DEFAULT_WIDTH = 240;
+const CALENDAR_ALL_DAY_HEIGHT = 28;
+const CALENDAR_GUTTER_WIDTH = 52;
+const CALENDAR_DRAG_SNAP_MINS = 30;
+const DAY_COLUMN_DEFAULT_WIDTH = 280;
+const CALENDAR_DAY_COLUMN_DEFAULT_WIDTH = 240;
 const DAY_COLUMN_MIN_WIDTH = 220;
 const DAY_COLUMN_MAX_WIDTH = 720;
+
+function createAttachmentFromFile(file) {
+  return {
+    name: file.name,
+    type: file.type || '',
+    url: URL.createObjectURL(file),
+  };
+}
+
+function normalizeAttachment(att) {
+  if (!att) return null;
+  if (typeof att === 'string') return { name: att, type: '', url: '' };
+  return {
+    name: att.name || 'Attachment',
+    type: att.type || '',
+    url: att.url || '',
+  };
+}
+
+function normalizeExternalUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//')) return `https:${raw}`;
+  if (/\s/.test(raw)) return '';
+  return `https://${raw}`;
+}
+
+function getItemViewDetailsUrl(item, city = '') {
+  const direct = normalizeExternalUrl(item?.externalLink || item?.website || item?.mapsUrl || '');
+  if (direct) return direct;
+  const query = `${item?.name || ''} ${item?.detail || item?.address || city || ''}`.trim();
+  if (!query) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function itemSpillsIntoNextDay(item) {
+  if (!item?.startTime || !item?.date) return false;
+  const raw = String(item.categoryId || item.category || '').toLowerCase();
+  const isStay = raw === 'stays' || raw === 'stay';
+  if (!isStay) return false;
+  const start = timeToMinutes(item.startTime);
+  const duration = (Number(item.durationHrs || 0) * 60) + Number(item.durationMins || 0);
+  return duration > 0 && (start + duration) >= 1440;
+}
 
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
@@ -260,9 +318,123 @@ function timeToMinutes(timeStr) {
 function getCalendarEventPosition(item) {
   const startMins = timeToMinutes(item.startTime);
   const startHour = startMins / 60;
-  const topPx = Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT);
-  const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, durationHrs * CALENDAR_ROW_HEIGHT);
+  const durationHrs = Number(item.durationHrs ?? 0);
+  const durationMins = Number(item.durationMins ?? 0);
+  const durationRows = Math.max(0.5, (durationHrs * 60 + durationMins) / 60);
+  const topPx = CALENDAR_ALL_DAY_HEIGHT + Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT);
+  const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, durationRows * CALENDAR_ROW_HEIGHT);
   return { top: topPx, height: heightPx };
+}
+
+function rangesOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function getCalendarEventLayouts(items, dayDate) {
+  const dayItems = getSortedDayItems(items, dayDate);
+  if (dayItems.length === 0) return [];
+
+  const normalized = dayItems.map((item) => {
+    const start = timeToMinutes(item.startTime || `${String(CALENDAR_START_HOUR).padStart(2, '0')}:00`);
+    const mins = Math.max(30, (Number(item.durationHrs ?? 0) * 60) + Number(item.durationMins ?? 0));
+    return {
+      item,
+      start,
+      end: start + mins,
+    };
+  }).sort((a, b) => (a.start - b.start) || (a.end - b.end));
+
+  const groups = [];
+  let currentGroup = [];
+  let currentGroupEnd = -1;
+
+  normalized.forEach((event) => {
+    if (currentGroup.length === 0 || event.start < currentGroupEnd) {
+      currentGroup.push(event);
+      currentGroupEnd = Math.max(currentGroupEnd, event.end);
+      return;
+    }
+    groups.push(currentGroup);
+    currentGroup = [event];
+    currentGroupEnd = event.end;
+  });
+
+  if (currentGroup.length > 0) groups.push(currentGroup);
+
+  const laidOut = [];
+
+  groups.forEach((group) => {
+    const active = [];
+    const placed = [];
+    let maxCols = 1;
+
+    group.forEach((event) => {
+      for (let i = active.length - 1; i >= 0; i--) {
+        if (active[i].end <= event.start) active.splice(i, 1);
+      }
+
+      let col = 0;
+      while (active.some((a) => a.col === col)) col += 1;
+      active.push({ end: event.end, col });
+
+      maxCols = Math.max(maxCols, col + 1);
+      placed.push({ ...event, col });
+    });
+
+    placed.forEach((event) => {
+      let span = 1;
+      while (event.col + span < maxCols) {
+        const blocked = placed.some((other) => (
+          other !== event
+          && other.col === event.col + span
+          && rangesOverlap(event.start, event.end, other.start, other.end)
+        ));
+        if (blocked) break;
+        span += 1;
+      }
+
+      const widthPercent = (span / maxCols) * 100;
+      const leftPercent = (event.col / maxCols) * 100;
+      laidOut.push({
+        item: event.item,
+        style: {
+          left: `calc(${leftPercent}% + 4px)`,
+          width: `calc(${widthPercent}% - 8px)`,
+        },
+      });
+    });
+  });
+
+  return laidOut;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function minutesToHHmm(totalMinutes) {
+  const mins = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function durationMinutesToParts(totalMinutes) {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  return {
+    durationHrs: Math.floor(safe / 60),
+    durationMins: safe % 60,
+  };
+}
+
+function getCalendarDropStartTime(clientY, containerRect) {
+  const y = clientY - containerRect.top;
+  const timelineY = Math.max(0, y - CALENDAR_ALL_DAY_HEIGHT);
+  const minsFromStart = Math.round((timelineY / CALENDAR_ROW_HEIGHT) * 60);
+  const snapped = Math.round(minsFromStart / CALENDAR_DRAG_SNAP_MINS) * CALENDAR_DRAG_SNAP_MINS;
+  const maxMinutes = (CALENDAR_START_HOUR + CALENDAR_HOURS) * 60 - CALENDAR_DRAG_SNAP_MINS;
+  const absoluteMinutes = clamp((CALENDAR_START_HOUR * 60) + snapped, CALENDAR_START_HOUR * 60, maxMinutes);
+  return minutesToHHmm(absoluteMinutes);
 }
 
 function distanceBetween(a, b) {
@@ -321,8 +493,13 @@ const TRAVEL_MODES = [
   { id: 'public', label: 'Public Transport', Icon: Train },
 ];
 
-function getSortedDayItems(items, dayDate) {
-  const dayItems = (items || []).filter((it) => it.date === dayDate);
+function getSortedDayItems(items, dayDate, options = {}) {
+  const includeOvernightStays = Boolean(options?.includeOvernightStays);
+  const dayItems = (items || []).filter((it) => {
+    if (it.date === dayDate) return true;
+    if (!includeOvernightStays) return false;
+    return itemSpillsIntoNextDay(it) && addDays(it.date, 1) === dayDate;
+  });
   return [...dayItems].sort((a, b) => {
     const tA = a.startTime || '00:00';
     const tB = b.startTime || '00:00';
@@ -922,8 +1099,8 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [addToTripItem, setAddToTripItem] = useState(null);
   const [addToTripDate, setAddToTripDate] = useState('');
   const [addToTripStartTime, setAddToTripStartTime] = useState('07:00');
-  const [addToTripDurationHrs, setAddToTripDurationHrs] = useState(1);
-  const [addToTripDurationMins, setAddToTripDurationMins] = useState(0);
+  const [addToTripDurationHrs, setAddToTripDurationHrs] = useState('1');
+  const [addToTripDurationMins, setAddToTripDurationMins] = useState('0');
   const [addToTripNotes, setAddToTripNotes] = useState('');
   const [addToTripCost, setAddToTripCost] = useState('');
   const [addToTripExternalLink, setAddToTripExternalLink] = useState('');
@@ -1050,11 +1227,18 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [generalAttachments, setGeneralAttachments] = useState([]);
   const [notesActiveTab, setNotesActiveTab] = useState('general');
   const [editPlaceItem, setEditPlaceItem] = useState(null);
+  const [pendingDeleteItemId, setPendingDeleteItemId] = useState(null);
   const [whereModalOpen, setWhereModalOpen] = useState(false);
   const [whereQuery, setWhereQuery] = useState('');
   const [whereSuggestionsOpen, setWhereSuggestionsOpen] = useState(false);
   const [whereSelectedLocations, setWhereSelectedLocations] = useState([]);
+  const [calendarScrollLeft, setCalendarScrollLeft] = useState(0);
+  const [calendarDraggingItemId, setCalendarDraggingItemId] = useState(null);
+  const [calendarResizingItemId, setCalendarResizingItemId] = useState(null);
+  const [calendarDragOverDayNum, setCalendarDragOverDayNum] = useState(null);
   const whereModalRef = useRef(null);
+  const calendarTimelineRef = useRef(null);
+  const calendarResizeSessionRef = useRef(null);
   const hydratedTripItemsForIdRef = useRef(null);
   const titleDropdownRef = useRef(null);
   const titleLastClickRef = useRef(0);
@@ -1088,6 +1272,88 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryError, setDiscoveryError] = useState('');
   const dayResizeSessionRef = useRef(null);
+
+  const handleCalendarDragStart = (e, itemId) => {
+    setCalendarDraggingItemId(itemId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(itemId));
+  };
+
+  const handleCalendarDragEnd = () => {
+    setCalendarDraggingItemId(null);
+    setCalendarDragOverDayNum(null);
+  };
+
+  const handleCalendarDayDragOver = (e, dayNum) => {
+    if (!calendarDraggingItemId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setCalendarDragOverDayNum(dayNum);
+  };
+
+  const handleCalendarDayDrop = (e, day) => {
+    const dragId = calendarDraggingItemId || e.dataTransfer.getData('text/plain');
+    if (!dragId) return;
+
+    e.preventDefault();
+    const startTime = getCalendarDropStartTime(e.clientY, e.currentTarget.getBoundingClientRect());
+    setTripExpenseItems((prev) => prev.map((it) => (
+      String(it.id) === String(dragId)
+        ? { ...it, date: day.date, startTime }
+        : it
+    )));
+
+    setCalendarDraggingItemId(null);
+    setCalendarDragOverDayNum(null);
+  };
+
+  const handleCalendarResizeStart = (e, item) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startDuration = Math.max(
+      CALENDAR_DRAG_SNAP_MINS,
+      (Number(item.durationHrs ?? 0) * 60) + Number(item.durationMins ?? 0),
+    );
+    calendarResizeSessionRef.current = {
+      itemId: item.id,
+      startClientY: e.clientY,
+      startDuration,
+      startMinutes: timeToMinutes(item.startTime || '00:00'),
+    };
+    setCalendarResizingItemId(item.id);
+
+    const onMouseMove = (moveEvent) => {
+      const session = calendarResizeSessionRef.current;
+      if (!session) return;
+      const deltaRaw = ((moveEvent.clientY - session.startClientY) / CALENDAR_ROW_HEIGHT) * 60;
+      const snappedDelta = Math.round(deltaRaw / CALENDAR_DRAG_SNAP_MINS) * CALENDAR_DRAG_SNAP_MINS;
+      const maxDuration = Math.max(
+        CALENDAR_DRAG_SNAP_MINS,
+        (24 * 60) - session.startMinutes,
+      );
+      const nextDuration = clamp(
+        session.startDuration + snappedDelta,
+        CALENDAR_DRAG_SNAP_MINS,
+        maxDuration,
+      );
+      const { durationHrs, durationMins } = durationMinutesToParts(nextDuration);
+      setTripExpenseItems((prev) => prev.map((it) => (
+        String(it.id) === String(session.itemId)
+          ? { ...it, durationHrs, durationMins }
+          : it
+      )));
+    };
+
+    const onMouseUp = () => {
+      calendarResizeSessionRef.current = null;
+      setCalendarResizingItemId(null);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   useEffect(() => {
     if (!whereModalOpen) return;
@@ -2189,32 +2455,46 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const appendItemToTrip = ({ itemType, data, categoryId, category, Icon, values }) => {
     const costNum = parseFloat(values?.cost) || 0;
+    const durationHrsNum = Number(values?.durationHrs || 0);
+    const durationMinsNum = Number(values?.durationMins || 0);
+    const startTime = values?.startTime || '07:00';
+    const stayCrossesMidnight = String(categoryId || '').toLowerCase() === 'stays'
+      && (timeToMinutes(startTime) + (durationHrsNum * 60) + durationMinsNum) >= 1440;
+    const resolvedDate = stayCrossesMidnight ? addDays(values?.date, 1) : values?.date;
+
     const docs = Array.isArray(values?.travelDocs)
-      ? values.travelDocs.map((file, idx) => ({
-        id: `${data.id || data.name || 'doc'}-${idx}-${Date.now()}`,
-        name: file?.name || `Document ${idx + 1}`,
-        size: file?.size || 0,
-        type: file?.type || '',
-      }))
+      ? values.travelDocs
+        .map((file, idx) => {
+          const normalized = normalizeAttachment(file) || createAttachmentFromFile(file);
+          if (!normalized) return null;
+          return {
+            id: `${data.id || data.name || 'doc'}-${idx}-${Date.now()}`,
+            name: normalized.name || `Document ${idx + 1}`,
+            type: normalized.type || '',
+            url: normalized.url || '',
+          };
+        })
+        .filter(Boolean)
       : [];
 
     setTripExpenseItems((prev) => [...prev, {
       id: `${itemType}-${data.id}-${Date.now()}`,
+      sourcePlaceId: data.id || null,
       name: data.name,
       total: costNum,
       categoryId,
       category,
-      date: values?.date,
+      date: resolvedDate,
       detail: data.address || data.name,
       Icon,
       lat: data.lat,
       lng: data.lng,
       notes: values?.note || '',
       attachments: docs,
-      startTime: values?.startTime || '07:00',
-      durationHrs: Number(values?.durationHrs || 0),
-      durationMins: Number(values?.durationMins || 0),
-      externalLink: values?.externalLink || data.website || '',
+      startTime,
+      durationHrs: durationHrsNum,
+      durationMins: durationMinsNum,
+      externalLink: normalizeExternalUrl(values?.externalLink || data.website || ''),
       placeImageUrl: resolveImageUrl(
         data.image,
         data.name,
@@ -2262,8 +2542,8 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripItem({ type, data, categoryId, category, Icon });
     setAddToTripDate(day?.date || days[0]?.date || '');
     setAddToTripStartTime('07:00');
-    setAddToTripDurationHrs(1);
-    setAddToTripDurationMins(0);
+    setAddToTripDurationHrs('1');
+    setAddToTripDurationMins('0');
     setAddToTripNotes('');
     setAddToTripCost('');
     setAddToTripExternalLink(data.website || '');
@@ -2291,13 +2571,112 @@ export default function TripDetailsPage({ user, onLogout }) {
     });
     setAddToTripDate(day?.date || days[0]?.date || '');
     setAddToTripStartTime('15:00');
-    setAddToTripDurationHrs(12);
-    setAddToTripDurationMins(0);
+    setAddToTripDurationHrs('12');
+    setAddToTripDurationMins('0');
     setAddToTripNotes(`Stay booking${roomLabel}`.trim());
     setAddToTripCost(defaultCost > 0 ? String(defaultCost) : '');
     setAddToTripExternalLink(bookingLink);
     setAddToTripTravelDocs([]);
     setAddToTripModalOpen(true);
+  };
+
+  const canOpenInternalItemOverview = (item) => {
+    const raw = String(item?.categoryId || item?.category || '').toLowerCase();
+    return raw === 'places'
+      || raw === 'place'
+      || raw === 'food'
+      || raw === 'food & beverage'
+      || raw === 'stays'
+      || raw === 'stay'
+      || raw === 'experiences'
+      || raw === 'experience';
+  };
+
+  const openInternalItemOverview = (item) => {
+    if (!item) return;
+    const raw = String(item.categoryId || item.category || '').toLowerCase();
+
+    setAddPlacesOpen(false);
+    setAddFoodOpen(false);
+    setAddStaysOpen(false);
+    setAddExperiencesOpen(false);
+    setPlaceDetailsView(null);
+    setFoodDetailsView(null);
+    setStayDetailsView(null);
+    setExperienceDetailsView(null);
+
+    if (raw === 'food' || raw === 'food & beverage') {
+      setFoodDetailsTab('overview');
+      setFoodDetailsView(enrichFoodDetails(item, cityQuery));
+      setAddFoodOpen(true);
+      setEditPlaceItem(null);
+      return;
+    }
+
+    if (raw === 'stays' || raw === 'stay') {
+      setStayDetailsTab('overview');
+      setStayDetailsView(item);
+      setAddStaysOpen(true);
+      setEditPlaceItem(null);
+      return;
+    }
+
+    if (raw === 'experiences' || raw === 'experience') {
+      setExperienceDetailsTab('overview');
+      setExperienceDetailsView(item);
+      setAddExperiencesOpen(true);
+      setEditPlaceItem(null);
+      return;
+    }
+
+    const normalizeText = (value) => String(value || '').trim().toLowerCase();
+    const sourcePlaces = Array.isArray(discoveryData?.places) ? discoveryData.places : [];
+    const byId = sourcePlaces.find((p) => String(p?.id || '') === String(item?.sourcePlaceId || item?.id || ''))
+      || filteredPlaces.find((p) => String(p?.id || '') === String(item?.sourcePlaceId || item?.id || ''));
+
+    const byNameAndAddress = !byId
+      ? (sourcePlaces.find((p) => (
+        normalizeText(p?.name) === normalizeText(item?.name)
+        && normalizeText(p?.address || '').includes(normalizeText(item?.detail || item?.address || ''))
+      )) || filteredPlaces.find((p) => (
+        normalizeText(p?.name) === normalizeText(item?.name)
+        && normalizeText(p?.address || '').includes(normalizeText(item?.detail || item?.address || ''))
+      )))
+      : null;
+
+    const byCoords = (!byId && !byNameAndAddress && item?.lat != null && item?.lng != null)
+      ? (sourcePlaces.find((p) => Number(p?.lat).toFixed(4) === Number(item.lat).toFixed(4) && Number(p?.lng).toFixed(4) === Number(item.lng).toFixed(4))
+        || filteredPlaces.find((p) => Number(p?.lat).toFixed(4) === Number(item.lat).toFixed(4) && Number(p?.lng).toFixed(4) === Number(item.lng).toFixed(4)))
+      : null;
+
+    const canonical = byId || byNameAndAddress || byCoords || null;
+    const detailItem = canonical
+      ? {
+        ...item,
+        ...canonical,
+        id: canonical.id || item.id,
+        name: canonical.name || item.name,
+        image: canonical.image || item.image || item.placeImageUrl,
+        images: Array.isArray(canonical.images) && canonical.images.length > 0
+          ? canonical.images
+          : (item.image || item.placeImageUrl ? [item.image || item.placeImageUrl] : []),
+        address: canonical.address || item.address || item.detail,
+        website: canonical.website || item.website || item.externalLink || '',
+        lat: canonical.lat ?? item.lat,
+        lng: canonical.lng ?? item.lng,
+      }
+      : {
+        ...item,
+        image: item.image || item.placeImageUrl,
+        images: item.image || item.placeImageUrl ? [item.image || item.placeImageUrl] : [],
+        address: item.address || item.detail,
+      };
+
+    setPlaceDetailsTab('overview');
+    setSelectedPlaceMarkerId(detailItem.id || null);
+    setPlaceDetailsView(detailItem);
+    setAddPlacesOpen(true);
+    setEditPlaceItem(null);
   };
 
   const openAddPlacesDetailsFromMapMarker = (marker) => {
@@ -2413,6 +2792,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       existingKeys.add(dedupeKey);
       toAppend.push({
         id: `place-${place?.id || idx}-${Date.now()}-${idx}`,
+        sourcePlaceId: place?.id || null,
         name: place?.name || `Place ${idx + 1}`,
         total: 0,
         categoryId: 'places',
@@ -2590,9 +2970,6 @@ export default function TripDetailsPage({ user, onLogout }) {
           >
             <BookOpen size={18} aria-hidden />
           </button>
-          <button type="button" className="trip-details__icon-btn" aria-label="View as list">
-            <MapPin size={18} aria-hidden />
-          </button>
         </div>
 
         <div className="trip-details__actions">
@@ -2632,7 +3009,8 @@ export default function TripDetailsPage({ user, onLogout }) {
           <div className="trip-details__columns">
             <div className="trip-details__columns-scroll">
               {visibleDays.map((day) => {
-                const dayItemsCount = getSortedDayItems(tripExpenseItems, day.date).length;
+                const boardDayItems = getSortedDayItems(tripExpenseItems, day.date, { includeOvernightStays: true });
+                const dayItemsCount = boardDayItems.length;
                 const totalMins = getDayTotalDurationMinutes(tripExpenseItems, day.date);
                 const durationStr = formatDurationMinutes(totalMins || 60);
                 const isDayMenuOpen = openDayMenuKey === day.dayNum;
@@ -2785,7 +3163,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       onChange={(e) => setDayTitle(day.dayNum, e.target.value)}
                     />
                     <div className="trip-details__day-content">
-                      {getSortedDayItems(tripExpenseItems, day.date).map((item, idx) => {
+                      {boardDayItems.map((item, idx) => {
                         const style = getCategoryStyle(item);
                         const IconComponent = item.Icon || Camera;
                         const timeRange = formatTimeRange(item);
@@ -2810,7 +3188,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const mode = transportModeBySegment[segmentKey] || 'driving';
                         const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
                         const TravelSegmentIcon = travelModeInfo.Icon;
-                        const nextItem = getSortedDayItems(tripExpenseItems, day.date)[idx + 1];
+                        const nextItem = boardDayItems[idx + 1];
                         const travelToNext = nextItem ? getTravelBetween(item, nextItem, mode, travelTimeCache, setTravelTimeCache) : null;
                         const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
                         return (
@@ -2870,7 +3248,29 @@ export default function TripDetailsPage({ user, onLogout }) {
                                     ) : null}
                                     {itemAttachments.length > 0 ? (
                                       <p className="trip-details__itinerary-meta-line">
-                                        <strong>Docs:</strong> {itemAttachments.map((doc) => doc?.name || 'Attachment').join(', ')}
+                                        <strong>Docs:</strong>{' '}
+                                        {itemAttachments.map((doc, docIdx) => {
+                                          const attachment = normalizeAttachment(doc);
+                                          if (!attachment) return null;
+                                          return (
+                                            <span key={`${item.id}-doc-${docIdx}`}>
+                                              {docIdx > 0 ? ', ' : ''}
+                                              {attachment.url ? (
+                                                <a
+                                                  href={attachment.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="trip-details__itinerary-meta-link"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  {attachment.name}
+                                                </a>
+                                              ) : (
+                                                attachment.name
+                                              )}
+                                            </span>
+                                          );
+                                        })}
                                       </p>
                                     ) : null}
                                   </div>
@@ -3050,43 +3450,85 @@ export default function TripDetailsPage({ user, onLogout }) {
         ) : (
           <div className="trip-details__calendar-view">
             <div className="trip-details__calendar-content">
-              <div className="trip-details__calendar-day-tabs">
-                {days.map((day) => (
-                  <div key={day.dayNum} className="trip-details__calendar-day-tab">
-                    <span className="trip-details__calendar-day-tab-title">Day {day.dayNum}: {day.label}</span>
-                    <span className="trip-details__calendar-day-tab-city">{trip.destination}</span>
-                  </div>
-                ))}
+              {(() => {
+                const dayColumnWidth = Math.min(DAY_COLUMN_MAX_WIDTH, Math.max(DAY_COLUMN_MIN_WIDTH, CALENDAR_DAY_COLUMN_DEFAULT_WIDTH));
+                const calendarColumnsWidth = dayColumnWidth * days.length;
+                return (
+                  <>
+              <div className="trip-details__calendar-day-tabs-row">
+                <div className="trip-details__calendar-day-tabs-spacer" aria-hidden style={{ width: `${CALENDAR_GUTTER_WIDTH}px` }} />
+                <div className="trip-details__calendar-day-tabs-viewport">
+                <div
+                  className="trip-details__calendar-day-tabs"
+                  style={{ width: `${calendarColumnsWidth}px`, transform: `translateX(-${calendarScrollLeft}px)` }}
+                >
+                  {days.map((day) => (
+                    <div
+                      key={day.dayNum}
+                      className="trip-details__calendar-day-tab"
+                      style={{ width: `${dayColumnWidth}px`, minWidth: `${dayColumnWidth}px`, maxWidth: `${dayColumnWidth}px` }}
+                    >
+                      <span className="trip-details__calendar-day-tab-title">Day {day.dayNum}: {day.label}</span>
+                      <span className="trip-details__calendar-day-tab-city">{trip.destination}</span>
+                    </div>
+                  ))}
+                </div>
+                </div>
               </div>
-              <div className="trip-details__calendar-timeline-wrap">
-                <div className="trip-details__calendar-times">
-                  {Array.from({ length: 12 }, (_, i) => i + 6).map((h) => (
+              <div
+                className="trip-details__calendar-timeline-wrap"
+                ref={calendarTimelineRef}
+                onScroll={(e) => setCalendarScrollLeft(e.currentTarget.scrollLeft)}
+              >
+                <div className="trip-details__calendar-times" style={{ width: `${CALENDAR_GUTTER_WIDTH}px` }}>
+                  <div className="trip-details__calendar-time-row trip-details__calendar-time-row--all-day">
+                    <span className="trip-details__calendar-time-label">All day</span>
+                  </div>
+                  {Array.from({ length: CALENDAR_HOURS }, (_, i) => i + CALENDAR_START_HOUR).map((h) => (
                     <div key={h} className="trip-details__calendar-time-row">
                       <span className="trip-details__calendar-time-label">{String(h).padStart(2, '0')}:00</span>
                     </div>
                   ))}
                 </div>
-                <div className="trip-details__calendar-grid">
+                <div className="trip-details__calendar-grid" style={{ width: `${calendarColumnsWidth}px`, minWidth: `${calendarColumnsWidth}px` }}>
                   {days.map((day) => (
-                    <div key={day.dayNum} className="trip-details__calendar-day-col">
-                      <div className="trip-details__calendar-day-col-content">
+                    <div
+                      key={day.dayNum}
+                      className="trip-details__calendar-day-col"
+                      style={{ width: `${dayColumnWidth}px`, minWidth: `${dayColumnWidth}px`, maxWidth: `${dayColumnWidth}px` }}
+                    >
+                      <div
+                        className={`trip-details__calendar-day-col-content ${calendarDragOverDayNum === day.dayNum ? 'trip-details__calendar-day-col-content--drop-target' : ''}`}
+                        onDragOver={(e) => handleCalendarDayDragOver(e, day.dayNum)}
+                        onDrop={(e) => handleCalendarDayDrop(e, day)}
+                        onDragLeave={() => {
+                          if (calendarDragOverDayNum === day.dayNum) setCalendarDragOverDayNum(null);
+                        }}
+                      >
+                        <div className="trip-details__calendar-all-day-cell" aria-hidden />
                         {Array.from({ length: CALENDAR_HOURS }, (_, i) => (
                           <div key={i} className="trip-details__calendar-cell" />
                         ))}
                         <div className="trip-details__calendar-events">
-                          {getSortedDayItems(tripExpenseItems, day.date).map((item) => {
+                          {getCalendarEventLayouts(tripExpenseItems, day.date).map(({ item, style: laneStyle }) => {
                             const style = getCategoryStyle(item);
-                            const IconComponent = item.Icon || Camera;
+                            const IconComponent = (typeof item.Icon === 'function' || typeof item.Icon === 'string')
+                              ? item.Icon
+                              : Camera;
                             const timeRange = formatTimeRange(item);
                             const { top, height } = getCalendarEventPosition(item);
                             return (
                               <button
                                 key={item.id}
                                 type="button"
-                                className="trip-details__calendar-event"
+                                className={`trip-details__calendar-event ${calendarDraggingItemId === item.id ? 'trip-details__calendar-event--dragging' : ''} ${calendarResizingItemId === item.id ? 'trip-details__calendar-event--resizing' : ''}`}
+                                draggable
+                                onDragStart={(e) => handleCalendarDragStart(e, item.id)}
+                                onDragEnd={handleCalendarDragEnd}
                                 style={{
                                   top: `${top}px`,
                                   height: `${height}px`,
+                                  ...laneStyle,
                                   backgroundColor: `${style.color}18`,
                                   borderLeftColor: style.color,
                                 }}
@@ -3097,6 +3539,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   <IconComponent size={14} aria-hidden />
                                 </span>
                                 <span className="trip-details__calendar-event-name">{item.name}</span>
+                                <span
+                                  className="trip-details__calendar-event-resize"
+                                  role="presentation"
+                                  onMouseDown={(e) => handleCalendarResizeStart(e, item)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
                               </button>
                             );
                           })}
@@ -3106,6 +3554,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                   ))}
                 </div>
               </div>
+                  </>
+                );
+              })()}
               <button
                 type="button"
                 className="trip-details__calendar-fab"
@@ -3445,7 +3896,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         onChange={(e) => {
                           const files = e.target.files;
                           if (!files?.length) return;
-                          const toAdd = Array.from(files).map((f) => ({ name: f.name })).slice(0, 5 - generalAttachments.length);
+                          const toAdd = Array.from(files).map((f) => createAttachmentFromFile(f)).slice(0, 5 - generalAttachments.length);
                           setGeneralAttachments((prev) => [...prev, ...toAdd].slice(0, 5));
                           e.target.value = '';
                         }}
@@ -3456,7 +3907,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                         {generalAttachments.map((att, ai) => (
                           <li key={ai} className="trip-details__notes-attach-item">
                             <Paperclip size={12} aria-hidden />
-                            {att.name}
+                            {att.url ? (
+                              <a href={att.url} target="_blank" rel="noopener noreferrer">{att.name}</a>
+                            ) : (
+                              att.name
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -3490,7 +3945,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   onChange={(e) => {
                                     const files = e.target.files;
                                     if (!files?.length) return;
-                                    const toAdd = Array.from(files).slice(0, 3 - (item.attachments?.length || 0)).map((f) => ({ name: f.name }));
+                                    const toAdd = Array.from(files).slice(0, 3 - (item.attachments?.length || 0)).map((f) => createAttachmentFromFile(f));
                                     setTripExpenseItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, attachments: [...(it.attachments || []), ...toAdd] } : it)));
                                     e.target.value = '';
                                   }}
@@ -3509,7 +3964,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 {item.attachments.map((att, ai) => (
                                   <li key={ai} className="trip-details__notes-attach-item">
                                     <Paperclip size={12} aria-hidden />
-                                    {att.name}
+                                    {att.url ? (
+                                      <a href={att.url} target="_blank" rel="noopener noreferrer">{att.name}</a>
+                                    ) : (
+                                      att.name
+                                    )}
                                   </li>
                                 ))}
                               </ul>
@@ -3553,8 +4012,14 @@ export default function TripDetailsPage({ user, onLogout }) {
                       </p>
                     )}
                     <p className="trip-details__edit-place-address">{item.detail || '—'}</p>
-                    {item.externalLink ? (
-                      <a href={item.externalLink} target="_blank" rel="noopener noreferrer" className="trip-details__edit-place-view-details">View details</a>
+                    {canOpenInternalItemOverview(item) ? (
+                      <button
+                        type="button"
+                        className="trip-details__edit-place-view-details trip-details__edit-place-view-details--button"
+                        onClick={() => openInternalItemOverview(item)}
+                      >
+                        View details
+                      </button>
                     ) : (
                       <span className="trip-details__edit-place-view-details trip-details__edit-place-view-details--muted">View details</span>
                     )}
@@ -3631,8 +4096,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                         step="0.01"
                         min={0}
                         className="trip-details__edit-place-input"
-                        value={item.total ?? 0}
-                        onChange={(e) => update({ total: parseFloat(e.target.value) || 0 })}
+                        value={item.total ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          update({ total: v === '' ? null : Number(v) });
+                        }}
                       />
                     </span>
                   </label>
@@ -3666,7 +4134,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         onChange={(e) => {
                           const files = e.target.files;
                           if (!files?.length) return;
-                          const toAdd = Array.from(files).slice(0, 3 - (item.attachments?.length || 0)).map((f) => ({ name: f.name }));
+                          const toAdd = Array.from(files).slice(0, 3 - (item.attachments?.length || 0)).map((f) => createAttachmentFromFile(f));
                           update({ attachments: [...(item.attachments || []), ...toAdd].slice(0, 3) });
                           e.target.value = '';
                         }}
@@ -3677,7 +4145,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                         {item.attachments.map((att, ai) => (
                           <li key={ai} className="trip-details__notes-attach-item">
                             <Paperclip size={12} aria-hidden />
-                            {att.name}
+                            {att.url ? (
+                              <a href={att.url} target="_blank" rel="noopener noreferrer">{att.name}</a>
+                            ) : (
+                              att.name
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -3690,8 +4162,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                   type="button"
                   className="trip-details__edit-place-delete"
                   onClick={() => {
-                    setTripExpenseItems((prev) => prev.filter((it) => it.id !== item.id));
-                    setEditPlaceItem(null);
+                    setPendingDeleteItemId(item.id);
                   }}
                 >
                   <Trash2 size={18} aria-hidden />
@@ -3706,6 +4177,35 @@ export default function TripDetailsPage({ user, onLogout }) {
           </>
         );
       })()}
+
+      {pendingDeleteItemId && (
+        <>
+          <button
+            type="button"
+            className="trip-details__modal-backdrop"
+            aria-label="Close"
+            onClick={() => setPendingDeleteItemId(null)}
+          />
+          <div className="trip-details__delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <h3 id="delete-confirm-title" className="trip-details__delete-confirm-title">Delete saved place?</h3>
+            <p className="trip-details__delete-confirm-text">This will remove the item from your itinerary.</p>
+            <div className="trip-details__delete-confirm-actions">
+              <button type="button" className="trip-details__modal-cancel" onClick={() => setPendingDeleteItemId(null)}>Cancel</button>
+              <button
+                type="button"
+                className="trip-details__modal-update"
+                onClick={() => {
+                  setTripExpenseItems((prev) => prev.filter((it) => it.id !== pendingDeleteItemId));
+                  setPendingDeleteItemId(null);
+                  setEditPlaceItem(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {optimizeRouteModalOpen && optimizeRouteDay && (() => {
         const dayItems = getSortedDayItems(tripExpenseItems, optimizeRouteDay.date);
@@ -5281,8 +5781,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 });
                                 setAddToTripDate(day?.date || days[0]?.date || '');
                                 setAddToTripStartTime('07:00');
-                                setAddToTripDurationHrs(1);
-                                setAddToTripDurationMins(0);
+                                setAddToTripDurationHrs('1');
+                                setAddToTripDurationMins('0');
                                 setAddToTripNotes('');
                                 setAddToTripCost('');
                                 setAddToTripExternalLink(detailPlace.website || '');
@@ -5484,8 +5984,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 });
                                 setAddToTripDate(day?.date || days[0]?.date || '');
                                 setAddToTripStartTime('07:00');
-                                setAddToTripDurationHrs(1);
-                                setAddToTripDurationMins(0);
+                                setAddToTripDurationHrs('1');
+                                setAddToTripDurationMins('0');
                                 setAddToTripNotes('');
                                 setAddToTripCost('');
                                 setAddToTripExternalLink(foodDetailsView.website || '');
@@ -7200,8 +7700,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                   values: {
                     date: addToTripDate,
                     startTime: addToTripStartTime,
-                    durationHrs: addToTripDurationHrs,
-                    durationMins: addToTripDurationMins,
+                    durationHrs: parseInt(addToTripDurationHrs, 10) || 0,
+                    durationMins: parseInt(addToTripDurationMins, 10) || 0,
                     note: addToTripNotes,
                     cost: addToTripCost,
                     externalLink: addToTripExternalLink,
@@ -7218,6 +7718,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                 } else if (addToTripItem.type === 'stay') {
                   setStayDetailsView(null);
                   setAddStaysOpen(false);
+                } else if (addToTripItem.type === 'experience') {
+                  setExperienceDetailsView(null);
+                  setAddExperiencesOpen(false);
                 }
               }}
             >
@@ -7278,9 +7781,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                       className="trip-details__custom-place-duration-input"
                       placeholder="hrs"
                       min="0"
-                      max="24"
                       value={addToTripDurationHrs}
-                      onChange={(e) => setAddToTripDurationHrs(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setAddToTripDurationHrs(e.target.value)}
                     />
                     <span className="trip-details__custom-place-duration-separator">hr:</span>
                     <input
@@ -7292,7 +7794,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       max="59"
                       step="5"
                       value={addToTripDurationMins}
-                      onChange={(e) => setAddToTripDurationMins(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setAddToTripDurationMins(e.target.value)}
                     />
                     <span className="trip-details__custom-place-duration-separator">mins</span>
                   </div>
@@ -7383,29 +7885,34 @@ export default function TripDetailsPage({ user, onLogout }) {
               className="trip-details__custom-place-form"
               onSubmit={(e) => {
                 e.preventDefault();
+                const parsedDurationHours = Number(bookingExperience.durationHours);
+                const fallbackDurationHours = Number.isFinite(parsedDurationHours) && parsedDurationHours > 0
+                  ? parsedDurationHours
+                  : 2;
+                const optionLabel = bookingOption.option || bookingOption.name || bookingOption.type || 'Experience package';
                 const totalCost = bookingOption.price * bookingTravellers;
                 setTripExpenseItems((prev) => [...prev, {
                   id: `experience-${bookingExperience.id}-${bookingOption.id}-${Date.now()}`,
                   name: bookingExperience.name,
                   total: totalCost,
-                  categoryId: 7,
+                  categoryId: 'experiences',
                   category: 'Experience',
                   date: bookingDate,
-                  detail: `${bookingOption.name} - ${bookingTravellers} traveller${bookingTravellers !== 1 ? 's' : ''}`,
+                  detail: `${optionLabel} - ${bookingTravellers} traveller${bookingTravellers !== 1 ? 's' : ''}`,
                   Icon: Ticket,
                   lat: bookingExperience.lat,
                   lng: bookingExperience.lng,
                   notes: bookingNotes,
                   attachments: [],
                   startTime: bookingStartTime,
-                  durationHrs: Math.floor(bookingExperience.durationHours),
-                  durationMins: Math.round((bookingExperience.durationHours % 1) * 60),
+                  durationHrs: Math.floor(fallbackDurationHours),
+                  durationMins: Math.round((fallbackDurationHours % 1) * 60),
                   externalLink: '',
                   placeImageUrl: bookingExperience.image,
                   rating: bookingExperience.rating,
                   reviewCount: bookingExperience.reviewCount,
                   experienceType: bookingExperience.type,
-                  bookingOption: bookingOption.name,
+                  bookingOption: optionLabel,
                   travellers: bookingTravellers,
                   pricePerTraveller: bookingOption.price,
                 }]);
