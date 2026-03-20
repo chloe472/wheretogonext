@@ -8,8 +8,6 @@ import {
   MoreVertical,
   Plus,
   MapPin,
-  ZoomIn,
-  Filter,
   Info,
   Camera,
   UtensilsCrossed,
@@ -78,7 +76,9 @@ import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import countriesData from '../data/countries.json';
 import DateRangePickerModal from './DateRangePickerModal';
 import TripMap from './TripMap';
+import TripDetailsMapPanel from './TripDetailsMapPanel';
 import './TripDetailsPage.css';
+import './TripDetailsPage.map.css';
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -141,8 +141,6 @@ const CURRENCY_LIST = [
   { code: 'VND', name: 'Vietnamese dong' },
   { code: 'ZAR', name: 'South African rand' },
 ];
-const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
-const MAP_FILTERS = ['Default', 'Food & Beverages', 'Experiences', 'My Trip'];
 // Keep one slot for the manual-add card so 3-column pages don't end with a lone card row.
 const ADD_PLACES_PAGE_SIZE = 17;
 
@@ -236,8 +234,108 @@ function addDays(dateStr, delta) {
   return d.toISOString().slice(0, 10);
 }
 
+function isStayItem(item) {
+  const raw = String(item?.categoryId || item?.category || '').toLowerCase();
+  return raw === 'stays' || raw === 'stay';
+}
+
+function isFlightItem(item) {
+  if (!item) return false;
+  const transportType = String(item?.transportType || '').toLowerCase();
+  if (transportType === 'flight' || transportType === 'flights') return true;
+  return String(item?.name || '').trim().toLowerCase().startsWith('flight:');
+}
+
+function parseDateTimeLocal(dateStr, timeStr = '00:00') {
+  if (!dateStr) return null;
+  const normalizedTime = /^\d{2}:\d{2}$/.test(String(timeStr || '')) ? String(timeStr) : '00:00';
+  const parsed = new Date(`${dateStr}T${normalizedTime}:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function toIsoDateLocal(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function toHHmmLocal(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
+  return `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+}
+
+function getStayWindow(item) {
+  const checkInDate = String(item?.checkInDate || item?.date || '').trim();
+  const checkInTime = String(item?.checkInTime || item?.startTime || '15:00').trim() || '15:00';
+
+  let checkOutDate = String(item?.checkOutDate || '').trim();
+  let checkOutTime = String(item?.checkOutTime || '').trim();
+
+  if (!checkOutDate || !checkOutTime) {
+    const start = parseDateTimeLocal(checkInDate, checkInTime);
+    const durationMinutes = (Number(item?.durationHrs || 0) * 60) + Number(item?.durationMins || 0);
+    if (start && durationMinutes > 0) {
+      const end = new Date(start.getTime() + (durationMinutes * 60 * 1000));
+      checkOutDate = checkOutDate || toIsoDateLocal(end);
+      checkOutTime = checkOutTime || toHHmmLocal(end);
+    }
+  }
+
+  checkOutDate = checkOutDate || checkInDate;
+  checkOutTime = checkOutTime || checkInTime;
+
+  return {
+    checkInDate,
+    checkInTime,
+    checkOutDate,
+    checkOutTime,
+  };
+}
+
+function isStayActiveOnDay(item, dayDate) {
+  if (!isStayItem(item) || !dayDate) return false;
+  const { checkInDate, checkOutDate } = getStayWindow(item);
+  if (!checkInDate) return false;
+
+  if (!checkOutDate || checkOutDate <= checkInDate) {
+    return dayDate === checkInDate;
+  }
+
+  return dayDate >= checkInDate && dayDate <= checkOutDate;
+}
+
+function formatStayDateTime(dateStr, timeStr = '') {
+  if (!dateStr) return '';
+  const date = parseDateTimeLocal(dateStr, timeStr || '00:00');
+  if (!date) return dateStr;
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function getDayStayItems(items, dayDate) {
+  return (items || []).filter((it) => isStayActiveOnDay(it, dayDate));
+}
+
+function hasStayBookingData(item) {
+  if (!item) return false;
+  const hasWindow = Boolean(item.checkInDate || item.checkOutDate);
+  const hasCost = Number(item.total || 0) > 0;
+  const hasNote = Boolean(String(item.notes || '').trim());
+  const hasLink = Boolean(String(item.externalLink || '').trim());
+  const hasDocs = Array.isArray(item.attachments) && item.attachments.length > 0;
+  return hasWindow || hasCost || hasNote || hasLink || hasDocs;
+}
+
 function getDayTotalDurationMinutes(items, dayDate) {
-  const dayItems = (items || []).filter((it) => it.date === dayDate);
+  const dayItems = (items || []).filter((it) => it.date === dayDate && !isStayItem(it));
   let total = 0;
   dayItems.forEach((it) => {
     const hrs = it.durationHrs ?? 0;
@@ -301,13 +399,9 @@ function getItemViewDetailsUrl(item, city = '') {
 }
 
 function itemSpillsIntoNextDay(item) {
-  if (!item?.startTime || !item?.date) return false;
-  const raw = String(item.categoryId || item.category || '').toLowerCase();
-  const isStay = raw === 'stays' || raw === 'stay';
-  if (!isStay) return false;
-  const start = timeToMinutes(item.startTime);
-  const duration = (Number(item.durationHrs || 0) * 60) + Number(item.durationMins || 0);
-  return duration > 0 && (start + duration) >= 1440;
+  if (!isStayItem(item)) return false;
+  const { checkInDate, checkOutDate } = getStayWindow(item);
+  return Boolean(checkInDate && checkOutDate && checkOutDate > checkInDate);
 }
 
 function timeToMinutes(timeStr) {
@@ -331,7 +425,7 @@ function rangesOverlap(aStart, aEnd, bStart, bEnd) {
 }
 
 function getCalendarEventLayouts(items, dayDate) {
-  const dayItems = getSortedDayItems(items, dayDate);
+  const dayItems = getSortedDayItems(items, dayDate).filter((it) => !isStayItem(it));
   if (dayItems.length === 0) return [];
 
   const normalized = dayItems.map((item) => {
@@ -1101,6 +1195,10 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [addToTripStartTime, setAddToTripStartTime] = useState('07:00');
   const [addToTripDurationHrs, setAddToTripDurationHrs] = useState('1');
   const [addToTripDurationMins, setAddToTripDurationMins] = useState('0');
+  const [addToTripCheckInDate, setAddToTripCheckInDate] = useState('');
+  const [addToTripCheckInTime, setAddToTripCheckInTime] = useState('15:00');
+  const [addToTripCheckOutDate, setAddToTripCheckOutDate] = useState('');
+  const [addToTripCheckOutTime, setAddToTripCheckOutTime] = useState('11:00');
   const [addToTripNotes, setAddToTripNotes] = useState('');
   const [addToTripCost, setAddToTripCost] = useState('');
   const [addToTripExternalLink, setAddToTripExternalLink] = useState('');
@@ -1271,7 +1369,31 @@ export default function TripDetailsPage({ user, onLogout }) {
   });
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryError, setDiscoveryError] = useState('');
+  const [inAppNotice, setInAppNotice] = useState(null);
   const dayResizeSessionRef = useRef(null);
+  const inAppNoticeTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (inAppNoticeTimerRef.current) {
+      clearTimeout(inAppNoticeTimerRef.current);
+    }
+  }, []);
+
+  const showInAppNotice = (message, type = 'info', durationMs = 3200) => {
+    if (!message) return;
+    if (inAppNoticeTimerRef.current) {
+      clearTimeout(inAppNoticeTimerRef.current);
+    }
+    setInAppNotice({
+      id: Date.now(),
+      message,
+      type,
+    });
+    inAppNoticeTimerRef.current = setTimeout(() => {
+      setInAppNotice(null);
+      inAppNoticeTimerRef.current = null;
+    }, durationMs);
+  };
 
   const handleCalendarDragStart = (e, itemId) => {
     setCalendarDraggingItemId(itemId);
@@ -2454,13 +2576,28 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery]);
 
   const appendItemToTrip = ({ itemType, data, categoryId, category, Icon, values }) => {
+    const isStayCategory = String(categoryId || '').toLowerCase() === 'stays';
     const costNum = parseFloat(values?.cost) || 0;
-    const durationHrsNum = Number(values?.durationHrs || 0);
-    const durationMinsNum = Number(values?.durationMins || 0);
-    const startTime = values?.startTime || '07:00';
-    const stayCrossesMidnight = String(categoryId || '').toLowerCase() === 'stays'
-      && (timeToMinutes(startTime) + (durationHrsNum * 60) + durationMinsNum) >= 1440;
-    const resolvedDate = stayCrossesMidnight ? addDays(values?.date, 1) : values?.date;
+    const durationHrsNum = isStayCategory ? 0 : Number(values?.durationHrs || 0);
+    const durationMinsNum = isStayCategory ? 0 : Number(values?.durationMins || 0);
+    const startTime = isStayCategory
+      ? (values?.checkInTime || '15:00')
+      : (values?.startTime || '07:00');
+    const resolvedDate = isStayCategory
+      ? (values?.checkInDate || values?.date)
+      : values?.date;
+
+    const checkInDate = isStayCategory ? (values?.checkInDate || resolvedDate) : '';
+    const checkInTime = isStayCategory ? (values?.checkInTime || startTime || '15:00') : '';
+    const checkOutDate = isStayCategory ? (values?.checkOutDate || checkInDate) : '';
+    const checkOutTime = isStayCategory ? (values?.checkOutTime || checkInTime || '11:00') : '';
+
+    const checkInDateTime = isStayCategory ? parseDateTimeLocal(checkInDate, checkInTime) : null;
+    const checkOutDateTime = isStayCategory ? parseDateTimeLocal(checkOutDate, checkOutTime) : null;
+    const stayDurationMinutes = (isStayCategory && checkInDateTime && checkOutDateTime)
+      ? Math.max(0, Math.round((checkOutDateTime.getTime() - checkInDateTime.getTime()) / (1000 * 60)))
+      : 0;
+    const stayDuration = isStayCategory ? durationMinutesToParts(stayDurationMinutes) : { durationHrs: durationHrsNum, durationMins: durationMinsNum };
 
     const docs = Array.isArray(values?.travelDocs)
       ? values.travelDocs
@@ -2492,8 +2629,12 @@ export default function TripDetailsPage({ user, onLogout }) {
       notes: values?.note || '',
       attachments: docs,
       startTime,
-      durationHrs: durationHrsNum,
-      durationMins: durationMinsNum,
+      durationHrs: stayDuration.durationHrs,
+      durationMins: stayDuration.durationMins,
+      checkInDate: isStayCategory ? checkInDate : undefined,
+      checkInTime: isStayCategory ? checkInTime : undefined,
+      checkOutDate: isStayCategory ? checkOutDate : undefined,
+      checkOutTime: isStayCategory ? checkOutTime : undefined,
       externalLink: normalizeExternalUrl(values?.externalLink || data.website || ''),
       placeImageUrl: resolveImageUrl(
         data.image,
@@ -2544,6 +2685,10 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripStartTime('07:00');
     setAddToTripDurationHrs('1');
     setAddToTripDurationMins('0');
+    setAddToTripCheckInDate(day?.date || days[0]?.date || '');
+    setAddToTripCheckInTime('15:00');
+    setAddToTripCheckOutDate(days.find((d) => d.dayNum === 2)?.date || addDays(day?.date || days[0]?.date || '', 1));
+    setAddToTripCheckOutTime('11:00');
     setAddToTripNotes('');
     setAddToTripCost('');
     setAddToTripExternalLink(data.website || '');
@@ -2573,6 +2718,10 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripStartTime('15:00');
     setAddToTripDurationHrs('12');
     setAddToTripDurationMins('0');
+    setAddToTripCheckInDate(day?.date || days[0]?.date || '');
+    setAddToTripCheckInTime('15:00');
+    setAddToTripCheckOutDate(days.find((d) => d.dayNum === 2)?.date || addDays(day?.date || days[0]?.date || '', 1));
+    setAddToTripCheckOutTime('11:00');
     setAddToTripNotes(`Stay booking${roomLabel}`.trim());
     setAddToTripCost(defaultCost > 0 ? String(defaultCost) : '');
     setAddToTripExternalLink(bookingLink);
@@ -2614,6 +2763,10 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
 
     if (raw === 'stays' || raw === 'stay') {
+      if (hasStayBookingData(item)) {
+        setEditPlaceItem(item);
+        return;
+      }
       setStayDetailsTab('overview');
       setStayDetailsView(item);
       setAddStaysOpen(true);
@@ -2755,7 +2908,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const addEntireItineraryToTrip = (itineraryPlaces = []) => {
     if (!Array.isArray(itineraryPlaces) || itineraryPlaces.length === 0) {
-      window.alert('No places found in this itinerary.');
+      showInAppNotice('No places found in this itinerary.', 'warning');
       return;
     }
 
@@ -2815,12 +2968,12 @@ export default function TripDetailsPage({ user, onLogout }) {
     });
 
     if (toAppend.length === 0) {
-      window.alert('These itinerary places are already in your trip.');
+      showInAppNotice('These itinerary places are already in your trip.', 'warning');
       return;
     }
 
     setTripExpenseItems((prev) => [...prev, ...toAppend]);
-    window.alert(`Added ${toAppend.length} place${toAppend.length === 1 ? '' : 's'} to your itinerary page.`);
+    showInAppNotice(`Added ${toAppend.length} place${toAppend.length === 1 ? '' : 's'} to your itinerary page.`, 'success');
   };
 
   return (
@@ -3004,12 +3157,34 @@ export default function TripDetailsPage({ user, onLogout }) {
         </div>
       </header>
 
+      {inAppNotice ? (
+        <div className={`trip-details__inline-notice trip-details__inline-notice--${inAppNotice.type}`} role="status" aria-live="polite">
+          <span className="trip-details__inline-notice-text">{inAppNotice.message}</span>
+          <button
+            type="button"
+            className="trip-details__inline-notice-close"
+            aria-label="Dismiss notification"
+            onClick={() => {
+              if (inAppNoticeTimerRef.current) {
+                clearTimeout(inAppNoticeTimerRef.current);
+                inAppNoticeTimerRef.current = null;
+              }
+              setInAppNotice(null);
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      ) : null}
+
       <div className="trip-details__body">
         {viewMode === 'kanban' ? (
           <div className="trip-details__columns">
             <div className="trip-details__columns-scroll">
               {visibleDays.map((day) => {
-                const boardDayItems = getSortedDayItems(tripExpenseItems, day.date, { includeOvernightStays: true });
+                const dayStayItems = getDayStayItems(tripExpenseItems, day.date);
+                const boardDayItems = getSortedDayItems(tripExpenseItems, day.date, { includeOvernightStays: true })
+                  .filter((item) => !isStayItem(item));
                 const dayItemsCount = boardDayItems.length;
                 const totalMins = getDayTotalDurationMinutes(tripExpenseItems, day.date);
                 const durationStr = formatDurationMinutes(totalMins || 60);
@@ -3036,7 +3211,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                           title={dayItemsCount < 2 ? 'Add at least 2 places to optimize route' : 'Optimize route'}
                           disabled={dayItemsCount < 2}
                           onClick={() => {
-                            const items = getSortedDayItems(tripExpenseItems, day.date);
+                            const items = getSortedDayItems(tripExpenseItems, day.date)
+                              .filter((item) => !isStayItem(item));
                             if (items.length < 2) return;
                             setOptimizeRouteDay(day);
                             setOptimizeRouteStartId(items[0]?.id ?? '');
@@ -3163,6 +3339,37 @@ export default function TripDetailsPage({ user, onLogout }) {
                       onChange={(e) => setDayTitle(day.dayNum, e.target.value)}
                     />
                     <div className="trip-details__day-content">
+                      {dayStayItems.map((stayItem) => {
+                        const stayWindow = getStayWindow(stayItem);
+                        return (
+                          <button
+                            key={`stay-info-${day.date}-${stayItem.id}`}
+                            type="button"
+                            className="trip-details__stay-banner"
+                            onClick={() => openInternalItemOverview(stayItem)}
+                          >
+                            <div className="trip-details__stay-banner-thumb" aria-hidden>
+                              {stayItem.placeImageUrl ? (
+                                <img src={resolveImageUrl(stayItem.placeImageUrl, stayItem.name, 'hotel')} alt="" className="trip-details__stay-banner-img" onError={handleImageError} />
+                              ) : (
+                                <span className="trip-details__stay-banner-icon">
+                                  <Bed size={20} aria-hidden />
+                                </span>
+                              )}
+                            </div>
+                            <div className="trip-details__stay-banner-body">
+                              <span className="trip-details__stay-banner-label">Stay</span>
+                              <strong className="trip-details__stay-banner-name">{stayItem.name}</strong>
+                              <span className="trip-details__stay-banner-time">
+                                Check-in: {formatStayDateTime(stayWindow.checkInDate, stayWindow.checkInTime)}
+                              </span>
+                              <span className="trip-details__stay-banner-time">
+                                Check-out: {formatStayDateTime(stayWindow.checkOutDate, stayWindow.checkOutTime)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                       {boardDayItems.map((item, idx) => {
                         const style = getCategoryStyle(item);
                         const IconComponent = item.Icon || Camera;
@@ -3189,7 +3396,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
                         const TravelSegmentIcon = travelModeInfo.Icon;
                         const nextItem = boardDayItems[idx + 1];
-                        const travelToNext = nextItem ? getTravelBetween(item, nextItem, mode, travelTimeCache, setTravelTimeCache) : null;
+                        const hideTravelSegment = Boolean(nextItem) && (isFlightItem(item) || isFlightItem(nextItem));
+                        const travelToNext = nextItem && !hideTravelSegment
+                          ? getTravelBetween(item, nextItem, mode, travelTimeCache, setTravelTimeCache)
+                          : null;
                         const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
                         return (
                           <div key={item.id} className="trip-details__itinerary-block">
@@ -3359,93 +3569,21 @@ export default function TripDetailsPage({ user, onLogout }) {
                 );
               })}
             </div>
-            <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
-              <div className="trip-details__map-header">
-                <div className="trip-details__map-dropdown-wrap">
-                  <button
-                    type="button"
-                    className="trip-details__map-expand-btn"
-                    onClick={() => setMapExpandOpen((o) => !o)}
-                    aria-expanded={mapExpandOpen}
-                  >
-                    Expand Map
-                    <ChevronDown size={14} aria-hidden />
-                  </button>
-                  {mapExpandOpen && (
-                    <>
-                      <button
-                        type="button"
-                        className="trip-details__map-dropdown-backdrop"
-                        aria-label="Close"
-                        onClick={() => setMapExpandOpen(false)}
-                      />
-                      <div className="trip-details__map-dropdown">
-                        {MAP_VIEWS.map((view) => (
-                          <button
-                            key={view}
-                            type="button"
-                            className={`trip-details__map-dropdown-item ${mapView === view ? 'trip-details__map-dropdown-item--active' : ''}`}
-                            onClick={() => { setMapView(view); setMapExpandOpen(false); }}
-                          >
-                            {view}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="trip-details__map-filters">
-                  {MAP_FILTERS.map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      className={`trip-details__map-filter ${mapFilter === f ? 'trip-details__map-filter--active' : ''}`}
-                      onClick={() => setMapFilter(f)}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="trip-details__map-area">
-                <TripMap
-                  center={mapCenter}
-                  zoom={11}
-                  markers={mapMarkers}
-                  activeDayNums={activeDayNums}
-                  className="trip-details__trip-map"
-                  fitBounds={mapMarkers.length > 0}
-                  resizeKey={mapView}
-                  popupMode="hover-preview"
-                  onMarkerAddClick={openAddToTripFromMapMarker}
-                  onMarkerViewDetails={openAddPlacesDetailsFromMapMarker}
-                />
-              </div>
-              <div className="trip-details__map-controls">
-                <button type="button" className="trip-details__map-ctrl">
-                  <ZoomIn size={14} aria-hidden />
-                  Zoom into...
-                </button>
-                <button
-                  type="button"
-                  className="trip-details__map-ctrl"
-                  onClick={() => {
-                    resetMapDays();
-                    setMapDayFilterOpen(true);
-                  }}
-                >
-                  <Filter size={14} aria-hidden />
-                  Filter days
-                </button>
-                <div className="trip-details__map-zoom">
-                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom in">+</button>
-                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom out">−</button>
-                </div>
-                <button type="button" className="trip-details__map-info" aria-label="Map info">
-                  <Info size={16} aria-hidden />
-                </button>
-              </div>
-            </aside>
+            <TripDetailsMapPanel
+              mapView={mapView}
+              mapExpandOpen={mapExpandOpen}
+              setMapExpandOpen={setMapExpandOpen}
+              setMapView={setMapView}
+              mapFilter={mapFilter}
+              setMapFilter={setMapFilter}
+              resetMapDays={resetMapDays}
+              setMapDayFilterOpen={setMapDayFilterOpen}
+              mapCenter={mapCenter}
+              mapMarkers={mapMarkers}
+              activeDayNums={activeDayNums}
+              openAddToTripFromMapMarker={openAddToTripFromMapMarker}
+              openAddPlacesDetailsFromMapMarker={openAddPlacesDetailsFromMapMarker}
+            />
           </div>
         ) : (
           <div className="trip-details__calendar-view">
@@ -3566,68 +3704,21 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <Plus size={24} aria-hidden />
               </button>
             </div>
-            <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
-              <div className="trip-details__map-header">
-                <div className="trip-details__map-dropdown-wrap">
-                  <button
-                    type="button"
-                    className="trip-details__map-expand-btn"
-                    onClick={() => setMapExpandOpen((o) => !o)}
-                    aria-expanded={mapExpandOpen}
-                  >
-                    Expand Map
-                    <ChevronDown size={14} aria-hidden />
-                  </button>
-                  {mapExpandOpen && (
-                    <>
-                      <button type="button" className="trip-details__map-dropdown-backdrop" aria-label="Close" onClick={() => setMapExpandOpen(false)} />
-                      <div className="trip-details__map-dropdown">
-                        {MAP_VIEWS.map((view) => (
-                          <button key={view} type="button" className={`trip-details__map-dropdown-item ${mapView === view ? 'trip-details__map-dropdown-item--active' : ''}`} onClick={() => { setMapView(view); setMapExpandOpen(false); }}>{view}</button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="trip-details__map-filters">
-                  {MAP_FILTERS.map((f) => (
-                    <button key={f} type="button" className={`trip-details__map-filter ${mapFilter === f ? 'trip-details__map-filter--active' : ''}`} onClick={() => setMapFilter(f)}>{f}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="trip-details__map-area">
-                <TripMap
-                  center={mapCenter}
-                  zoom={11}
-                  markers={mapMarkers}
-                  activeDayNums={activeDayNums}
-                  className="trip-details__trip-map"
-                  fitBounds={mapMarkers.length > 0}
-                  resizeKey={mapView}
-                  popupMode="hover-preview"
-                  onMarkerAddClick={openAddToTripFromMapMarker}
-                  onMarkerViewDetails={openAddPlacesDetailsFromMapMarker}
-                />
-              </div>
-              <div className="trip-details__map-controls">
-                <button type="button" className="trip-details__map-ctrl"><ZoomIn size={14} aria-hidden /> Zoom into...</button>
-                <button
-                  type="button"
-                  className="trip-details__map-ctrl"
-                  onClick={() => {
-                    resetMapDays();
-                    setMapDayFilterOpen(true);
-                  }}
-                >
-                  <Filter size={14} aria-hidden /> Filter days
-                </button>
-                <div className="trip-details__map-zoom">
-                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom in">+</button>
-                  <button type="button" className="trip-details__map-zoom-btn" aria-label="Zoom out">−</button>
-                </div>
-                <button type="button" className="trip-details__map-info" aria-label="Map info"><Info size={16} aria-hidden /></button>
-              </div>
-            </aside>
+            <TripDetailsMapPanel
+              mapView={mapView}
+              mapExpandOpen={mapExpandOpen}
+              setMapExpandOpen={setMapExpandOpen}
+              setMapView={setMapView}
+              mapFilter={mapFilter}
+              setMapFilter={setMapFilter}
+              resetMapDays={resetMapDays}
+              setMapDayFilterOpen={setMapDayFilterOpen}
+              mapCenter={mapCenter}
+              mapMarkers={mapMarkers}
+              activeDayNums={activeDayNums}
+              openAddToTripFromMapMarker={openAddToTripFromMapMarker}
+              openAddPlacesDetailsFromMapMarker={openAddPlacesDetailsFromMapMarker}
+            />
           </div>
         )}
       </div>
@@ -3987,13 +4078,38 @@ export default function TripDetailsPage({ user, onLogout }) {
 
       {editPlaceItem && (() => {
         const item = tripExpenseItems.find((i) => i.id === editPlaceItem.id) ?? editPlaceItem;
+        const isStayEditing = isStayItem(item);
+        const stayWindow = isStayEditing ? getStayWindow(item) : null;
         const update = (updates) => setTripExpenseItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, ...updates } : it)));
+        const updateStayWindow = (updates) => {
+          const nextCheckInDate = updates.checkInDate ?? (stayWindow?.checkInDate || item.date || '');
+          const nextCheckInTime = updates.checkInTime ?? (stayWindow?.checkInTime || item.startTime || '15:00');
+          const nextCheckOutDate = updates.checkOutDate ?? (stayWindow?.checkOutDate || nextCheckInDate);
+          const nextCheckOutTime = updates.checkOutTime ?? (stayWindow?.checkOutTime || nextCheckInTime);
+
+          const checkIn = parseDateTimeLocal(nextCheckInDate, nextCheckInTime);
+          const checkOut = parseDateTimeLocal(nextCheckOutDate, nextCheckOutTime);
+          const durationUpdates = {};
+          if (checkIn && checkOut && checkOut > checkIn) {
+            const durationMinutes = Math.max(0, Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60)));
+            const durationParts = durationMinutesToParts(durationMinutes);
+            durationUpdates.durationHrs = durationParts.durationHrs;
+            durationUpdates.durationMins = durationParts.durationMins;
+          }
+
+          update({
+            ...updates,
+            date: nextCheckInDate,
+            startTime: nextCheckInTime,
+            ...durationUpdates,
+          });
+        };
         return (
           <>
             <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setEditPlaceItem(null)} />
             <div className="trip-details__edit-place-modal" role="dialog" aria-labelledby="edit-place-title" aria-modal="true">
               <div className="trip-details__edit-place-head">
-                <h2 id="edit-place-title" className="trip-details__edit-place-title">Edit Place</h2>
+                <h2 id="edit-place-title" className="trip-details__edit-place-title">{isStayEditing ? 'Edit Stay' : 'Edit Place'}</h2>
                 <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setEditPlaceItem(null)}>
                   <X size={20} aria-hidden />
                 </button>
@@ -4001,10 +4117,10 @@ export default function TripDetailsPage({ user, onLogout }) {
               <div className="trip-details__edit-place-body">
                 <div className="trip-details__edit-place-overview">
                   {item.placeImageUrl && (
-                    <img src={resolveImageUrl(item.placeImageUrl, item.name, 'landmark')} alt="" className="trip-details__edit-place-thumb" onError={handleImageError} />
+                    <img src={resolveImageUrl(item.placeImageUrl, item.name, isStayEditing ? 'hotel' : 'landmark')} alt="" className="trip-details__edit-place-thumb" onError={handleImageError} />
                   )}
                   <div className="trip-details__edit-place-meta">
-                    <span className="trip-details__edit-place-type">Place</span>
+                    <span className="trip-details__edit-place-type">{isStayEditing ? 'Stay' : 'Place'}</span>
                     <h3 className="trip-details__edit-place-name">{item.name}</h3>
                     {(item.rating != null || item.reviewCount != null) && (
                       <p className="trip-details__edit-place-rating">
@@ -4026,57 +4142,108 @@ export default function TripDetailsPage({ user, onLogout }) {
                   </div>
                 </div>
                 <div className="trip-details__edit-place-fields">
-                  <label className="trip-details__edit-place-label">
-                    Date <span className="trip-details__edit-place-required">*</span>
-                    <select
-                      className="trip-details__edit-place-select"
-                      value={item.date || ''}
-                      onChange={(e) => update({ date: e.target.value })}
-                      required
-                    >
-                      {days.map((d) => (
-                        <option key={d.date} value={d.date}>Day {d.dayNum}: {formatDayDate(d.date)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="trip-details__edit-place-label">
-                    Start time <span className="trip-details__edit-place-required">*</span>
-                    <span className="trip-details__edit-place-input-wrap">
-                      <Clock size={18} className="trip-details__edit-place-input-icon" aria-hidden />
-                      <input
-                        type="time"
-                        className="trip-details__edit-place-input"
-                        value={item.startTime || '07:00'}
-                        onChange={(e) => update({ startTime: e.target.value })}
-                      />
-                    </span>
-                  </label>
-                  <label className="trip-details__edit-place-label">
-                    Duration <span className="trip-details__edit-place-required">*</span>
-                    <div className="trip-details__edit-place-duration">
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="trip-details__edit-place-duration-input"
-                        value={item.durationHrs ?? 1}
-                        onChange={(e) => update({ durationHrs: Number(e.target.value) || 0 })}
-                        aria-label="Hours"
-                      />
-                      <span className="trip-details__edit-place-duration-sep">hrs</span>
-                      <span className="trip-details__edit-place-duration-colon">:</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={59}
-                        className="trip-details__edit-place-duration-input"
-                        value={item.durationMins ?? 0}
-                        onChange={(e) => update({ durationMins: Number(e.target.value) || 0 })}
-                        aria-label="Minutes"
-                      />
-                      <span className="trip-details__edit-place-duration-sep">mins</span>
-                    </div>
-                  </label>
+                  {isStayEditing ? (
+                    <>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Check-in date <span className="trip-details__edit-place-required">*</span></span>
+                        <input
+                          type="date"
+                          className="trip-details__edit-place-input"
+                          value={stayWindow?.checkInDate || ''}
+                          onChange={(e) => updateStayWindow({ checkInDate: e.target.value })}
+                          required
+                        />
+                      </label>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Check-in time <span className="trip-details__edit-place-required">*</span></span>
+                        <span className="trip-details__edit-place-input-wrap">
+                          <Clock size={18} className="trip-details__edit-place-input-icon" aria-hidden />
+                          <input
+                            type="time"
+                            className="trip-details__edit-place-input"
+                            value={stayWindow?.checkInTime || '15:00'}
+                            onChange={(e) => updateStayWindow({ checkInTime: e.target.value })}
+                          />
+                        </span>
+                      </label>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Check-out date <span className="trip-details__edit-place-required">*</span></span>
+                        <input
+                          type="date"
+                          className="trip-details__edit-place-input"
+                          value={stayWindow?.checkOutDate || ''}
+                          onChange={(e) => updateStayWindow({ checkOutDate: e.target.value })}
+                          required
+                        />
+                      </label>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Check-out time <span className="trip-details__edit-place-required">*</span></span>
+                        <span className="trip-details__edit-place-input-wrap">
+                          <Clock size={18} className="trip-details__edit-place-input-icon" aria-hidden />
+                          <input
+                            type="time"
+                            className="trip-details__edit-place-input"
+                            value={stayWindow?.checkOutTime || '11:00'}
+                            onChange={(e) => updateStayWindow({ checkOutTime: e.target.value })}
+                          />
+                        </span>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Date <span className="trip-details__edit-place-required">*</span></span>
+                        <select
+                          className="trip-details__edit-place-select"
+                          value={item.date || ''}
+                          onChange={(e) => update({ date: e.target.value })}
+                          required
+                        >
+                          {days.map((d) => (
+                            <option key={d.date} value={d.date}>Day {d.dayNum}: {formatDayDate(d.date)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Start time <span className="trip-details__edit-place-required">*</span></span>
+                        <span className="trip-details__edit-place-input-wrap">
+                          <Clock size={18} className="trip-details__edit-place-input-icon" aria-hidden />
+                          <input
+                            type="time"
+                            className="trip-details__edit-place-input"
+                            value={item.startTime || '07:00'}
+                            onChange={(e) => update({ startTime: e.target.value })}
+                          />
+                        </span>
+                      </label>
+                      <label className="trip-details__edit-place-label">
+                        <span className="trip-details__edit-place-label-text">Duration <span className="trip-details__edit-place-required">*</span></span>
+                        <div className="trip-details__edit-place-duration">
+                          <input
+                            type="number"
+                            min={0}
+                            max={23}
+                            className="trip-details__edit-place-duration-input"
+                            value={item.durationHrs ?? 1}
+                            onChange={(e) => update({ durationHrs: Number(e.target.value) || 0 })}
+                            aria-label="Hours"
+                          />
+                          <span className="trip-details__edit-place-duration-sep">hrs</span>
+                          <span className="trip-details__edit-place-duration-colon">:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            className="trip-details__edit-place-duration-input"
+                            value={item.durationMins ?? 0}
+                            onChange={(e) => update({ durationMins: Number(e.target.value) || 0 })}
+                            aria-label="Minutes"
+                          />
+                          <span className="trip-details__edit-place-duration-sep">mins</span>
+                        </div>
+                      </label>
+                    </>
+                  )}
                   <label className="trip-details__edit-place-label">
                     Note (Optional)
                     <textarea
@@ -4208,7 +4375,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       )}
 
       {optimizeRouteModalOpen && optimizeRouteDay && (() => {
-        const dayItems = getSortedDayItems(tripExpenseItems, optimizeRouteDay.date);
+        const dayItems = getSortedDayItems(tripExpenseItems, optimizeRouteDay.date).filter((item) => !isStayItem(item));
         const startItem = dayItems.find((i) => i.id === optimizeRouteStartId) || dayItems[0];
         const endItem = dayItems.find((i) => i.id === optimizeRouteEndId) || dayItems[dayItems.length - 1];
         return (
@@ -6239,6 +6406,8 @@ export default function TripDetailsPage({ user, onLogout }) {
 
       {addStaysOpen && (() => {
         const showingStayDetail = stayDetailsView != null;
+        const stayWindow = stayDetailsView ? getStayWindow(stayDetailsView) : null;
+        const stayHasBookingData = hasStayBookingData(stayDetailsView);
 
         const stayMapMarkers = filteredStays
           .filter((stay) => stay.lat != null && stay.lng != null)
@@ -6303,13 +6472,77 @@ export default function TripDetailsPage({ user, onLogout }) {
                       )}
                     </div>
                     <div className="trip-details__place-detail-tabs">
+                      {stayHasBookingData && (
+                        <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'booking' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('booking')}>Your booking</button>
+                      )}
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('overview')}>Overview</button>
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'rooms' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('rooms')}>Rooms</button>
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'policies' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('policies')}>Policies</button>
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'nearby' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('nearby')}>Stays Nearby</button>
                     </div>
                     <div className="trip-details__place-detail-content">
-                      {stayDetailsTab === 'overview' ? (
+                      {stayDetailsTab === 'booking' ? (
+                        <>
+                          <div className="trip-details__place-detail-section">
+                            <h3 className="trip-details__place-detail-section-title">Your stay booking</h3>
+                            {stayWindow && (
+                              <ul className="trip-details__place-detail-list">
+                                <li><strong>Check-in:</strong> {formatStayDateTime(stayWindow.checkInDate, stayWindow.checkInTime)}</li>
+                                <li><strong>Check-out:</strong> {formatStayDateTime(stayWindow.checkOutDate, stayWindow.checkOutTime)}</li>
+                              </ul>
+                            )}
+                          </div>
+                          {Number(stayDetailsView.total || 0) > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Cost</h3>
+                              <p className="trip-details__place-detail-section-text">{currency} {Number(stayDetailsView.total).toFixed(2)}</p>
+                            </div>
+                          )}
+                          {String(stayDetailsView.notes || '').trim() && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Notes</h3>
+                              <p className="trip-details__place-detail-section-text">{stayDetailsView.notes}</p>
+                            </div>
+                          )}
+                          {String(stayDetailsView.externalLink || '').trim() && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Booking link</h3>
+                              <a href={stayDetailsView.externalLink} target="_blank" rel="noopener noreferrer" className="trip-details__place-detail-link">
+                                {String(stayDetailsView.externalLink).replace(/^https?:\/\//, '')} <ExternalLink size={14} aria-hidden />
+                              </a>
+                            </div>
+                          )}
+                          {Array.isArray(stayDetailsView.attachments) && stayDetailsView.attachments.length > 0 && (
+                            <div className="trip-details__place-detail-section">
+                              <h3 className="trip-details__place-detail-section-title">Travel documents</h3>
+                              <ul className="trip-details__place-detail-list">
+                                {stayDetailsView.attachments.map((doc, idx) => {
+                                  const attachment = normalizeAttachment(doc);
+                                  if (!attachment) return null;
+                                  return (
+                                    <li key={`stay-doc-${idx}`}>
+                                      {attachment.url ? (
+                                        <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="trip-details__place-detail-link">{attachment.name}</a>
+                                      ) : (
+                                        attachment.name
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                          <div className="trip-details__place-detail-section" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="trip-details__place-detail-add-btn"
+                              onClick={() => setEditPlaceItem(stayDetailsView)}
+                            >
+                              Edit booking details
+                            </button>
+                          </div>
+                        </>
+                      ) : stayDetailsTab === 'overview' ? (
                         <>
                           <div className="trip-details__place-detail-section" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                             <button
@@ -7691,6 +7924,15 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const data = addToTripItem.data;
+                const isStayForm = addToTripItem.type === 'stay';
+                if (isStayForm) {
+                  const checkIn = parseDateTimeLocal(addToTripCheckInDate, addToTripCheckInTime);
+                  const checkOut = parseDateTimeLocal(addToTripCheckOutDate, addToTripCheckOutTime);
+                  if (!checkIn || !checkOut || checkOut <= checkIn) {
+                    window.alert('Check-out must be after check-in.');
+                    return;
+                  }
+                }
                 appendItemToTrip({
                   itemType: addToTripItem.type,
                   data,
@@ -7702,6 +7944,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                     startTime: addToTripStartTime,
                     durationHrs: parseInt(addToTripDurationHrs, 10) || 0,
                     durationMins: parseInt(addToTripDurationMins, 10) || 0,
+                    checkInDate: addToTripCheckInDate,
+                    checkInTime: addToTripCheckInTime,
+                    checkOutDate: addToTripCheckOutDate,
+                    checkOutTime: addToTripCheckOutTime,
                     note: addToTripNotes,
                     cost: addToTripCost,
                     externalLink: addToTripExternalLink,
@@ -7736,70 +7982,133 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </div>
               </div>
 
-              <div className="trip-details__custom-place-field-row">
-                <div className="trip-details__custom-place-field">
-                  <label htmlFor="add-to-trip-date" className="trip-details__custom-place-label">
-                    Date <span className="trip-details__custom-place-required">*</span>
-                  </label>
-                  <select
-                    id="add-to-trip-date"
-                    className="trip-details__custom-place-select"
-                    value={addToTripDate}
-                    onChange={(e) => setAddToTripDate(e.target.value)}
-                    required
-                  >
-                    {days.map((day) => (
-                      <option key={day.dayNum} value={day.date}>
-                        Day {day.dayNum}: {day.date}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="trip-details__custom-place-field">
-                  <label htmlFor="add-to-trip-start-time" className="trip-details__custom-place-label">
-                    Start time <span className="trip-details__custom-place-required">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    id="add-to-trip-start-time"
-                    className="trip-details__custom-place-input"
-                    value={addToTripStartTime}
-                    onChange={(e) => setAddToTripStartTime(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="trip-details__custom-place-field">
-                  <label htmlFor="add-to-trip-duration" className="trip-details__custom-place-label">
-                    Duration <span className="trip-details__custom-place-required">*</span>
-                  </label>
-                  <div className="trip-details__custom-place-duration-wrap">
+              {addToTripItem.type === 'stay' ? (
+                <div className="trip-details__custom-place-field-row">
+                  <div className="trip-details__custom-place-field">
+                    <label htmlFor="add-to-trip-checkin-date" className="trip-details__custom-place-label">
+                      Check-in date <span className="trip-details__custom-place-required">*</span>
+                    </label>
                     <input
-                      type="number"
-                      id="add-to-trip-duration-hrs"
-                      className="trip-details__custom-place-duration-input"
-                      placeholder="hrs"
-                      min="0"
-                      value={addToTripDurationHrs}
-                      onChange={(e) => setAddToTripDurationHrs(e.target.value)}
+                      type="date"
+                      id="add-to-trip-checkin-date"
+                      className="trip-details__custom-place-input"
+                      value={addToTripCheckInDate}
+                      onChange={(e) => setAddToTripCheckInDate(e.target.value)}
+                      required
                     />
-                    <span className="trip-details__custom-place-duration-separator">hr:</span>
+                  </div>
+
+                  <div className="trip-details__custom-place-field">
+                    <label htmlFor="add-to-trip-checkin-time" className="trip-details__custom-place-label">
+                      Check-in time <span className="trip-details__custom-place-required">*</span>
+                    </label>
                     <input
-                      type="number"
-                      id="add-to-trip-duration-mins"
-                      className="trip-details__custom-place-duration-input"
-                      placeholder="mins"
-                      min="0"
-                      max="59"
-                      step="5"
-                      value={addToTripDurationMins}
-                      onChange={(e) => setAddToTripDurationMins(e.target.value)}
+                      type="time"
+                      id="add-to-trip-checkin-time"
+                      className="trip-details__custom-place-input"
+                      value={addToTripCheckInTime}
+                      onChange={(e) => setAddToTripCheckInTime(e.target.value)}
+                      required
                     />
-                    <span className="trip-details__custom-place-duration-separator">mins</span>
+                  </div>
+
+                  <div className="trip-details__custom-place-field">
+                    <label htmlFor="add-to-trip-checkout-date" className="trip-details__custom-place-label">
+                      Check-out date <span className="trip-details__custom-place-required">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="add-to-trip-checkout-date"
+                      className="trip-details__custom-place-input"
+                      value={addToTripCheckOutDate}
+                      onChange={(e) => setAddToTripCheckOutDate(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="trip-details__custom-place-field">
+                    <label htmlFor="add-to-trip-checkout-time" className="trip-details__custom-place-label">
+                      Check-out time <span className="trip-details__custom-place-required">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      id="add-to-trip-checkout-time"
+                      className="trip-details__custom-place-input"
+                      value={addToTripCheckOutTime}
+                      onChange={(e) => setAddToTripCheckOutTime(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="trip-details__custom-place-field-row">
+                    <div className="trip-details__custom-place-field">
+                      <label htmlFor="add-to-trip-date" className="trip-details__custom-place-label">
+                        Date <span className="trip-details__custom-place-required">*</span>
+                      </label>
+                      <select
+                        id="add-to-trip-date"
+                        className="trip-details__custom-place-select"
+                        value={addToTripDate}
+                        onChange={(e) => setAddToTripDate(e.target.value)}
+                        required
+                      >
+                        {days.map((day) => (
+                          <option key={day.dayNum} value={day.date}>
+                            Day {day.dayNum}: {day.date}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="trip-details__custom-place-field">
+                      <label htmlFor="add-to-trip-start-time" className="trip-details__custom-place-label">
+                        Start time <span className="trip-details__custom-place-required">*</span>
+                      </label>
+                      <input
+                        type="time"
+                        id="add-to-trip-start-time"
+                        className="trip-details__custom-place-input"
+                        value={addToTripStartTime}
+                        onChange={(e) => setAddToTripStartTime(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="trip-details__custom-place-field">
+                      <label htmlFor="add-to-trip-duration" className="trip-details__custom-place-label">
+                        Duration <span className="trip-details__custom-place-required">*</span>
+                      </label>
+                      <div className="trip-details__custom-place-duration-wrap">
+                        <input
+                          type="number"
+                          id="add-to-trip-duration-hrs"
+                          className="trip-details__custom-place-duration-input"
+                          placeholder="hrs"
+                          min="0"
+                          value={addToTripDurationHrs}
+                          onChange={(e) => setAddToTripDurationHrs(e.target.value)}
+                        />
+                        <span className="trip-details__custom-place-duration-separator">hr:</span>
+                        <input
+                          type="number"
+                          id="add-to-trip-duration-mins"
+                          className="trip-details__custom-place-duration-input"
+                          placeholder="mins"
+                          min="0"
+                          max="59"
+                          step="5"
+                          value={addToTripDurationMins}
+                          onChange={(e) => setAddToTripDurationMins(e.target.value)}
+                        />
+                        <span className="trip-details__custom-place-duration-separator">mins</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </>
+              )}
 
               <div className="trip-details__custom-place-field">
                 <label htmlFor="add-to-trip-note" className="trip-details__custom-place-label">

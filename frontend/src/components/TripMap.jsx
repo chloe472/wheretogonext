@@ -86,17 +86,42 @@ function FitBounds({ markers, disabled = false }) {
 /** Call invalidateSize when the map container is resized (e.g. expand half/full) so the map fills the new size. */
 function MapResizeHandler({ resizeKey }) {
   const map = useMap();
+
+  const invalidateMapSize = () => {
+    try {
+      map.invalidateSize({ pan: false, animate: false });
+    } catch (_) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
-    if (!resizeKey) return;
-    const t = setTimeout(() => {
-      try {
-        map.invalidateSize();
-      } catch (_) {
-        // ignore
-      }
-    }, 50);
+    // Handle explicit layout mode changes (Default/Expand half/Expand full).
+    const t = setTimeout(() => invalidateMapSize(), resizeKey ? 50 : 0);
     return () => clearTimeout(t);
   }, [map, resizeKey]);
+
+  useEffect(() => {
+    const container = map.getContainer?.();
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+
+    let rafId = 0;
+    const observer = new ResizeObserver(() => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        invalidateMapSize();
+        rafId = 0;
+      });
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [map]);
+
   return null;
 }
 
