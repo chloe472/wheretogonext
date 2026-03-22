@@ -30,6 +30,12 @@ function App() {
     closeAuthModal();
   };
 
+  const handleUserUpdate = (nextUser) => {
+    if (!nextUser) return;
+    localStorage.setItem('wheretogonext_user', JSON.stringify(nextUser));
+    setUser(nextUser);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('wheretogonext_token');
     localStorage.removeItem('wheretogonext_user');
@@ -73,7 +79,17 @@ function App() {
           path="/profile"
           element={
             user ? (
-              <ProfilePage user={user} onLogout={handleLogout} />
+              <ProfilePage user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/profile/:id"
+          element={
+            user ? (
+              <ProfilePage user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
             ) : (
               <Navigate to="/" replace />
             )

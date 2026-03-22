@@ -7,6 +7,7 @@ export function mapItineraryToCard(it) {
   const creator = it.creator && typeof it.creator === 'object' ? it.creator : {};
   const creatorName = creator.name || creator.username || creator.email || 'Traveler';
   const creatorPicture = creator.picture || null;
+  const creatorId = creator._id || creator.id || '';
   const days = Math.max(1, Number(it.days) || 1);
   const categories = Array.isArray(it.categories) ? it.categories : [];
   const coverImages = Array.isArray(it.coverImages) ? it.coverImages.filter(Boolean) : [];
@@ -25,6 +26,7 @@ export function mapItineraryToCard(it) {
     days,
     creator: creatorName,
     creatorAvatar: creatorPicture,
+    creatorId,
     tags: categories,
     type: categories.length ? categories.slice(0, 2).join(' · ') : '—',
     /** Legacy mock fields — omit in UI when absent */

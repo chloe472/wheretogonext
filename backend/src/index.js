@@ -32,10 +32,12 @@ async function start() {
   const { default: authRoutes } = await import('./routes/auth.js');
   const { default: discoveryRoutes } = await import('./routes/discovery.js');
   const { default: itinerariesRoutes } = await import('./routes/itineraries.js');
+  const { default: profileRoutes } = await import('./routes/profile.js');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/discovery', discoveryRoutes);
   app.use('/api/itineraries', itinerariesRoutes);
+  app.use('/api/profile', profileRoutes);
 
   if (MONGODB_URI) {
     try {

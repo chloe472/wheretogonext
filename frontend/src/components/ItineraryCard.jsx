@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye, User, MoreVertical } from 'lucide-react';
 import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import { formatViewCount } from '../lib/formatViewCount';
@@ -14,6 +14,7 @@ import './ItineraryCard.css';
  * @param {number} props.placesCount
  * @param {string} props.creatorName
  * @param {string|null} [props.creatorAvatar]
+ * @param {string} [props.creatorId]
  * @param {string} [props.itineraryId] — navigates to detail when card is clicked (carousel buttons excluded)
  * @param {boolean} [props.ownerMenu] — show kebab with Share / Publish / Duplicate / Delete
  * @param {function(string): void} [props.onOwnerMenu]
@@ -26,6 +27,7 @@ export default function ItineraryCard({
   placesCount,
   creatorName,
   creatorAvatar,
+  creatorId,
   itineraryId,
   ownerMenu = false,
   onOwnerMenu,
@@ -76,6 +78,8 @@ export default function ItineraryCard({
       navigate(`/itineraries/${encodeURIComponent(itineraryId)}`);
     }
   };
+
+  const creatorLink = creatorId ? `/profile/${encodeURIComponent(creatorId)}` : null;
 
   return (
     <article
@@ -226,18 +230,39 @@ export default function ItineraryCard({
           </span>
         </div>
         <div className="itinerary-card__creator">
-          <span className="itinerary-card__avatar">
-            {creatorAvatar ? (
-              <img
-                src={resolveImageUrl(creatorAvatar, creatorName, 'avatar')}
-                alt=""
-                className="itinerary-card__avatar-img"
-                onError={(e) => applyImageFallback(e)}
-              />
-            ) : (
-              <User size={14} aria-hidden />
-            )}
-          </span>
+          {creatorLink ? (
+            <Link
+              to={creatorLink}
+              className="itinerary-card__avatar"
+              data-stop-card-nav
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`View ${creatorName}'s profile`}
+            >
+              {creatorAvatar ? (
+                <img
+                  src={resolveImageUrl(creatorAvatar, creatorName, 'avatar')}
+                  alt=""
+                  className="itinerary-card__avatar-img"
+                  onError={(e) => applyImageFallback(e)}
+                />
+              ) : (
+                <User size={14} aria-hidden />
+              )}
+            </Link>
+          ) : (
+            <span className="itinerary-card__avatar">
+              {creatorAvatar ? (
+                <img
+                  src={resolveImageUrl(creatorAvatar, creatorName, 'avatar')}
+                  alt=""
+                  className="itinerary-card__avatar-img"
+                  onError={(e) => applyImageFallback(e)}
+                />
+              ) : (
+                <User size={14} aria-hidden />
+              )}
+            </span>
+          )}
           <span className="itinerary-card__creator-name">{creatorName}</span>
         </div>
       </div>

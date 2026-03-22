@@ -202,6 +202,7 @@ export default function SearchResultsPage({ user, onLogout }) {
                 placesCount={it.placesCount ?? 0}
                 creatorName={it.creator}
                 creatorAvatar={it.creatorAvatar}
+                creatorId={it.creatorId}
               />
             ))}
           </div>

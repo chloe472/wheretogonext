@@ -438,6 +438,8 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+  color: inherit;
 }
 
 .itinerary-detail__comment-avatar--nested {
@@ -597,6 +599,7 @@
   align-items: center;
   justify-content: center;
   color: #57534e;
+  text-decoration: none;
 }
 
 .itinerary-detail__creator-avatar img {

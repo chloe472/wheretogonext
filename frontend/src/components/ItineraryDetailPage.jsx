@@ -73,7 +73,7 @@ function commentAuthorInitial(displayName) {
   return chars[0] ? chars[0].toUpperCase() : '?';
 }
 
-function CommentAvatar({ userName, userPicture, nested }) {
+function CommentAvatar({ userName, userPicture, userId, nested }) {
   const [imgFailed, setImgFailed] = useState(false);
   const pic = String(userPicture || '').trim();
 
@@ -84,11 +84,25 @@ function CommentAvatar({ userName, userPicture, nested }) {
   const initial = commentAuthorInitial(userName);
   const showImg = Boolean(pic) && !imgFailed;
 
+  const avatarClass = `itinerary-detail__comment-avatar ${nested ? 'itinerary-detail__comment-avatar--nested' : ''}`;
+  if (userId) {
+    return (
+      <Link to={`/profile/${userId}`} className={avatarClass} aria-label={`View ${userName || 'user'} profile`}>
+        {showImg ? (
+          <img
+            src={resolveImageUrl(pic, userName, 'avatar')}
+            alt=""
+            className="itinerary-detail__comment-avatar-img"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <span className="itinerary-detail__comment-avatar-fallback">{initial}</span>
+        )}
+      </Link>
+    );
+  }
   return (
-    <span
-      className={`itinerary-detail__comment-avatar ${nested ? 'itinerary-detail__comment-avatar--nested' : ''}`}
-      aria-hidden
-    >
+    <span className={avatarClass} aria-hidden>
       {showImg ? (
         <img
           src={resolveImageUrl(pic, userName, 'avatar')}
@@ -138,6 +152,7 @@ function CommentBranch({
         <CommentAvatar
           userName={node.userName}
           userPicture={node.userPicture}
+          userId={node.userId}
           nested={depth > 0}
         />
         <div className="itinerary-detail__comment-head-main">
@@ -670,6 +685,7 @@ export default function ItineraryDetailPage({ user, onLogout }) {
                     placesCount={it.placesCount}
                     creatorName={it.creator}
                     creatorAvatar={it.creatorAvatar}
+                    creatorId={it.creatorId}
                   />
                 ))}
               </div>
@@ -689,7 +705,14 @@ export default function ItineraryDetailPage({ user, onLogout }) {
             <p className="itinerary-detail__cta-hint">Start from this plan and make it yours.</p>
           </div>
           <div className="itinerary-detail__creator-card">
-            <div className="itinerary-detail__creator-avatar">
+            <Link
+              to={itinerary.creator?._id ? `/profile/${itinerary.creator._id}` : '#'}
+              className="itinerary-detail__creator-avatar"
+              aria-label={`View ${itinerary.creator?.name || 'creator'} profile`}
+              onClick={(e) => {
+                if (!itinerary.creator?._id) e.preventDefault();
+              }}
+            >
               {itinerary.creator?.picture ? (
                 <img
                   src={resolveImageUrl(itinerary.creator.picture, itinerary.creator.name, 'avatar')}
@@ -699,7 +722,7 @@ export default function ItineraryDetailPage({ user, onLogout }) {
               ) : (
                 <User size={28} />
               )}
-            </div>
+            </Link>
             <h3 className="itinerary-detail__creator-name">
               {itinerary.creator?.name || itinerary.creator?.username || 'Creator'}
             </h3>
