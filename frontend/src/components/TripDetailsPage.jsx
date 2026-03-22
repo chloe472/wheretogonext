@@ -53,7 +53,7 @@ import {
   ArrowLeft,
   ExternalLink,
 } from 'lucide-react';
-import { getTripById, getTripDays, updateTrip, deleteTrip } from '../data/mockTrips';
+import { fetchItineraryById, updateItinerary, deleteItinerary } from '../api/itinerariesApi';
 import {
   searchAddressSuggestions,
   getMapCenterForDestination,
@@ -83,6 +83,36 @@ import './TripDetailsPage.map.css';
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Day rows for Kanban/calendar — from trip startDate/endDate (YYYY-MM-DD). */
+function getTripDaysFromTrip(trip) {
+  if (!trip?.startDate || !trip?.endDate) return [];
+  const s = String(trip.startDate).slice(0, 10);
+  const e = String(trip.endDate).slice(0, 10);
+  const start = new Date(`${s}T12:00:00`);
+  const end = new Date(`${e}T12:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return [];
+  const days = [];
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    days.push({
+      dayNum: days.length + 1,
+      date: d.toISOString().slice(0, 10),
+      label: `${dayLabels[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`,
+    });
+  }
+  return days;
+}
+
+function itineraryDocToTrip(doc) {
+  if (!doc) return null;
+  const id = String(doc._id ?? doc.id ?? '');
+  return {
+    ...doc,
+    id,
+    tripExpenseItems: Array.isArray(doc.tripExpenseItems) ? doc.tripExpenseItems : [],
+  };
+}
 const FOOD_FILTER_OPTIONS = [
   'All',
   'Top Rated (4.5+)',
@@ -1115,9 +1145,40 @@ export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
   const navigate = useNavigate();
   const [locationUpdateKey, setLocationUpdateKey] = useState(0);
+  const [serverItinerary, setServerItinerary] = useState(null);
+  const [tripLoading, setTripLoading] = useState(true);
+  const [tripLoadError, setTripLoadError] = useState(null);
 
-  // Use useMemo to re-fetch trip when location updates
-  const tripData = useMemo(() => getTripById(tripId), [tripId, locationUpdateKey]);
+  useEffect(() => {
+    let cancelled = false;
+    setTripLoading(true);
+    setTripLoadError(null);
+    setServerItinerary(null);
+    (async () => {
+      try {
+        const doc = await fetchItineraryById(tripId);
+        if (cancelled) return;
+        if (!doc) {
+          setTripLoadError('Trip not found.');
+          setServerItinerary(null);
+        } else {
+          setServerItinerary(doc);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setTripLoadError(e?.message || 'Failed to load trip');
+          setServerItinerary(null);
+        }
+      } finally {
+        if (!cancelled) setTripLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId]);
+
+  const tripData = useMemo(() => itineraryDocToTrip(serverItinerary), [serverItinerary]);
 
   // Local state for immediate destination/location updates
   const [localDestination, setLocalDestination] = useState(null);
@@ -1150,12 +1211,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleEditValue, setTitleEditValue] = useState('');
-  const [titleDisplay, setTitleDisplay] = useState(() => {
-    const t = getTripById(tripId);
-    if (!t) return '';
-    const d = getTripDays(t);
-    return t.title ?? `${d.length} days to ${t.destination}`;
-  });
+  const [titleDisplay, setTitleDisplay] = useState('');
   const [mapView, setMapView] = useState('Default');
   const [mapFilter, setMapFilter] = useState('Default');
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
@@ -1227,14 +1283,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [bookingStartTime, setBookingStartTime] = useState('07:00');
   const [bookingTravellers, setBookingTravellers] = useState(2);
   const [bookingNotes, setBookingNotes] = useState('');
-  const [tripExpenseItems, setTripExpenseItems] = useState(() => {
-    const existingTrip = getTripById(tripId);
-    if (!Array.isArray(existingTrip?.tripExpenseItems)) return [];
-    return existingTrip.tripExpenseItems.map((item) => ({
-      ...item,
-      attachments: Array.isArray(item?.attachments) ? item.attachments : [],
-    }));
-  });
+  const [tripExpenseItems, setTripExpenseItems] = useState([]);
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [customPlaceAddress, setCustomPlaceAddress] = useState('');
   const [customPlaceAddressSelection, setCustomPlaceAddressSelection] = useState(null);
@@ -1551,10 +1600,10 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   useEffect(() => {
     if (trip) {
-      const d = getTripDays(trip);
+      const d = getTripDaysFromTrip(trip);
       setTitleDisplay(trip.title ?? `${d.length} days to ${trip.destination}`);
     }
-  }, [tripId, trip?.destination, locationUpdateKey]);
+  }, [tripId, trip?.destination, locationUpdateKey, trip]);
 
   useEffect(() => {
     if (!titleDropdownOpen) return;
@@ -1568,9 +1617,9 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [titleDropdownOpen]);
 
   useEffect(() => {
-    const existingTrip = getTripById(tripId);
-    const persistedItems = Array.isArray(existingTrip?.tripExpenseItems)
-      ? existingTrip.tripExpenseItems.map((item) => ({
+    if (!tripData) return;
+    const persistedItems = Array.isArray(tripData?.tripExpenseItems)
+      ? tripData.tripExpenseItems.map((item) => ({
         ...item,
         attachments: Array.isArray(item?.attachments) ? item.attachments : [],
       }))
@@ -1578,12 +1627,23 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     setTripExpenseItems(persistedItems);
     hydratedTripItemsForIdRef.current = tripId;
-  }, [tripId]);
+  }, [tripId, tripData]);
 
   useEffect(() => {
+    if (tripLoading || !tripData) return;
     if (hydratedTripItemsForIdRef.current !== tripId) return;
-    updateTrip(tripId, { tripExpenseItems });
-  }, [tripId, tripExpenseItems]);
+    let cancelled = false;
+    (async () => {
+      try {
+        await updateItinerary(tripId, { tripExpenseItems });
+      } catch (e) {
+        if (!cancelled) console.error('Failed to save trip items', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId, tripExpenseItems, tripLoading, tripData]);
 
   // Fetch transit directions when public transport modal opens
   useEffect(() => {
@@ -1670,15 +1730,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     fetchTransitDirections();
   }, [publicTransportModalOpen, publicTransportSegment]);
 
-  if (!trip) {
-    return (
-      <div className="trip-details trip-details--missing">
-        <p>Trip not found.</p>
-        <Link to="/">Back to My Trips</Link>
-      </div>
-    );
-  }
-
   const displayTrip = useMemo(() => {
     if (!trip) return null;
     const start = dateRange?.startDate ?? trip.startDate;
@@ -1686,11 +1737,11 @@ export default function TripDetailsPage({ user, onLogout }) {
     return { ...trip, startDate: start, endDate: end };
   }, [trip, dateRange?.startDate, dateRange?.endDate]);
 
-  const days = getTripDays(displayTrip ?? trip);
-  const spent = trip.budgetSpent ?? 0;
+  const days = trip ? getTripDaysFromTrip(displayTrip ?? trip) : [];
+  const spent = trip?.budgetSpent ?? 0;
 
-  const displayStart = dateRange?.startDate ?? trip.startDate;
-  const displayEnd = dateRange?.endDate ?? trip.endDate;
+  const displayStart = trip ? (dateRange?.startDate ?? trip.startDate) : undefined;
+  const displayEnd = trip ? (dateRange?.endDate ?? trip.endDate) : undefined;
   const allDayNums = days.map((d) => d.dayNum);
   const activeDayNums = (mapDayFilterSelected.length ? mapDayFilterSelected : allDayNums).filter((n) =>
     allDayNums.includes(n),
@@ -1701,7 +1752,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       const e = new Date(displayEnd);
       return `${MONTH_SHORT[s.getMonth()]} ${s.getDate()} - ${MONTH_SHORT[e.getMonth()]} ${e.getDate()}`;
     })()
-    : trip.dates;
+    : (trip?.dates ?? '');
 
   const openDateModal = () => setDateModalOpen(true);
 
@@ -2976,6 +3027,23 @@ export default function TripDetailsPage({ user, onLogout }) {
     showInAppNotice(`Added ${toAppend.length} place${toAppend.length === 1 ? '' : 's'} to your itinerary page.`, 'success');
   };
 
+  if (tripLoading) {
+    return (
+      <div className="trip-details trip-details--missing">
+        <p>Loading trip…</p>
+      </div>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <div className="trip-details trip-details--missing">
+        <p>{tripLoadError || 'Trip not found.'}</p>
+        <Link to="/">Back to My Trips</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="trip-details">
       <header className="trip-details__header">
@@ -2993,8 +3061,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                 onBlur={() => {
                   const v = titleEditValue.trim();
                   if (v) {
-                    updateTrip(tripId, { title: v });
-                    setTitleDisplay(v);
+                    (async () => {
+                      try {
+                        const updated = await updateItinerary(tripId, { title: v });
+                        if (updated) setServerItinerary(updated);
+                        setTitleDisplay(v);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    })();
                   }
                   setTitleEditing(false);
                 }}
@@ -3050,9 +3125,14 @@ export default function TripDetailsPage({ user, onLogout }) {
                       onClick={() => {
                         setTitleDropdownOpen(false);
                         if (!window.confirm('Delete this trip? This cannot be undone.')) return;
-                        const removed = deleteTrip(tripId);
-                        if (removed) navigate('/');
-                        else alert('This is a sample trip and cannot be deleted.');
+                        (async () => {
+                          try {
+                            await deleteItinerary(tripId);
+                            navigate('/');
+                          } catch (e) {
+                            alert(e?.message || 'Could not delete trip.');
+                          }
+                        })();
                       }}
                     >
                       Delete trip
@@ -3150,9 +3230,6 @@ export default function TripDetailsPage({ user, onLogout }) {
           </div>
           <button type="button" className="trip-details__icon-btn" aria-label="Share">
             <Share2 size={18} aria-hidden />
-          </button>
-          <button type="button" className="trip-details__save">
-            Save
           </button>
         </div>
       </header>
@@ -3900,14 +3977,19 @@ export default function TripDetailsPage({ user, onLogout }) {
                   setLocalDestination(newDestination);
                   setLocalLocations(locationsStr);
 
-                  // Update the trip data in the store
-                  updateTrip(tripId, {
-                    destination: newDestination,
-                    locations: locationsStr
-                  });
-
-                  // Force re-render with updated trip data
-                  setLocationUpdateKey(prev => prev + 1);
+                  (async () => {
+                    try {
+                      const updated = await updateItinerary(tripId, {
+                        destination: newDestination,
+                        locations: locationsStr,
+                      });
+                      if (updated) setServerItinerary(updated);
+                      setLocationUpdateKey((prev) => prev + 1);
+                    } catch (e) {
+                      console.error(e);
+                      alert(e?.message || 'Could not update destination.');
+                    }
+                  })();
                 }}
               >
                 Update

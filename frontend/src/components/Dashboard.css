@@ -332,9 +332,120 @@
   background: #6b5344;
 }
 
-/* Your Trips */
+/* Your Trips (API — GET /api/itineraries/mine) */
 .dashboard__trips {
   margin-top: 2rem;
+}
+
+.dashboard__trips-hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--dash-text-muted);
+  line-height: 1.45;
+}
+
+.dashboard__trips-status,
+.dashboard__trips-empty {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  color: var(--dash-text-muted);
+}
+
+/* Rename trip modal */
+.dashboard__rename-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(40, 35, 30, 0.45);
+  cursor: default;
+}
+
+.dashboard__rename-modal {
+  position: fixed;
+  z-index: 201;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(400px, calc(100vw - 2rem));
+  padding: 1.25rem 1.35rem;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(61, 52, 40, 0.2);
+}
+
+.dashboard__rename-title {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--dash-text);
+}
+
+.dashboard__rename-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--dash-text-muted);
+}
+
+.dashboard__rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--dash-text);
+  background: var(--dash-input-bg);
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.dashboard__rename-input:focus {
+  outline: none;
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.2);
+}
+
+.dashboard__rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.dashboard__rename-cancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--dash-text);
+  background: transparent;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dashboard__rename-cancel:hover {
+  background: var(--dash-hover);
+}
+
+.dashboard__rename-save {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #faf8f5;
+  background: var(--dash-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dashboard__rename-save:hover {
+  background: #6b5344;
 }
 
 .dashboard__section-title {
@@ -382,7 +493,7 @@
   gap: 1.25rem;
 }
 
-/* Trip card */
+/* Trip card — overflow visible so kebab dropdown isn’t clipped (was overflow:hidden) */
 .trip-card {
   display: flex;
   gap: 1.25rem;
@@ -390,7 +501,9 @@
   background: var(--dash-surface);
   border: 1px solid var(--dash-border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  isolation: isolate;
   transition: box-shadow 0.2s;
   cursor: pointer;
 }
@@ -405,6 +518,8 @@
   min-width: 200px;
   height: 140px;
   flex-shrink: 0;
+  overflow: visible;
+  border-radius: 12px 0 0 12px;
 }
 
 .trip-card__image {
@@ -412,6 +527,71 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 12px 0 0 12px;
+}
+
+.trip-card__owner-menu {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 30;
+}
+
+.trip-card__owner-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--dash-text);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.trip-card__owner-more:hover {
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.trip-card__owner-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 11.5rem;
+  max-height: min(70vh, 22rem);
+  overflow-y: auto;
+  padding: 0.35rem 0;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(61, 52, 40, 0.14);
+  z-index: 50;
+}
+
+.trip-card__owner-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--dash-text);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.trip-card__owner-option:hover {
+  background: var(--dash-hover);
+}
+
+.trip-card__owner-option--danger {
+  color: #b42318;
 }
 
 .trip-card__status-wrap {
@@ -699,5 +879,10 @@
   .trip-card__image-wrap {
     width: 100%;
     height: 180px;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .trip-card__image {
+    border-radius: 12px 12px 0 0;
   }
 }

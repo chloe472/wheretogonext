@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Bell,
   User,
@@ -14,10 +14,41 @@ import {
   ChevronRight,
   ChevronDown,
   Search,
+  MoreVertical,
 } from 'lucide-react';
-import { getAllTrips } from '../data/mockTrips';
 import { searchLocations } from '../data/mockLocations';
+import {
+  fetchMyItineraries,
+  deleteItinerary,
+  createItinerary,
+  updateItinerary,
+} from '../api/itinerariesApi';
+import PublishItineraryModal from './PublishItineraryModal';
 import './Dashboard.css';
+
+const DEFAULT_TRIP_IMAGE =
+  'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
+
+/** Map Mongo itinerary doc → trip card row (same shape the mock list used). */
+function mapItineraryToTripRow(raw) {
+  const id = String(raw._id ?? raw.id ?? '');
+  const coverImages = Array.isArray(raw.coverImages) ? raw.coverImages.filter(Boolean) : [];
+  const image = (raw.image && String(raw.image).trim()) || coverImages[0] || DEFAULT_TRIP_IMAGE;
+  return {
+    raw,
+    id,
+    title: raw.title || '',
+    dates: raw.dates || '—',
+    locations: raw.locations || raw.destination || '',
+    image,
+    placesSaved: Array.isArray(raw.places) ? raw.places.length : 0,
+    budget: raw.budget ?? '$0',
+    travelers: raw.travelers ?? 1,
+    status: raw.status || 'Planning',
+    endDate: raw.endDate || '',
+    startDate: raw.startDate || '',
+  };
+}
 
 const MOCK_COMING_UP = [
   { id: '1', name: 'Summer Europe', day: 15, month: 'JUN', label: 'Departure in 4 months' },
@@ -51,22 +82,135 @@ export default function Dashboard({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
-  const trips = getAllTrips();
   const searchSuggestions = searchLocations(searchQuery);
-  const [tripStatuses, setTripStatuses] = useState(() => {
-    const map = {};
-    trips.forEach((t) => {
-      map[t.id] = t.status;
-    });
-    return map;
-  });
+  const [tripStatuses, setTripStatuses] = useState({});
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const statusDropdownRef = useRef(null);
+  const [openOwnerMenuId, setOpenOwnerMenuId] = useState(null);
+  const ownerMenuRef = useRef(null);
+
+  const [myTrips, setMyTrips] = useState([]);
+  const [myTripsLoading, setMyTripsLoading] = useState(true);
+  const [publishTarget, setPublishTarget] = useState(null);
+  /** Raw itinerary doc while rename modal is open */
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameTitleDraft, setRenameTitleDraft] = useState('');
+
+  const tripRows = useMemo(() => myTrips.map(mapItineraryToTripRow), [myTrips]);
+
+  useEffect(() => {
+    setTripStatuses((prev) => {
+      const next = { ...prev };
+      tripRows.forEach((t) => {
+        if (next[t.id] === undefined) next[t.id] = t.status;
+      });
+      return next;
+    });
+  }, [tripRows]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMine() {
+      setMyTripsLoading(true);
+      try {
+        const rows = await fetchMyItineraries();
+        if (!cancelled) setMyTrips(rows);
+      } catch {
+        if (!cancelled) setMyTrips([]);
+      } finally {
+        if (!cancelled) setMyTripsLoading(false);
+      }
+    }
+    loadMine();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyRenameFromModal = async () => {
+    const title = renameTitleDraft.trim();
+    if (!renameTarget || !title) return;
+    try {
+      await updateItinerary(String(renameTarget._id), { title });
+      setMyTrips((prev) =>
+        prev.map((doc) => (String(doc._id) === String(renameTarget._id) ? { ...doc, title } : doc)),
+      );
+      setRenameTarget(null);
+      setRenameTitleDraft('');
+    } catch (err) {
+      alert(err?.message || 'Could not rename trip');
+    }
+  };
+
+  const handleItineraryOwnerMenu = (rawItinerary, action) => {
+    if (action === 'share') {
+      const url = `${window.location.origin}/itineraries/${rawItinerary._id}`;
+      navigator.clipboard.writeText(url).catch(() => {});
+      return;
+    }
+    if (action === 'publish') {
+      setPublishTarget(rawItinerary);
+      return;
+    }
+    if (action === 'rename') {
+      setRenameTarget(rawItinerary);
+      setRenameTitleDraft(String(rawItinerary.title || '').trim() || 'Untitled trip');
+      return;
+    }
+    if (action === 'duplicate') {
+      (async () => {
+        try {
+          await createItinerary({
+            title: `${rawItinerary.title || 'Itinerary'} (copy)`,
+            overview: rawItinerary.overview || '',
+            destination: rawItinerary.destination || '',
+            locations: rawItinerary.locations || '',
+            startDate: rawItinerary.startDate || '',
+            endDate: rawItinerary.endDate || '',
+            dates: rawItinerary.dates || '',
+            days: rawItinerary.days || 1,
+            categories: Array.isArray(rawItinerary.categories) ? rawItinerary.categories : [],
+            coverImages: Array.isArray(rawItinerary.coverImages) ? rawItinerary.coverImages : [],
+            places: Array.isArray(rawItinerary.places) ? rawItinerary.places : [],
+            tripExpenseItems: Array.isArray(rawItinerary.tripExpenseItems) ? rawItinerary.tripExpenseItems : [],
+            budget: rawItinerary.budget,
+            budgetSpent: rawItinerary.budgetSpent,
+            travelers: rawItinerary.travelers,
+            status: rawItinerary.status,
+            statusClass: rawItinerary.statusClass,
+            image: rawItinerary.image,
+            placesSaved: rawItinerary.placesSaved,
+            published: false,
+            visibility: 'private',
+          });
+          const rows = await fetchMyItineraries();
+          setMyTrips(rows);
+        } catch (e) {
+          alert(e?.message || 'Could not duplicate');
+        }
+      })();
+      return;
+    }
+    if (action === 'delete') {
+      if (!window.confirm('Delete this trip? This cannot be undone.')) return;
+      (async () => {
+        try {
+          await deleteItinerary(String(rawItinerary._id));
+          setMyTrips((prev) => prev.filter((x) => String(x._id) !== String(rawItinerary._id)));
+        } catch (e) {
+          alert(e?.message || 'Delete failed');
+        }
+      })();
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(e) {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
         setOpenStatusDropdownId(null);
+      }
+      if (ownerMenuRef.current && !ownerMenuRef.current.contains(e.target)) {
+        setOpenOwnerMenuId(null);
       }
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
@@ -86,16 +230,16 @@ export default function Dashboard({ user, onLogout }) {
     return d.toISOString().slice(0, 10);
   })();
 
-  const filteredTrips = (() => {
-    if (tripFilter === 'All') return trips;
+  const filteredTrips = useMemo(() => {
+    if (tripFilter === 'All') return tripRows;
     if (tripFilter === 'Upcoming') {
-      return trips.filter((t) => t.endDate && t.endDate >= todayStr);
+      return tripRows.filter((t) => t.endDate && t.endDate >= todayStr);
     }
     if (tripFilter === 'Past') {
-      return trips.filter((t) => t.endDate && t.endDate < todayStr);
+      return tripRows.filter((t) => t.endDate && t.endDate < todayStr);
     }
-    return trips;
-  })();
+    return tripRows;
+  }, [tripRows, tripFilter, todayStr]);
 
   return (
     <div className="dashboard">
@@ -215,8 +359,11 @@ export default function Dashboard({ user, onLogout }) {
             </Link>
           </section>
 
-          <section className="dashboard__trips">
+          <section className="dashboard__trips" id="my-trips">
             <h2 className="dashboard__section-title">Your Trips</h2>
+            <p className="dashboard__trips-hint">
+              Plan trips, publish to Explore, or share from the menu on each card.
+            </p>
             <div className="dashboard__filters">
               {TRIP_FILTERS.map((filter) => (
                 <button
@@ -229,8 +376,15 @@ export default function Dashboard({ user, onLogout }) {
                 </button>
               ))}
             </div>
+            {myTripsLoading && <p className="dashboard__trips-status">Loading your trips…</p>}
+            {!myTripsLoading && myTrips.length === 0 && (
+              <p className="dashboard__trips-empty">No trips yet. Start with &quot;New Trip&quot; above.</p>
+            )}
+            {!myTripsLoading && myTrips.length > 0 && filteredTrips.length === 0 && (
+              <p className="dashboard__trips-empty">No trips match this filter.</p>
+            )}
             <ul className="dashboard__trip-list">
-              {filteredTrips.map((trip) => (
+              {!myTripsLoading && filteredTrips.map((trip) => (
                 <li
                   key={trip.id}
                   className="trip-card"
@@ -250,6 +404,87 @@ export default function Dashboard({ user, onLogout }) {
                       alt=""
                       className="trip-card__image"
                     />
+                    <div
+                      className="trip-card__owner-menu"
+                      ref={openOwnerMenuId === trip.id ? ownerMenuRef : null}
+                    >
+                      <button
+                        type="button"
+                        className="trip-card__owner-more"
+                        aria-label="Trip options"
+                        aria-expanded={openOwnerMenuId === trip.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenOwnerMenuId((id) => (id === trip.id ? null : trip.id));
+                        }}
+                      >
+                        <MoreVertical size={18} aria-hidden />
+                      </button>
+                      {openOwnerMenuId === trip.id && (
+                        <div className="trip-card__owner-dropdown" role="menu">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'share');
+                            }}
+                          >
+                            Share link
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'publish');
+                            }}
+                          >
+                            Publish to Explore
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'duplicate');
+                            }}
+                          >
+                            Duplicate
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'rename');
+                            }}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option trip-card__owner-option--danger"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'delete');
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="trip-card__status-wrap" ref={openStatusDropdownId === trip.id ? statusDropdownRef : null}>
                       <button
                         type="button"
@@ -362,6 +597,81 @@ export default function Dashboard({ user, onLogout }) {
           </section>
         </aside>
       </div>
+
+      {renameTarget && (
+        <>
+          <button
+            type="button"
+            className="dashboard__rename-backdrop"
+            aria-label="Close rename dialog"
+            onClick={() => {
+              setRenameTarget(null);
+              setRenameTitleDraft('');
+            }}
+          />
+          <div
+            className="dashboard__rename-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-rename-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="dashboard-rename-title" className="dashboard__rename-title">
+              Rename trip
+            </h2>
+            <label htmlFor="dashboard-rename-input" className="dashboard__rename-label">
+              Trip name
+            </label>
+            <input
+              id="dashboard-rename-input"
+              type="text"
+              className="dashboard__rename-input"
+              value={renameTitleDraft}
+              onChange={(e) => setRenameTitleDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyRenameFromModal();
+                }
+                if (e.key === 'Escape') {
+                  setRenameTarget(null);
+                  setRenameTitleDraft('');
+                }
+              }}
+              autoFocus
+            />
+            <div className="dashboard__rename-actions">
+              <button
+                type="button"
+                className="dashboard__rename-cancel"
+                onClick={() => {
+                  setRenameTarget(null);
+                  setRenameTitleDraft('');
+                }}
+              >
+                Cancel
+              </button>
+              <button type="button" className="dashboard__rename-save" onClick={() => applyRenameFromModal()}>
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <PublishItineraryModal
+        open={Boolean(publishTarget)}
+        onClose={() => setPublishTarget(null)}
+        itinerary={publishTarget}
+        onPublished={async () => {
+          try {
+            const rows = await fetchMyItineraries();
+            setMyTrips(rows);
+          } catch {
+            /* ignore */
+          }
+        }}
+      />
     </div>
   );
 }

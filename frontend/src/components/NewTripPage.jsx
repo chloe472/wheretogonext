@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
-import { addTrip } from '../data/mockTrips';
+import { createItinerary } from '../api/itinerariesApi';
 import DateRangePickerModal from './DateRangePickerModal';
 import './NewTripPage.css';
 
@@ -52,6 +52,8 @@ export default function NewTripPage({ user, onLogout }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitedEmails, setInvitedEmails] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const whereRef = useRef(null);
 
   const suggestions = searchLocations(whereQuery);
@@ -80,9 +82,10 @@ export default function NewTripPage({ user, onLogout }) {
 
   const handleWhereFocus = () => setWhereOpen(true);
 
-  const handleStartPlanning = (e) => {
+  const handleStartPlanning = async (e) => {
     e.preventDefault();
     setDatesError('');
+    setSubmitError('');
     const resolvedLocation = selectedLocation ?? resolveTypedLocation(whereQuery);
     if (!resolvedLocation) return;
     if (!startDate || !endDate) {
@@ -95,16 +98,15 @@ export default function NewTripPage({ user, onLogout }) {
     }
     const start = startDate;
     const end = endDate;
-    const tripId = `trip-${Date.now()}`;
     const title = resolvedLocation.country
       ? `${resolvedLocation.name}, ${resolvedLocation.country}`
       : resolvedLocation.name;
     const locations = resolvedLocation.country
       ? `${resolvedLocation.name}, ${resolvedLocation.country}`
       : resolvedLocation.name;
-    const newTrip = {
-      id: tripId,
+    const payload = {
       title: `Trip to ${title}`,
+      overview: '',
       destination: resolvedLocation.name,
       dates: formatTripDates(start, end),
       startDate: start,
@@ -117,9 +119,23 @@ export default function NewTripPage({ user, onLogout }) {
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
       image: DEFAULT_TRIP_IMAGE,
+      coverImages: [DEFAULT_TRIP_IMAGE],
+      published: false,
+      visibility: 'private',
     };
-    addTrip(newTrip);
-    navigate(`/trip/${tripId}`);
+    setSubmitting(true);
+    try {
+      const newItinerary = await createItinerary(payload);
+      const id = newItinerary?._id ?? newItinerary?.id;
+      if (!id) {
+        throw new Error('Server did not return an itinerary id.');
+      }
+      navigate(`/trip/${id}`);
+    } catch (err) {
+      setSubmitError(err?.message || 'Could not create trip. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -299,8 +315,11 @@ export default function NewTripPage({ user, onLogout }) {
             )}
           </div>
 
-          <button type="submit" className="new-trip__submit">
-            Start planning
+          {submitError && (
+            <p className="new-trip__error" role="alert">{submitError}</p>
+          )}
+          <button type="submit" className="new-trip__submit" disabled={submitting}>
+            {submitting ? 'Creating…' : 'Start planning'}
           </button>
         </form>
       </main>

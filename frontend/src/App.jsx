@@ -7,6 +7,7 @@ import TripDetailsPage from './components/TripDetailsPage';
 import NewTripPage from './components/NewTripPage';
 import ProfilePage from './components/ProfilePage';
 import SearchResultsPage from './components/SearchResultsPage';
+import ItineraryDetailPage from './components/ItineraryDetailPage';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -88,6 +89,7 @@ function App() {
             )
           }
         />
+        <Route path="/itineraries/:id" element={<ItineraryDetailPage user={user} onLogout={handleLogout} />} />
       </Routes>
       {authModalOpen && (
         <AuthModal
