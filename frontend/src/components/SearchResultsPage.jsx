@@ -1,36 +1,81 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, User, Bell, ChevronDown } from 'lucide-react';
+import { Search, User, Bell } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
 import {
-  getCommunityItineraries,
   ADVENTURE_TYPES,
   DURATIONS,
   SORT_OPTIONS,
   CREATOR_NATIONALITIES,
-} from '../data/mockCommunityItineraries';
-import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
+} from '../data/communitySearchConstants';
+import {
+  fetchPublicItineraries,
+  mapItineraryToCard,
+  mapSortToApiParam,
+  applyClientSort,
+} from '../api/itinerariesApi';
+import ItineraryCard from './ItineraryCard';
 import './SearchResultsPage.css';
 
 export default function SearchResultsPage({ user, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
   const [searchInput, setSearchInput] = useState(q);
-  const [suggestOpen, setSuggestOpen] = useState(false);
   const [sortBy, setSortBy] = useState('Most Popular');
   const [adventureType, setAdventureType] = useState('All');
   const [duration, setDuration] = useState('');
   const [creatorNationality, setCreatorNationality] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [itineraries, setItineraries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const searchRef = useRef(null);
   const suggestRef = useRef(null);
 
   const suggestions = searchLocations(searchInput.trim());
-  const itineraries = getCommunityItineraries(q, { type: adventureType !== 'All' ? adventureType : undefined, duration: duration || undefined, sort: sortBy });
 
   useEffect(() => {
     setSearchInput(q);
   }, [q]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const apiSort = mapSortToApiParam(sortBy);
+        const raw = await fetchPublicItineraries(
+          {
+            search: q,
+            sort: apiSort,
+            categories: adventureType !== 'All' ? adventureType : undefined,
+            duration: duration || undefined,
+          },
+          ac.signal
+        );
+        if (cancelled) return;
+        let cards = raw.map(mapItineraryToCard);
+        cards = applyClientSort(cards, sortBy);
+        setItineraries(cards);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setError(err?.message || 'Failed to load itineraries');
+        setItineraries([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [q, sortBy, adventureType, duration]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -124,7 +169,9 @@ export default function SearchResultsPage({ user, onLogout }) {
 
       <div className="search-results__main">
         <aside className="search-results__sidebar">
-          <p className="search-results__count">{itineraries.length} Itineraries for you</p>
+          <p className="search-results__count">
+            {loading ? 'Loading…' : `${itineraries.length} Itineraries for you`}
+          </p>
           <div className="search-results__filter">
             <label htmlFor="sort">Sort by:</label>
             <select id="sort" className="search-results__select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -151,6 +198,7 @@ export default function SearchResultsPage({ user, onLogout }) {
           </div>
           <div className="search-results__filter-block">
             <h3 className="search-results__filter-title">Creator Nationality</h3>
+            <p className="search-results__filter-note">Coming soon — not applied to saved itineraries yet.</p>
             <div className="search-results__filter-tags">
               {CREATOR_NATIONALITIES.map((n) => (
                 <button key={n} type="button" className={`search-results__filter-tag ${creatorNationality === n ? 'search-results__filter-tag--active' : ''}`} onClick={() => setCreatorNationality(creatorNationality === n ? '' : n)}>{n}</button>
@@ -160,41 +208,34 @@ export default function SearchResultsPage({ user, onLogout }) {
         </aside>
 
         <div className="search-results__content">
+          {error && (
+            <p className="search-results__error" role="alert">{error}</p>
+          )}
           {q && (
             <p className="search-results__query-hint">
               You are searching for itineraries that contain <strong>{q}</strong> – this can be in the name or in the contents of the itinerary.
             </p>
           )}
           <div className="search-results__grid">
-            {itineraries.map((it) => (
-              <article key={it.id} className="search-results__card">
-                <div className="search-results__card-image-wrap">
-                  <img
-                    src={resolveImageUrl(it.image, it.title, 'itinerary')}
-                    alt={it.title || 'Itinerary'}
-                    className="search-results__card-image"
-                    data-image-hint={it.title || ''}
-                    data-image-topic="itinerary"
-                    onError={(event) => applyImageFallback(event)}
-                  />
-                </div>
-                <div className="search-results__card-body">
-                  <h3 className="search-results__card-title">{it.title}</h3>
-                  <p className="search-results__card-price">{it.currency} {it.price}</p>
-                  <div className="search-results__card-creator">
-                    <span className="search-results__card-avatar"><User size={14} aria-hidden /></span>
-                    <span className="search-results__card-username">{it.creator}</span>
-                  </div>
-                  <div className="search-results__card-meta">
-                    <span className="search-results__card-type">{it.type}</span>
-                    <span className="search-results__card-duration">{it.duration}</span>
-                  </div>
-                </div>
-              </article>
+            {!loading && itineraries.map((it) => (
+              <ItineraryCard
+                key={it.id}
+                itineraryId={it.id}
+                title={it.title}
+                coverImages={it.coverImages}
+                views={it.views}
+                durationLabel={it.duration}
+                placesCount={it.placesCount ?? 0}
+                creatorName={it.creator}
+                creatorAvatar={it.creatorAvatar}
+              />
             ))}
           </div>
-          {itineraries.length === 0 && (
+          {!loading && itineraries.length === 0 && !error && (
             <p className="search-results__empty">No itineraries match your search. Try a different destination or filters.</p>
+          )}
+          {loading && (
+            <p className="search-results__loading">Loading itineraries…</p>
           )}
         </div>
       </div>

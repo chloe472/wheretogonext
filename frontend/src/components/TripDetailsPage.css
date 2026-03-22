@@ -307,22 +307,6 @@
   gap: 0.25rem;
 }
 
-.trip-details__save {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--wtg-primary-contrast);
-  background: #dc2626;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-left: 0.5rem;
-}
-
-.trip-details__save:hover {
-  background: #b91c1c;
-}
-
 /* View toggle (Kanban / Calendar) */
 .trip-details__view-toggle {
   display: flex;

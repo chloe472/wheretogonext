@@ -1,0 +1,705 @@
+import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import mongoose from 'mongoose';
+import Itinerary from '../models/Itinerary.js';
+import ItineraryComment from '../models/ItineraryComment.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
+
+const router = Router();
+
+const uploadDir = path.join(process.cwd(), 'uploads', 'itineraries');
+fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg';
+    cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`);
+  },
+});
+
+const ALLOWED_IMAGE_MIME = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+]);
+
+const uploadMw = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_IMAGE_MIME.has(file.mimetype)) return cb(null, true);
+    cb(new Error('Invalid file type. Use SVG, PNG, JPG, WEBP, or GIF.'));
+  },
+});
+
+function isDbReady() {
+  return mongoose.connection.readyState === 1;
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Max day number from places; default 1. */
+function computeDaysFromPlaces(places) {
+  if (!Array.isArray(places) || places.length === 0) return 1;
+  const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1);
+  if (nums.length === 0) return 1;
+  return Math.max(1, ...nums);
+}
+
+/** Inclusive calendar-day count from YYYY-MM-DD strings (avoids TZ edge cases at noon UTC). */
+function computeDaysFromDateRange(startStr, endStr) {
+  const a = String(startStr || '').trim();
+  const b = String(endStr || '').trim();
+  if (!a || !b) return 1;
+  const start = new Date(`${a}T12:00:00`);
+  const end = new Date(`${b}T12:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 1;
+  const diff = Math.round((end - start) / 86400000) + 1;
+  return Math.max(1, diff);
+}
+
+function parseDurationFilter(durationParam) {
+  const d = String(durationParam || '').trim().toLowerCase();
+  if (!d) return null;
+  if (d === '1-3 days' || d === '1-3') return { $gte: 1, $lte: 3 };
+  if (d === '3-5 days' || d === '3-5') return { $gte: 3, $lte: 5 };
+  if (d === '5-7 days' || d === '5-7') return { $gte: 5, $lte: 7 };
+  if (d === '7-10 days' || d === '7-10') return { $gte: 7, $lte: 10 };
+  if (d === '10-14 days' || d === '10-14') return { $gte: 10, $lte: 14 };
+  if (d === '14+ days' || d === '14+') return { $gte: 14 };
+  return null;
+}
+
+/**
+ * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
+ */
+function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
+  const s = String(startDateStr || '').trim().slice(0, 10);
+  const d = String(itemDateStr || '').trim().slice(0, 10);
+  if (!s || !d) return 1;
+  const start = new Date(`${s}T12:00:00`);
+  const item = new Date(`${d}T12:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(item.getTime())) return 1;
+  const diff = Math.round((item - start) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
+/** Kanban categories that represent mappable / publishable stops (not transport-only rows). */
+const EXPENSE_ITEM_CATEGORIES_FOR_PLACES = new Set(['places', 'food', 'experiences', 'stays']);
+
+/**
+ * Build Itinerary.places[] from tripExpenseItems for Explore / public views.
+ */
+function placesFromTripExpenseItems(items, startDateStr) {
+  if (!Array.isArray(items)) return [];
+  const raw = [];
+  for (const it of items) {
+    const cid = String(it?.categoryId || '').toLowerCase();
+    if (!EXPENSE_ITEM_CATEGORIES_FOR_PLACES.has(cid)) continue;
+
+    const name = String(it?.name || '').trim();
+    if (!name) continue;
+
+    const itemDate = cid === 'stays' ? (it.checkInDate || it.date || '') : (it.date || '');
+    const dayNumber = dayNumberFromStartAndItemDate(startDateStr, itemDate);
+
+    raw.push({
+      name,
+      category: String(it?.category != null ? it.category : it?.categoryId || ''),
+      address: String(it?.detail != null ? it.detail : it?.address || ''),
+      timeSlot: String(it?.startTime != null ? it.startTime : ''),
+      notes: String(it?.notes != null ? it.notes : ''),
+      image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''),
+      rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null,
+      reviewCount: it?.reviewCount != null && it.reviewCount !== '' ? Number(it.reviewCount) : null,
+      dayNumber,
+      lat: it?.lat,
+      lng: it?.lng,
+    });
+  }
+  return normalizePlaces(raw);
+}
+
+function normalizePlaces(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p) => ({
+    name: p?.name != null ? String(p.name) : '',
+    category: p?.category != null ? String(p.category) : '',
+    address: p?.address != null ? String(p.address) : '',
+    timeSlot: p?.timeSlot != null ? String(p.timeSlot) : '',
+    notes: p?.notes != null ? String(p.notes) : '',
+    image: p?.image != null ? String(p.image) : '',
+    rating: p?.rating != null && p.rating !== '' ? Number(p.rating) : null,
+    reviewCount: p?.reviewCount != null && p.reviewCount !== '' ? Number(p.reviewCount) : null,
+    dayNumber: Math.max(1, Number(p?.dayNumber) || 1),
+    lat: p?.lat != null && p.lat !== '' && Number.isFinite(Number(p.lat)) ? Number(p.lat) : null,
+    lng: p?.lng != null && p.lng !== '' && Number.isFinite(Number(p.lng)) ? Number(p.lng) : null,
+  }));
+}
+
+function serializeComment(c, currentUserId) {
+  const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : [];
+  const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false;
+  return {
+    id: String(c._id),
+    itineraryId: String(c.itineraryId),
+    userId: String(c.userId),
+    userName: c.userName || '',
+    body: c.body,
+    parentId: c.parentId ? String(c.parentId) : null,
+    likeCount: likes.length,
+    likedByMe,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  };
+}
+
+function normalizeCategories(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((c) => String(c).trim()).filter(Boolean);
+}
+
+function normalizeCoverImages(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((u) => String(u).trim()).filter(Boolean);
+}
+
+/**
+ * GET /api/itineraries
+ * Public community list: published + public only.
+ * Query: sort, categories, duration, search
+ */
+router.get('/', async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const filter = { published: true, visibility: 'public' };
+
+    const search = String(req.query.search || '').trim();
+    if (search) {
+      const q = escapeRegex(search);
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { destination: { $regex: q, $options: 'i' } },
+        { overview: { $regex: q, $options: 'i' } },
+      ];
+    }
+
+    const categories = String(req.query.categories || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (categories.length) {
+      filter.categories = { $in: categories };
+    }
+
+    const range = parseDurationFilter(req.query.duration);
+    if (range) {
+      filter.days = range;
+    }
+
+    const sortKey = String(req.query.sort || 'newest').toLowerCase();
+    let sort = { publishedAt: -1, createdAt: -1 };
+    if (sortKey === 'most-popular' || sortKey === 'popular') {
+      sort = { viewCount: -1, publishedAt: -1 };
+    }
+
+    const exclude = String(req.query.exclude || '').trim();
+    if (exclude && mongoose.isValidObjectId(exclude)) {
+      filter._id = { $ne: new mongoose.Types.ObjectId(exclude) };
+    }
+
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '100'), 10) || 100));
+
+    const docs = await Itinerary.find(filter)
+      .sort(sort)
+      .limit(limit)
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.json({ itineraries: docs });
+  } catch (err) {
+    console.error('GET /itineraries error:', err);
+    return res.status(500).json({ error: 'Failed to list itineraries' });
+  }
+});
+
+/**
+ * GET /api/itineraries/mine
+ */
+router.get('/mine', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const docs = await Itinerary.find({ creator: req.userId })
+      .sort({ updatedAt: -1 })
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.json({ itineraries: docs });
+  } catch (err) {
+    console.error('GET /itineraries/mine error:', err);
+    return res.status(500).json({ error: 'Failed to load your itineraries' });
+  }
+});
+
+/**
+ * POST /api/itineraries/upload — single image (multipart field name: file)
+ */
+router.post('/upload', requireAuth, (req, res, next) => {
+  uploadMw.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Upload failed' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const rel = `/uploads/itineraries/${req.file.filename}`;
+    const host = req.get('host') || 'localhost:5000';
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const url = `${proto}://${host}${rel}`;
+    return res.status(201).json({ url, path: rel });
+  });
+});
+
+/**
+ * GET /api/itineraries/:id/comments
+ */
+router.get('/:id/comments', optionalAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+    const exists = await Itinerary.findById(id).select('_id').lean();
+    if (!exists) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+    const docs = await ItineraryComment.find({ itineraryId: id }).sort({ createdAt: 1 }).lean();
+    const uid = req.userId || null;
+    return res.json({ comments: docs.map((c) => serializeComment(c, uid)) });
+  } catch (err) {
+    console.error('GET /itineraries/:id/comments error:', err);
+    return res.status(500).json({ error: 'Failed to load comments' });
+  }
+});
+
+/**
+ * POST /api/itineraries/:id/comments
+ */
+router.post('/:id/comments', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+    const itinerary = await Itinerary.findById(id).select('_id').lean();
+    if (!itinerary) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+
+    const body = String(req.body?.body || '').trim();
+    if (!body) {
+      return res.status(400).json({ error: 'Comment body is required' });
+    }
+
+    let parentId = null;
+    if (req.body?.parentId) {
+      const pid = String(req.body.parentId);
+      if (!mongoose.isValidObjectId(pid)) {
+        return res.status(400).json({ error: 'Invalid parentId' });
+      }
+      const parent = await ItineraryComment.findById(pid);
+      if (!parent || String(parent.itineraryId) !== id) {
+        return res.status(400).json({ error: 'Invalid parent comment' });
+      }
+      parentId = parent._id;
+    }
+
+    const doc = await ItineraryComment.create({
+      itineraryId: id,
+      userId: req.userId,
+      userName: req.user?.name || req.user?.username || req.user?.email || 'User',
+      body,
+      parentId,
+    });
+
+    const populated = await ItineraryComment.findById(doc._id).lean();
+    return res.status(201).json({ comment: serializeComment(populated, req.userId) });
+  } catch (err) {
+    console.error('POST /itineraries/:id/comments error:', err);
+    return res.status(500).json({ error: 'Failed to post comment' });
+  }
+});
+
+/**
+ * POST /api/itineraries/:id/comments/:commentId/like
+ */
+router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const { id, commentId } = req.params;
+    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(commentId)) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    const comment = await ItineraryComment.findById(commentId);
+    if (!comment || String(comment.itineraryId) !== id) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const uid = new mongoose.Types.ObjectId(req.userId);
+    const idx = comment.likes.findIndex((x) => String(x) === String(req.userId));
+    let likedByMe;
+    if (idx >= 0) {
+      comment.likes.splice(idx, 1);
+      likedByMe = false;
+    } else {
+      comment.likes.push(uid);
+      likedByMe = true;
+    }
+    await comment.save();
+
+    return res.json({ likeCount: comment.likes.length, likedByMe });
+  } catch (err) {
+    console.error('POST like comment error:', err);
+    return res.status(500).json({ error: 'Failed to update like' });
+  }
+});
+
+/**
+ * GET /api/itineraries/:id
+ * Atomically increments viewCount by 1.
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const itinerary = await Itinerary.findOneAndUpdate(
+      { _id: id },
+      { $inc: { viewCount: 1 } },
+      { new: true }
+    )
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    if (!itinerary) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+
+    const commentCount = await ItineraryComment.countDocuments({ itineraryId: id });
+
+    return res.json({ itinerary: { ...itinerary, commentCount } });
+  } catch (err) {
+    console.error('GET /itineraries/:id error:', err);
+    return res.status(500).json({ error: 'Failed to load itinerary' });
+  }
+});
+
+/**
+ * POST /api/itineraries
+ */
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const title = String(req.body?.title || '').trim();
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const places = normalizePlaces(req.body?.places);
+    const startDate = req.body?.startDate != null ? String(req.body.startDate).trim() : '';
+    const endDate = req.body?.endDate != null ? String(req.body.endDate).trim() : '';
+    let days =
+      Number.isFinite(Number(req.body?.days)) && Number(req.body.days) >= 1
+        ? Number(req.body.days)
+        : null;
+    if (days == null) {
+      if (places.length > 0) {
+        days = computeDaysFromPlaces(places);
+      } else if (startDate && endDate) {
+        days = computeDaysFromDateRange(startDate, endDate);
+      } else {
+        days = 1;
+      }
+    }
+
+    const visibility = req.body?.visibility === 'public' ? 'public' : 'private';
+    const published = Boolean(req.body?.published);
+
+    const coverImages = normalizeCoverImages(req.body?.coverImages);
+    const imageFromBody = req.body?.image != null ? String(req.body.image).trim() : '';
+    const coverImagesFinal =
+      coverImages.length > 0 ? coverImages : imageFromBody ? [imageFromBody] : [];
+
+    const tripExpenseItemsIn = Array.isArray(req.body?.tripExpenseItems) ? req.body.tripExpenseItems : [];
+    const placesFinal =
+      places.length > 0
+        ? places
+        : tripExpenseItemsIn.length > 0
+          ? placesFromTripExpenseItems(tripExpenseItemsIn, startDate)
+          : [];
+
+    let daysFinal = days;
+    if (placesFinal.length > 0 && !(Number.isFinite(Number(req.body?.days)) && Number(req.body.days) >= 1)) {
+      daysFinal = computeDaysFromPlaces(placesFinal);
+    }
+
+    const doc = await Itinerary.create({
+      title,
+      overview: req.body?.overview != null ? String(req.body.overview) : '',
+      creator: req.userId,
+      destination: req.body?.destination != null ? String(req.body.destination).trim() : '',
+      locations: req.body?.locations != null ? String(req.body.locations).trim() : '',
+      startDate,
+      endDate,
+      dates: req.body?.dates != null ? String(req.body.dates) : '',
+      budget: req.body?.budget != null ? String(req.body.budget) : '$0',
+      budgetSpent:
+        req.body?.budgetSpent != null && req.body.budgetSpent !== ''
+          ? Math.max(0, Number(req.body.budgetSpent) || 0)
+          : 0,
+      travelers:
+        req.body?.travelers != null && req.body.travelers !== ''
+          ? Math.max(1, Number(req.body.travelers) || 1)
+          : 1,
+      status: req.body?.status != null ? String(req.body.status) : 'Planning',
+      statusClass: req.body?.statusClass != null ? String(req.body.statusClass) : '',
+      image: imageFromBody || (coverImagesFinal[0] ?? ''),
+      placesSaved:
+        req.body?.placesSaved != null && req.body.placesSaved !== ''
+          ? Math.max(0, Number(req.body.placesSaved) || 0)
+          : placesFinal.length,
+      days: daysFinal,
+      categories: normalizeCategories(req.body?.categories),
+      coverImages: coverImagesFinal,
+      tripExpenseItems: tripExpenseItemsIn,
+      places: placesFinal,
+      viewCount: 0,
+      published,
+      visibility,
+      publishedAt: published ? new Date() : null,
+    });
+
+    const populated = await Itinerary.findById(doc._id)
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.status(201).json({ itinerary: populated });
+  } catch (err) {
+    console.error('POST /itineraries error:', err);
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors || {}).map((e) => e.message).join(' ') || err.message;
+      return res.status(400).json({ error: msg });
+    }
+    return res.status(500).json({ error: 'Failed to create itinerary' });
+  }
+});
+
+/**
+ * PUT /api/itineraries/:id
+ */
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const existing = await Itinerary.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+    if (String(existing.creator) !== req.userId) {
+      return res.status(403).json({ error: 'Not allowed to edit this itinerary' });
+    }
+
+    const body = req.body || {};
+    if (body.title != null) existing.title = String(body.title).trim();
+    if (body.overview != null) existing.overview = String(body.overview);
+    if (body.destination != null) existing.destination = String(body.destination).trim();
+    if (body.locations != null) existing.locations = String(body.locations).trim();
+    if (body.startDate != null) existing.startDate = String(body.startDate).trim();
+    if (body.endDate != null) existing.endDate = String(body.endDate).trim();
+    if (body.dates != null) existing.dates = String(body.dates);
+    if (body.budget != null) existing.budget = String(body.budget);
+    if (body.budgetSpent != null && body.budgetSpent !== '') {
+      existing.budgetSpent = Math.max(0, Number(body.budgetSpent) || 0);
+    }
+    if (body.travelers != null && body.travelers !== '') {
+      existing.travelers = Math.max(1, Number(body.travelers) || 1);
+    }
+    if (body.status != null) existing.status = String(body.status);
+    if (body.statusClass != null) existing.statusClass = String(body.statusClass);
+    if (body.image != null) existing.image = String(body.image).trim();
+    if (body.placesSaved != null && body.placesSaved !== '') {
+      existing.placesSaved = Math.max(0, Number(body.placesSaved) || 0);
+    }
+    let placesDerivedFromTripExpense = false;
+    if (body.tripExpenseItems != null && Array.isArray(body.tripExpenseItems)) {
+      existing.tripExpenseItems = body.tripExpenseItems;
+      existing.places = placesFromTripExpenseItems(body.tripExpenseItems, existing.startDate);
+      existing.placesSaved = Array.isArray(existing.places) ? existing.places.length : 0;
+      placesDerivedFromTripExpense = true;
+    }
+    if (body.categories != null) existing.categories = normalizeCategories(body.categories);
+    if (body.coverImages != null) existing.coverImages = normalizeCoverImages(body.coverImages);
+    if (body.places != null && !placesDerivedFromTripExpense) {
+      existing.places = normalizePlaces(body.places);
+    }
+    if (body.days != null && Number(body.days) >= 1) {
+      existing.days = Number(body.days);
+    } else if (placesDerivedFromTripExpense || body.places != null) {
+      existing.days = computeDaysFromPlaces(existing.places);
+    }
+    if (body.published != null) existing.published = Boolean(body.published);
+    if (body.visibility === 'public' || body.visibility === 'private') {
+      existing.visibility = body.visibility;
+    }
+    if (body.publishedAt != null && body.publishedAt !== '') {
+      existing.publishedAt = new Date(body.publishedAt);
+    }
+
+    await existing.save();
+
+    const populated = await Itinerary.findById(existing._id)
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.json({ itinerary: populated });
+  } catch (err) {
+    console.error('PUT /itineraries/:id error:', err);
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors || {}).map((e) => e.message).join(' ') || err.message;
+      return res.status(400).json({ error: msg });
+    }
+    return res.status(500).json({ error: 'Failed to update itinerary' });
+  }
+});
+
+/**
+ * DELETE /api/itineraries/:id
+ */
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const existing = await Itinerary.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+    if (String(existing.creator) !== req.userId) {
+      return res.status(403).json({ error: 'Not allowed to delete this itinerary' });
+    }
+
+    await Itinerary.deleteOne({ _id: id });
+    return res.status(204).send();
+  } catch (err) {
+    console.error('DELETE /itineraries/:id error:', err);
+    return res.status(500).json({ error: 'Failed to delete itinerary' });
+  }
+});
+
+/**
+ * POST /api/itineraries/:id/publish
+ */
+router.post('/:id/publish', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const visibility = req.body?.visibility;
+    if (visibility !== 'public' && visibility !== 'private') {
+      return res.status(400).json({ error: 'visibility must be "public" or "private"' });
+    }
+
+    const existing = await Itinerary.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+    if (String(existing.creator) !== req.userId) {
+      return res.status(403).json({ error: 'Not allowed to publish this itinerary' });
+    }
+
+    existing.published = true;
+    existing.visibility = visibility;
+    existing.publishedAt = new Date();
+
+    if (req.body?.title != null) {
+      const t = String(req.body.title).trim();
+      if (t) existing.title = t;
+    }
+    if (req.body?.overview != null) {
+      existing.overview = String(req.body.overview);
+    }
+    if (req.body?.categories != null) {
+      existing.categories = normalizeCategories(req.body.categories);
+    }
+    if (req.body?.coverImages != null) {
+      existing.coverImages = normalizeCoverImages(req.body.coverImages);
+    }
+
+    await existing.save();
+
+    const populated = await Itinerary.findById(existing._id)
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.json({ itinerary: populated });
+  } catch (err) {
+    console.error('POST /itineraries/:id/publish error:', err);
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors || {}).map((e) => e.message).join(' ') || err.message;
+      return res.status(400).json({ error: msg });
+    }
+    return res.status(500).json({ error: 'Failed to publish itinerary' });
+  }
+});
+
+export default router;

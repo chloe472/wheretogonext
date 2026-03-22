@@ -29,3 +29,6 @@ Thumbs.db
 
 .history
 backend/.env
+
+# User-uploaded itinerary images (local dev)
+backend/uploads/
