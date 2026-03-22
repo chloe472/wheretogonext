@@ -1,20 +1,21 @@
+/* Shared navbar — uses global theme tokens so it works on any page */
 .dashboard__header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 2rem;
-  border-bottom: 1px solid var(--dash-border);
-  background: var(--dash-surface);
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-body > #root {
-  padding-top: 80px;
+.dashboard__brand-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.dashboard__brand-link:hover {
+  text-decoration: none;
 }
 
 .dashboard__brand {
@@ -29,7 +30,7 @@ body > #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--dash-primary);
+  background: var(--wtg-primary);
   color: #faf8f5;
   font-size: 1.25rem;
   font-weight: 600;
@@ -40,13 +41,13 @@ body > #root {
   display: block;
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--dash-text);
+  color: var(--wtg-text);
 }
 
 .dashboard__tagline {
   display: block;
   font-size: 0.75rem;
-  color: var(--dash-text-muted);
+  color: var(--wtg-text-muted);
 }
 
 .dashboard__search-wrap {
@@ -65,7 +66,7 @@ body > #root {
 .dashboard__search-icon {
   position: absolute;
   left: 0.75rem;
-  color: var(--dash-text-muted);
+  color: var(--wtg-text-muted);
   pointer-events: none;
 }
 
@@ -73,27 +74,67 @@ body > #root {
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   font-size: 0.9375rem;
-  color: var(--dash-text);
-  background: var(--dash-input-bg);
-  border: 1px solid var(--dash-border);
+  color: var(--wtg-text);
+  background: var(--wtg-input-bg);
+  border: 1px solid var(--wtg-border);
   border-radius: 8px;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .dashboard__search-input::placeholder {
-  color: var(--dash-text-muted);
+  color: var(--wtg-text-muted);
 }
 
 .dashboard__search-input:hover {
-  background: var(--dash-surface);
+  background: var(--wtg-surface);
   border-color: #c4b8a8;
 }
 
 .dashboard__search-input:focus {
-  background: var(--dash-surface);
-  border-color: var(--dash-accent);
+  background: var(--wtg-surface);
+  border-color: var(--wtg-accent);
   box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.2);
+}
+
+.dashboard__search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(61, 52, 40, 0.12);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.dashboard__search-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: var(--wtg-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.dashboard__search-suggestion:hover {
+  background: var(--wtg-hover);
+}
+
+.dashboard__search-suggestion-meta {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
 }
 
 .dashboard__nav {
@@ -106,13 +147,19 @@ body > #root {
   padding: 0.5rem 0.75rem;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: var(--dash-text);
+  color: var(--wtg-text);
   text-decoration: none;
   border-radius: 6px;
 }
 
 .dashboard__nav-link:hover {
-  background: var(--dash-hover);
+  background: var(--wtg-hover);
+  text-decoration: none;
+}
+
+.dashboard__nav-link--active {
+  background: var(--wtg-hover);
+  font-weight: 600;
 }
 
 .dashboard__icon-btn {
@@ -121,20 +168,21 @@ body > #root {
   justify-content: center;
   width: 40px;
   height: 40px;
+  padding: 0;
   border: none;
   background: transparent;
-  color: var(--dash-text);
+  color: var(--wtg-text);
   border-radius: 50%;
   cursor: pointer;
 }
 
 .dashboard__icon-btn:hover {
-  background: var(--dash-hover);
+  background: var(--wtg-hover);
 }
 
 .dashboard__icon-btn--avatar {
-  background: var(--dash-accent);
-  color: var(--dash-surface);
+  background: var(--wtg-accent);
+  color: var(--wtg-primary-contrast);
 }
 
 .dashboard__profile-wrap {
@@ -144,7 +192,7 @@ body > #root {
 .dashboard__profile-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 1090;
   border: none;
   background: transparent;
   cursor: default;
@@ -154,12 +202,12 @@ body > #root {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 2;
+  z-index: 1100;
   margin-top: 0.25rem;
   min-width: 160px;
   padding: 0.5rem;
-  background: var(--dash-surface);
-  border: 1px solid var(--dash-border);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(61, 52, 40, 0.12);
 }
@@ -168,8 +216,8 @@ body > #root {
   display: block;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  color: var(--dash-text-muted);
-  border-bottom: 1px solid var(--dash-border);
+  color: var(--wtg-text-muted);
+  border-bottom: 1px solid var(--wtg-border);
   margin-bottom: 0.25rem;
 }
 
@@ -186,7 +234,7 @@ body > #root {
 }
 
 .dashboard__profile-link {
-  color: var(--dash-text);
+  color: var(--wtg-text);
 }
 
 .dashboard__profile-link:hover {
@@ -195,9 +243,11 @@ body > #root {
 
 .dashboard__profile-logout {
   background: transparent;
-  color: var(--dash-text);
+  color: var(--wtg-text);
+  border: none;
+  font-family: inherit;
 }
 
 .dashboard__profile-logout:hover {
-  background: var(--dash-hover);
+  background: var(--wtg-hover);
 }

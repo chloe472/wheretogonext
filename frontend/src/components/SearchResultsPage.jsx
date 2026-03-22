@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Search, User, Bell } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
 import {
   ADVENTURE_TYPES,
@@ -15,6 +15,7 @@ import {
   applyClientSort,
 } from '../api/itinerariesApi';
 import ItineraryCard from './ItineraryCard';
+import DashboardHeader from './DashboardHeader';
 import './SearchResultsPage.css';
 
 export default function SearchResultsPage({ user, onLogout }) {
@@ -25,7 +26,6 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [adventureType, setAdventureType] = useState('All');
   const [duration, setDuration] = useState('');
   const [creatorNationality, setCreatorNationality] = useState('');
-  const [profileOpen, setProfileOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [itineraries, setItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,33 +103,7 @@ export default function SearchResultsPage({ user, onLogout }) {
 
   return (
     <div className="search-results">
-      <header className="search-results__header">
-        <Link to="/" className="search-results__brand">
-          <span className="search-results__logo">@</span>
-          <span className="search-results__app-name">where to go next</span>
-        </Link>
-        <nav className="search-results__nav">
-          <Link to="/" className="search-results__nav-link">My Trips</Link>
-          <Link to="/search" className="search-results__nav-link search-results__nav-link--active">Explore</Link>
-          <button type="button" className="search-results__icon-btn" aria-label="Notifications">
-            <Bell size={20} aria-hidden />
-          </button>
-          <div className="search-results__profile-wrap">
-            <button type="button" className="search-results__icon-btn search-results__icon-btn--avatar" aria-label="Profile" onClick={() => setProfileOpen((o) => !o)}>
-              <User size={20} aria-hidden />
-            </button>
-            {profileOpen && (
-              <>
-                <button type="button" className="search-results__profile-backdrop" aria-label="Close" onClick={() => setProfileOpen(false)} />
-                <div className="search-results__profile-menu">
-                  {user?.name && <span className="search-results__profile-name">{user.name}</span>}
-                  <button type="button" className="search-results__profile-logout" onClick={() => { setProfileOpen(false); onLogout?.(); }}>Log out</button>
-                </div>
-              </>
-            )}
-          </div>
-        </nav>
-      </header>
+      <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
 
       <section className="search-results__hero">
         <h1 className="search-results__hero-title">Community made itineraries</h1>
