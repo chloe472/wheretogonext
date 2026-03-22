@@ -23,6 +23,12 @@ const MIN_IMAGES = 3;
 const MAX_IMAGES = 15;
 const MAX_BYTES = 5 * 1024 * 1024;
 
+const PUBLISH_STEPS = [
+  { id: 1, label: 'Details' },
+  { id: 2, label: 'Photos' },
+  { id: 3, label: 'Visibility' },
+];
+
 const ALLOWED_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -65,12 +71,15 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [openKebab, setOpenKebab] = useState(null);
+  /** Highest step the user has reached via Next (breadcrumbs can only go to steps ≤ this). */
+  const [farthestStep, setFarthestStep] = useState(1);
   const fileInputRef = useRef(null);
   const revokeUrls = useRef([]);
 
   const resetFromItinerary = useCallback(() => {
     if (!itinerary) return;
     setStep(1);
+    setFarthestStep(1);
     setSuccess(false);
     setTitle(String(itinerary.title || '').trim());
     setOverview(String(itinerary.overview || '').slice(0, MAX_OVERVIEW));
@@ -175,6 +184,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         setSubmitError('Please enter a title.');
         return;
       }
+      setFarthestStep((f) => Math.max(f, 2));
       setStep(2);
       return;
     }
@@ -184,8 +194,17 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         return;
       }
       setPhotoError('');
+      setFarthestStep((f) => Math.max(f, 3));
       setStep(3);
     }
+  };
+
+  const goToStep = (n) => {
+    if (n < 1 || n > 3 || n > farthestStep) return;
+    setSubmitError('');
+    setPhotoError('');
+    setOpenKebab(null);
+    setStep(n);
   };
 
   const goBack = () => {
@@ -240,16 +259,38 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         </div>
 
         {!success && (
-          <div className="publish-modal__steps" aria-hidden>
-            {[1, 2, 3].map((n) => (
-              <span
-                key={n}
-                className={`publish-modal__step-dot ${step >= n ? 'publish-modal__step-dot--active' : ''}`}
-              >
-                {n}
-              </span>
-            ))}
-          </div>
+          <nav className="publish-modal__steps" aria-label="Publish steps">
+            {PUBLISH_STEPS.map(({ id, label }) => {
+              const reachable = id <= farthestStep;
+              const isCurrent = step === id;
+              const isPast = step > id;
+              const isFutureReachable = id > step && id <= farthestStep;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={[
+                    'publish-modal__step',
+                    isCurrent ? 'publish-modal__step--current' : '',
+                    isPast ? 'publish-modal__step--past' : '',
+                    isFutureReachable ? 'publish-modal__step--future' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => goToStep(id)}
+                  disabled={!reachable}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`${id}. ${label}${!reachable ? ' (complete previous steps first)' : ''}`}
+                >
+                  <span className="publish-modal__step-inner" aria-hidden>
+                    <span className="publish-modal__step-num">{id}</span>
+                    <span className="publish-modal__step-sep">·</span>
+                    <span className="publish-modal__step-label">{label}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
         )}
 
         {success ? (
@@ -361,7 +402,10 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
                             <MoreVertical size={18} />
                           </button>
                           {openKebab === img.id && (
-                            <ul className="publish-modal__menu" role="menu">
+                            <ul
+                              className={`publish-modal__menu${idx === 0 ? ' publish-modal__menu--flip' : ''}`}
+                              role="menu"
+                            >
                               <li>
                                 <button type="button" role="menuitem" onClick={() => setAsThumbnail(img.id)}>
                                   Set as thumbnail

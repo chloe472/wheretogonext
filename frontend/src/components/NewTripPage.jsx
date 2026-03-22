@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { searchLocations } from '../data/mockLocations';
 import { createItinerary } from '../api/itinerariesApi';
+import { getCoverImageForDestination } from '../data/tripDestinationMeta';
 import DateRangePickerModal from './DateRangePickerModal';
 import './NewTripPage.css';
 
@@ -16,7 +17,6 @@ function formatTripDates(startDate, endDate) {
 }
 
 const TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
-const DEFAULT_TRIP_IMAGE = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
 
 function resolveTypedLocation(query) {
   const value = String(query || '').trim();
@@ -104,6 +104,7 @@ export default function NewTripPage({ user, onLogout }) {
     const locations = resolvedLocation.country
       ? `${resolvedLocation.name}, ${resolvedLocation.country}`
       : resolvedLocation.name;
+    const coverUrl = getCoverImageForDestination(resolvedLocation.name, locations);
     const payload = {
       title: `Trip to ${title}`,
       overview: '',
@@ -118,8 +119,8 @@ export default function NewTripPage({ user, onLogout }) {
       travelers: 1 + (invitedEmails?.length || 0),
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
-      image: DEFAULT_TRIP_IMAGE,
-      coverImages: [DEFAULT_TRIP_IMAGE],
+      image: coverUrl,
+      coverImages: [coverUrl],
       published: false,
       visibility: 'private',
     };

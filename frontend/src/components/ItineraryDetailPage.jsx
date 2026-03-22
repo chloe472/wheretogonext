@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   Share2,
   Eye,
   MessageCircle,
@@ -26,6 +25,7 @@ import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import { formatViewCount } from '../lib/formatViewCount';
 import ItineraryPlacesMap from './ItineraryPlacesMap';
 import ItineraryCard from './ItineraryCard';
+import DashboardHeader from './DashboardHeader';
 import './ItineraryDetailPage.css';
 
 const TABS = [
@@ -65,6 +65,44 @@ function buildCommentTree(flat) {
   return roots;
 }
 
+/** First grapheme of display name for avatar fallback */
+function commentAuthorInitial(displayName) {
+  const s = String(displayName || '').trim();
+  if (!s) return '?';
+  const chars = [...s];
+  return chars[0] ? chars[0].toUpperCase() : '?';
+}
+
+function CommentAvatar({ userName, userPicture, nested }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const pic = String(userPicture || '').trim();
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [pic]);
+
+  const initial = commentAuthorInitial(userName);
+  const showImg = Boolean(pic) && !imgFailed;
+
+  return (
+    <span
+      className={`itinerary-detail__comment-avatar ${nested ? 'itinerary-detail__comment-avatar--nested' : ''}`}
+      aria-hidden
+    >
+      {showImg ? (
+        <img
+          src={resolveImageUrl(pic, userName, 'avatar')}
+          alt=""
+          className="itinerary-detail__comment-avatar-img"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span className="itinerary-detail__comment-avatar-fallback">{initial}</span>
+      )}
+    </span>
+  );
+}
+
 function CommentBranch({
   node,
   itineraryId,
@@ -97,10 +135,17 @@ function CommentBranch({
   return (
     <div className={`itinerary-detail__comment ${depth > 0 ? 'itinerary-detail__comment--nested' : ''}`}>
       <div className="itinerary-detail__comment-head">
-        <span className="itinerary-detail__comment-author">{node.userName || 'User'}</span>
-        <span className="itinerary-detail__comment-date">
-          {node.createdAt ? formatPublished(node.createdAt) : ''}
-        </span>
+        <CommentAvatar
+          userName={node.userName}
+          userPicture={node.userPicture}
+          nested={depth > 0}
+        />
+        <div className="itinerary-detail__comment-head-main">
+          <span className="itinerary-detail__comment-author">{node.userName || 'User'}</span>
+          <span className="itinerary-detail__comment-date">
+            {node.createdAt ? formatPublished(node.createdAt) : ''}
+          </span>
+        </div>
       </div>
       <p className="itinerary-detail__comment-body">{node.body}</p>
       <div className="itinerary-detail__comment-actions">
@@ -355,17 +400,23 @@ export default function ItineraryDetailPage({ user, onLogout }) {
 
   if (loading) {
     return (
-      <div className="itinerary-detail itinerary-detail--center">
-        <p>Loading itinerary…</p>
+      <div className="itinerary-detail">
+        <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
+        <div className="itinerary-detail--center">
+          <p>Loading itinerary…</p>
+        </div>
       </div>
     );
   }
 
   if (error || !itinerary) {
     return (
-      <div className="itinerary-detail itinerary-detail--center">
-        <p>{error || 'Itinerary not found.'}</p>
-        <Link to="/search">Back to Explore</Link>
+      <div className="itinerary-detail">
+        <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
+        <div className="itinerary-detail--center">
+          <p>{error || 'Itinerary not found.'}</p>
+          <Link to="/search">Back to Explore</Link>
+        </div>
       </div>
     );
   }
@@ -377,25 +428,7 @@ export default function ItineraryDetailPage({ user, onLogout }) {
 
   return (
     <div className="itinerary-detail">
-      <header className="itinerary-detail__topbar">
-        <button type="button" className="itinerary-detail__back" onClick={() => navigate(-1)} aria-label="Back">
-          <ArrowLeft size={20} />
-        </button>
-        <Link to="/search" className="itinerary-detail__explore">
-          Explore
-        </Link>
-        <div className="itinerary-detail__topbar-right">
-          {user ? (
-            <button type="button" className="itinerary-detail__logout" onClick={() => onLogout?.()}>
-              Log out
-            </button>
-          ) : (
-            <Link to="/" className="itinerary-detail__logout">
-              Home
-            </Link>
-          )}
-        </div>
-      </header>
+      <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
 
       <div className="itinerary-detail__layout">
         <main className="itinerary-detail__main">

@@ -148,11 +148,22 @@ function normalizePlaces(raw) {
 function serializeComment(c, currentUserId) {
   const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : [];
   const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false;
+
+  let userIdStr = '';
+  let userPicture = '';
+  if (c.userId && typeof c.userId === 'object' && c.userId._id) {
+    userIdStr = String(c.userId._id);
+    userPicture = c.userId.picture != null ? String(c.userId.picture).trim() : '';
+  } else if (c.userId) {
+    userIdStr = String(c.userId);
+  }
+
   return {
     id: String(c._id),
     itineraryId: String(c.itineraryId),
-    userId: String(c.userId),
+    userId: userIdStr,
     userName: c.userName || '',
+    userPicture,
     body: c.body,
     parentId: c.parentId ? String(c.parentId) : null,
     likeCount: likes.length,
@@ -290,7 +301,10 @@ router.get('/:id/comments', optionalAuth, async (req, res) => {
     if (!exists) {
       return res.status(404).json({ error: 'Itinerary not found' });
     }
-    const docs = await ItineraryComment.find({ itineraryId: id }).sort({ createdAt: 1 }).lean();
+    const docs = await ItineraryComment.find({ itineraryId: id })
+      .sort({ createdAt: 1 })
+      .populate('userId', 'picture name')
+      .lean();
     const uid = req.userId || null;
     return res.json({ comments: docs.map((c) => serializeComment(c, uid)) });
   } catch (err) {
@@ -342,7 +356,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
       parentId,
     });
 
-    const populated = await ItineraryComment.findById(doc._id).lean();
+    const populated = await ItineraryComment.findById(doc._id).populate('userId', 'picture name').lean();
     return res.status(201).json({ comment: serializeComment(populated, req.userId) });
   } catch (err) {
     console.error('POST /itineraries/:id/comments error:', err);

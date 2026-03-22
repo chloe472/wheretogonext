@@ -1,15 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Calendar,
-  MapPin,
-  Bookmark,
-  Banknote,
-  Users,
   Plus,
   Clock,
   FileText,
-  ChevronRight,
   ChevronDown,
   MoreVertical,
 } from 'lucide-react';
@@ -21,26 +15,28 @@ import {
 } from '../api/itinerariesApi';
 import PublishItineraryModal from './PublishItineraryModal';
 import DashboardHeader from './DashboardHeader';
+import {
+  resolveTripCardCoverImage,
+  getFlagEmojiForDestination,
+  formatTripCardDateRange,
+} from '../data/tripDestinationMeta';
 import './Dashboard.css';
-
-const DEFAULT_TRIP_IMAGE =
-  'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
 
 /** Map Mongo itinerary doc → trip card row (same shape the mock list used). */
 function mapItineraryToTripRow(raw) {
   const id = String(raw._id ?? raw.id ?? '');
-  const coverImages = Array.isArray(raw.coverImages) ? raw.coverImages.filter(Boolean) : [];
-  const image = (raw.image && String(raw.image).trim()) || coverImages[0] || DEFAULT_TRIP_IMAGE;
+  const destination = String(raw.destination || '').trim();
+  const locations = String(raw.locations || '').trim();
+  const image = resolveTripCardCoverImage(raw);
+  const dateLabel = formatTripCardDateRange(raw.startDate, raw.endDate, raw.dates);
+  const flagEmoji = getFlagEmojiForDestination(destination, locations);
   return {
     raw,
     id,
     title: raw.title || '',
-    dates: raw.dates || '—',
-    locations: raw.locations || raw.destination || '',
+    dateLabel,
     image,
-    placesSaved: Array.isArray(raw.places) ? raw.places.length : 0,
-    budget: raw.budget ?? '$0',
-    travelers: raw.travelers ?? 1,
+    flagEmoji,
     status: raw.status || 'Planning',
     endDate: raw.endDate || '',
     startDate: raw.startDate || '',
@@ -281,7 +277,7 @@ export default function Dashboard({ user, onLogout }) {
               {!myTripsLoading && filteredTrips.map((trip) => (
                 <li
                   key={trip.id}
-                  className="trip-card"
+                  className={`trip-card${openOwnerMenuId === trip.id || openStatusDropdownId === trip.id ? ' trip-card--active' : ''}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => navigate(`/trip/${trip.id}`)}
@@ -293,11 +289,18 @@ export default function Dashboard({ user, onLogout }) {
                   }}
                 >
                   <div className="trip-card__image-wrap">
-                    <img
-                      src={trip.image}
-                      alt=""
-                      className="trip-card__image"
-                    />
+                    <div className="trip-card__image-crop">
+                      <img
+                        src={trip.image}
+                        alt=""
+                        className="trip-card__image"
+                      />
+                    </div>
+                    {trip.flagEmoji ? (
+                      <span className="trip-card__flag" aria-hidden>
+                        {trip.flagEmoji}
+                      </span>
+                    ) : null}
                     <div
                       className="trip-card__owner-menu"
                       ref={openOwnerMenuId === trip.id ? ownerMenuRef : null}
@@ -416,37 +419,9 @@ export default function Dashboard({ user, onLogout }) {
                       )}
                     </div>
                   </div>
-                  <div className="trip-card__content">
+                  <div className="trip-card__body">
                     <h3 className="trip-card__title">{trip.title}</h3>
-                    <p className="trip-card__meta">
-                      <Calendar size={16} className="trip-card__meta-icon" aria-hidden />
-                      {trip.dates}
-                    </p>
-                    <p className="trip-card__meta">
-                      <MapPin size={16} className="trip-card__meta-icon" aria-hidden />
-                      {trip.locations}
-                    </p>
-                    <div className="trip-card__stats">
-                      <span className="trip-card__stat">
-                        <Bookmark size={16} aria-hidden />
-                        <strong>{trip.placesSaved}</strong> Places Saved
-                      </span>
-                      <span className="trip-card__stat">
-                        <Banknote size={16} aria-hidden />
-                        <strong>{trip.budget}</strong> Budget
-                      </span>
-                      <span className="trip-card__stat">
-                        <Users size={16} aria-hidden />
-                        <strong>{trip.travelers}</strong> Travelers
-                      </span>
-                    </div>
-                    <Link
-                      to={`/trip/${trip.id}`}
-                      className="trip-card__link"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      View Trip Details <ChevronRight size={16} aria-hidden />
-                    </Link>
+                    <p className="trip-card__dates">{trip.dateLabel}</p>
                   </div>
                 </li>
               ))}
