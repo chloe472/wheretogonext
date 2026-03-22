@@ -8,7 +8,7 @@ export default defineConfig({
     // Don't set COOP here: Google OAuth popup needs to check window.closed; strict COOP blocks that and causes "Sign-in failed" + console errors.
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
     },
