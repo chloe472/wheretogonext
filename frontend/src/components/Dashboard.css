@@ -440,18 +440,18 @@
 }
 
 .trip-card__status--planning {
-  background-color: #d4c4a8;
-  color: var(--dash-primary);
+  background-color: #fff7ed;
+  color: #9a3412;
 }
 
 .trip-card__status--upcoming {
-  background-color: #a89f91;
-  color: var(--dash-surface);
+  background-color: #ecfdf5;
+  color: #0f766e;
 }
 
 .trip-card__status--dreaming {
-  background-color: #c4b8a8;
-  color: var(--dash-primary);
+  background-color: rgba(124, 58, 237, 0.16);
+  color: #6d28d9;
 }
 
 .trip-card__status-dropdown {
@@ -486,6 +486,30 @@
 
 .trip-card__status-option:hover {
   background: var(--dash-hover);
+}
+
+.trip-card__status-option--planning {
+  color: #9a3412;
+}
+
+.trip-card__status-option--planning:hover {
+  background: #fff7ed;
+}
+
+.trip-card__status-option--upcoming {
+  color: #0f766e;
+}
+
+.trip-card__status-option--upcoming:hover {
+  background: #ecfdf5;
+}
+
+.trip-card__status-option--dreaming {
+  color: #6d28d9;
+}
+
+.trip-card__status-option--dreaming:hover {
+  background: rgba(124, 58, 237, 0.12);
 }
 
 .trip-card__status-dot {

@@ -13,8 +13,10 @@ import {
   mapSortToApiParam,
   applyClientSort,
 } from '../api/itinerariesApi';
+import { EXPLORE_HERO_IMAGES } from '../assets/exploreHeroImages';
 import ItineraryCard from './ItineraryCard';
 import DashboardHeader from './DashboardHeader';
+import HeroSlideshowBackground from './HeroSlideshowBackground';
 import './SearchResultsPage.css';
 
 const RECENT_DESTINATIONS = ['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'];
@@ -112,65 +114,68 @@ export default function SearchResultsPage({ user, onLogout }) {
       <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
 
       <section className="search-results__hero">
-        <h1 className="search-results__hero-title">Community made itineraries</h1>
-        <form className="search-results__search-form" onSubmit={handleSearchSubmit} ref={searchRef}>
-          <Search size={20} className="search-results__search-icon" aria-hidden />
-          <input
-            type="text"
-            className="search-results__search-input"
-            placeholder="Search for Destination / Itineraries"
-            value={searchInput}
-            onChange={(e) => { setSearchInput(e.target.value); setSuggestOpen(true); }}
-            onFocus={() => setSuggestOpen(true)}
-            aria-label="Search destinations or itineraries"
-          />
-          {(q || searchInput.trim()) && (
-            <button
-              type="button"
-              className="search-results__search-clear"
-              onClick={handleClearSearch}
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          )}
-          {suggestOpen && suggestions.length > 0 && (
-            <ul className="search-results__suggestions" role="listbox" ref={suggestRef}>
-              {suggestions.slice(0, 8).map((loc) => (
-                <li key={loc.id}>
-                  <button type="button" className="search-results__suggestion" onClick={() => handleSelectSuggestion(loc)} role="option">
-                    {loc.name}
-                    {loc.country && <span className="search-results__suggestion-meta">{loc.country}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </form>
-        <p className="search-results__hero-hint">Search by your most recent destination</p>
-        <div className="search-results__tags">
-          {RECENT_DESTINATIONS.map((dest) => {
-            const isActive = q.trim().toLowerCase() === dest.toLowerCase();
-            return (
+        <HeroSlideshowBackground images={EXPLORE_HERO_IMAGES} />
+        <div className="search-results__hero-content">
+          <h1 className="search-results__hero-title">Community made itineraries</h1>
+          <form className="search-results__search-form" onSubmit={handleSearchSubmit} ref={searchRef}>
+            <Search size={20} className="search-results__search-icon" aria-hidden />
+            <input
+              type="text"
+              className="search-results__search-input"
+              placeholder="Search for Destination / Itineraries"
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); setSuggestOpen(true); }}
+              onFocus={() => setSuggestOpen(true)}
+              aria-label="Search destinations or itineraries"
+            />
+            {(q || searchInput.trim()) && (
               <button
-                key={dest}
                 type="button"
-                className={`search-results__tag ${isActive ? 'search-results__tag--active' : ''}`}
-                onClick={() => {
-                  if (isActive) {
-                    handleClearSearch();
-                    return;
-                  }
-                  setSearchInput(dest);
-                  setSearchParams({ q: dest });
-                  setSuggestOpen(false);
-                }}
-                aria-pressed={isActive}
+                className="search-results__search-clear"
+                onClick={handleClearSearch}
+                aria-label="Clear search"
               >
-              {dest}
+                ×
               </button>
-            );
-          })}
+            )}
+            {suggestOpen && suggestions.length > 0 && (
+              <ul className="search-results__suggestions" role="listbox" ref={suggestRef}>
+                {suggestions.slice(0, 8).map((loc) => (
+                  <li key={loc.id}>
+                    <button type="button" className="search-results__suggestion" onClick={() => handleSelectSuggestion(loc)} role="option">
+                      {loc.name}
+                      {loc.country && <span className="search-results__suggestion-meta">{loc.country}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </form>
+          <p className="search-results__hero-hint">Search by your most recent destination</p>
+          <div className="search-results__tags">
+            {RECENT_DESTINATIONS.map((dest) => {
+              const isActive = q.trim().toLowerCase() === dest.toLowerCase();
+              return (
+                <button
+                  key={dest}
+                  type="button"
+                  className={`search-results__tag ${isActive ? 'search-results__tag--active' : ''}`}
+                  onClick={() => {
+                    if (isActive) {
+                      handleClearSearch();
+                      return;
+                    }
+                    setSearchInput(dest);
+                    setSearchParams({ q: dest });
+                    setSuggestOpen(false);
+                  }}
+                  aria-pressed={isActive}
+                >
+                  {dest}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 

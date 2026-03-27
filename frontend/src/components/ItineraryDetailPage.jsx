@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Share2,
@@ -30,6 +31,7 @@ import { buildItineraryMapMarkers } from '../lib/itineraryMapMarkers';
 import TripMap from './TripMap';
 import ItineraryCard from './ItineraryCard';
 import DashboardHeader from './DashboardHeader';
+import FriendlyModal from './FriendlyModal';
 import './ItineraryDetailPage.css';
 
 const TABS = [
@@ -129,6 +131,7 @@ function CommentBranch({
   onLike,
   onReply,
   likingId,
+  onError,
 }) {
   const [openReply, setOpenReply] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -144,7 +147,7 @@ function CommentBranch({
       setOpenReply(false);
       onReply();
     } catch (e) {
-      alert(e.message || 'Failed to reply');
+      onError?.(e?.message || 'Failed to reply');
     } finally {
       setSending(false);
     }
@@ -216,6 +219,7 @@ function CommentBranch({
               onLike={onLike}
               onReply={onReply}
               likingId={likingId}
+              onError={onError}
             />
           ))}
         </div>
@@ -243,6 +247,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   const [shareDone, setShareDone] = useState(false);
   const [customizeBusy, setCustomizeBusy] = useState(false);
   const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState('');
 
   const loadComments = useCallback(async () => {
     if (!id) return;
@@ -419,6 +424,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
     const copy = await duplicateItinerary(id);
     const newId = copy?._id ?? copy?.id;
     if (!newId) throw new Error('Copy did not return an id.');
+    toast.success('Trip added to My Trips!');
     navigate(`/trip/${newId}`);
   }, [id, navigate]);
 
@@ -437,7 +443,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       }
       await performDuplicate();
     } catch (e) {
-      alert(e?.message || 'Could not copy this itinerary. Please try again.');
+      setDialogMessage(e?.message || 'Could not copy this itinerary. Please try again.');
     } finally {
       setCustomizeBusy(false);
     }
@@ -449,7 +455,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
     try {
       await performDuplicate();
     } catch (e) {
-      alert(e?.message || 'Could not copy this itinerary. Please try again.');
+      setDialogMessage(e?.message || 'Could not copy this itinerary. Please try again.');
     } finally {
       setCustomizeBusy(false);
     }
@@ -468,10 +474,12 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
     const url = typeof window !== 'undefined' ? window.location.href : '';
     try {
       await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
       setShareDone(true);
       setTimeout(() => setShareDone(false), 2000);
     } catch {
       setShareDone(false);
+      toast.error('Could not copy link');
     }
   };
 
@@ -487,7 +495,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
         prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev
       );
     } catch (e) {
-      alert(e.message || 'Failed to post');
+      setDialogMessage(e?.message || 'Failed to post');
     } finally {
       setPosting(false);
     }
@@ -495,7 +503,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
 
   const handleLike = async (commentId) => {
     if (!user || !id) {
-      alert('Log in to like comments');
+      setDialogMessage('Log in to like comments');
       return;
     }
     setLikingId(commentId);
@@ -507,7 +515,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
         )
       );
     } catch (e) {
-      alert(e.message || 'Failed');
+      setDialogMessage(e?.message || 'Failed');
     } finally {
       setLikingId(null);
     }
@@ -804,6 +812,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                       onLike={handleLike}
                       onReply={loadComments}
                       likingId={likingId}
+                      onError={(msg) => setDialogMessage(msg)}
                     />
                   ))}
                   {commentTree.length === 0 && (
@@ -965,7 +974,10 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
             aria-label="Close"
           />
           <div className="itinerary-detail__customize-modal-panel">
-            <p id="itinerary-customize-confirm-title" className="itinerary-detail__customize-modal-text">
+            <h2 id="itinerary-customize-confirm-title" className="itinerary-detail__customize-modal-title">
+              Already customized
+            </h2>
+            <p className="itinerary-detail__customize-modal-text">
               You&apos;ve already customized this itinerary. Do you want to create another copy?
             </p>
             <div className="itinerary-detail__customize-modal-actions">
@@ -987,6 +999,12 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
           </div>
         </div>
       )}
+      <FriendlyModal
+        open={Boolean(dialogMessage)}
+        message={dialogMessage}
+        confirmText="OK"
+        onClose={() => setDialogMessage('')}
+      />
     </div>
   );
 }
