@@ -10,9 +10,7 @@ function isKnownPlaceholderUrl(url = '') {
     || value.includes('placeholder.com')
     || value.includes('/placeholder')
     || value.includes('placehold.co')
-    || value.includes('picsum.photos')
-    || value.includes('source.unsplash.com')
-    || value.includes('images.unsplash.com');
+    || value.includes('picsum.photos');
 }
 
 function escapeSvgText(value = '') {
@@ -29,12 +27,19 @@ export function buildInlinePlaceholderUrl(hint = '', topic = 'travel') {
 
 export function resolveImageUrl(imageUrl, hint = '', topic = 'travel') {
   const raw = String(imageUrl || '').trim();
+  const normalized = raw.replace(/\\/g, '/');
+  // Support old persisted values like "uploads/itineraries/..." (without leading slash).
+  const rootRelative = normalized.startsWith('uploads/') ? `/${normalized}` : normalized;
   if (raw && raw.startsWith('data:image/')) {
     return raw;
   }
-  // Accept absolute URLs (http://, https://, //) OR relative URLs starting with /
-  if (raw && (/^(https?:)?\/\//i.test(raw) || raw.startsWith('/')) && !isKnownPlaceholderUrl(raw)) {
-    return raw;
+  // Accept absolute URLs, blob URLs, or root-relative paths.
+  if (
+    rootRelative
+    && (/^(https?:)?\/\//i.test(rootRelative) || rootRelative.startsWith('/') || rootRelative.startsWith('blob:'))
+    && !isKnownPlaceholderUrl(rootRelative)
+  ) {
+    return rootRelative;
   }
   return buildInlinePlaceholderUrl(hint, topic);
 }

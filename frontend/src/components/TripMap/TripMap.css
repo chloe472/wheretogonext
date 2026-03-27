@@ -200,11 +200,15 @@
   border: none;
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  background: #111827;
-  color: #fff;
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.trip-map__popup-submit:hover {
+  background: #6b5344;
 }
 
 .trip-map__popup-actions {

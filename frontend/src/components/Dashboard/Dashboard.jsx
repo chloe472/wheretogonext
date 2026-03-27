@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import {
   fetchMyItineraries,
+  fetchSharedWithMeItineraries,
   deleteItinerary,
   createItinerary,
   updateItinerary,
@@ -44,6 +45,7 @@ function mapItineraryToTripRow(raw) {
     status: raw.status || 'Planning',
     endDate: raw.endDate || '',
     startDate: raw.startDate || '',
+    isSharedWithMe: Boolean(raw?.__sharedWithMe),
   };
 }
 
@@ -61,18 +63,6 @@ function resolveDashboardTripImage(trip) {
   }
   return destFallback;
 }
-
-const MOCK_COMING_UP = [
-  { id: '1', name: 'Summer Europe', day: 15, month: 'JUN', label: 'Departure in 4 months' },
-  { id: '3', name: 'Bali Wellness', day: 10, month: 'AUG', label: 'Departure in 6 months' },
-];
-
-const MOCK_ACTIVITY = [
-  { id: '1', text: 'Sarah added 3 restaurants to Summer Europe', time: '2 hours ago' },
-  { id: '2', text: 'Flight confirmation received for Tokyo trip', time: '5 hours ago' },
-  { id: '3', text: 'Mike updated the budget for Bali Retreat', time: '1 day ago' },
-  { id: '4', text: 'New template created: Beach Essentials', time: '2 days ago' },
-];
 
 const TRIP_FILTERS = ['All', 'Upcoming', 'Past'];
 
@@ -102,6 +92,76 @@ function getStatusClass(status) {
   return opt ? opt.class : 'trip-card__status--planning';
 }
 
+function parseTripDate(dateStr) {
+  const s = String(dateStr || '').trim();
+  if (!s) return null;
+
+  // Strict ISO date (YYYY-MM-DD).
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    // Use midday local time to avoid TZ edge cases.
+    const d = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T12:00:00`);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+
+  // Fallback for non-standard values (e.g., "Mar 3 - Mar 10, 2026").
+  const rangeStart = s.split(' - ')[0]?.trim() || s;
+  const parsed = new Date(rangeStart);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function resolveTripStartDate(trip) {
+  if (!trip) return null;
+  const candidates = [
+    trip.startDate,
+    trip.raw?.startDate,
+    trip.raw?.dates,
+    trip.dateLabel,
+  ];
+  for (const candidate of candidates) {
+    const parsed = parseTripDate(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function formatDepartureDistance(startDate, todayDate) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const deltaDays = Math.floor((startDate.getTime() - todayDate.getTime()) / msPerDay);
+
+  if (deltaDays <= 0) return 'Departs today';
+  if (deltaDays === 1) return 'Departs tomorrow';
+  if (deltaDays < 30) return `Departure in ${deltaDays} days`;
+
+  const months = Math.round(deltaDays / 30.44);
+  if (months <= 1) return 'Departure in 1 month';
+  return `Departure in ${months} months`;
+}
+
+function parseIsoDate(value) {
+  const s = String(value || '').trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function formatRelativeTime(date, now = new Date()) {
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+
+  if (diffSec < 60) return 'just now';
+  const minutes = Math.floor(diffSec / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
 export default function Dashboard({ user, onLogout }) {
   const DIALOG_CLOSED = {
     open: false,
@@ -114,6 +174,8 @@ export default function Dashboard({ user, onLogout }) {
   };
   const navigate = useNavigate();
   const [tripFilter, setTripFilter] = useState('All');
+  const [openTripFilterDropdown, setOpenTripFilterDropdown] = useState(false);
+  const tripFilterDropdownRef = useRef(null);
   const [tripStatuses, setTripStatuses] = useState({});
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const statusDropdownRef = useRef(null);
@@ -142,18 +204,41 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     let cancelled = false;
-    async function loadMine() {
+    async function loadTrips() {
       setMyTripsLoading(true);
       try {
-        const rows = await fetchMyItineraries();
-        if (!cancelled) setMyTrips(rows);
+        const [mineRows, sharedRows] = await Promise.all([
+          fetchMyItineraries(),
+          fetchSharedWithMeItineraries(),
+        ]);
+
+        if (cancelled) return;
+
+        const mine = Array.isArray(mineRows) ? mineRows : [];
+        const shared = (Array.isArray(sharedRows) ? sharedRows : []).map((row) => ({
+          ...row,
+          __sharedWithMe: true,
+        }));
+
+        // Merge by id so "mine" wins if a trip appears in both sets.
+        const mergedById = new Map();
+        [...shared, ...mine].forEach((row) => {
+          const key = String(row?._id ?? row?.id ?? '');
+          if (key) mergedById.set(key, row);
+        });
+
+        const merged = Array.from(mergedById.values()).sort(
+          (a, b) => new Date(b?.updatedAt || b?.createdAt || 0) - new Date(a?.updatedAt || a?.createdAt || 0),
+        );
+
+        setMyTrips(merged);
       } catch {
         if (!cancelled) setMyTrips([]);
       } finally {
         if (!cancelled) setMyTripsLoading(false);
       }
     }
-    loadMine();
+    loadTrips();
     return () => {
       cancelled = true;
     };
@@ -247,8 +332,21 @@ export default function Dashboard({ user, onLogout }) {
             published: false,
             visibility: 'private',
           });
-          const rows = await fetchMyItineraries();
-          setMyTrips(rows);
+          const [mineRows, sharedRows] = await Promise.all([
+            fetchMyItineraries(),
+            fetchSharedWithMeItineraries(),
+          ]);
+          const mine = Array.isArray(mineRows) ? mineRows : [];
+          const shared = (Array.isArray(sharedRows) ? sharedRows : []).map((row) => ({
+            ...row,
+            __sharedWithMe: true,
+          }));
+          const mergedById = new Map();
+          [...shared, ...mine].forEach((row) => {
+            const key = String(row?._id ?? row?.id ?? '');
+            if (key) mergedById.set(key, row);
+          });
+          setMyTrips(Array.from(mergedById.values()));
           toast.success('Trip duplicated successfully');
         } catch (e) {
           toast.error(e?.message || 'Could not duplicate trip. Please try again.');
@@ -291,6 +389,9 @@ export default function Dashboard({ user, onLogout }) {
       if (ownerMenuRef.current && !ownerMenuRef.current.contains(e.target)) {
         setOpenOwnerMenuId(null);
       }
+      if (tripFilterDropdownRef.current && !tripFilterDropdownRef.current.contains(e.target)) {
+        setOpenTripFilterDropdown(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -307,15 +408,77 @@ export default function Dashboard({ user, onLogout }) {
   })();
 
   const filteredTrips = useMemo(() => {
+    // Use midday local time to avoid TZ edge cases.
+    const todayDate = new Date(`${todayStr}T12:00:00`);
     if (tripFilter === 'All') return tripRows;
     if (tripFilter === 'Upcoming') {
-      return tripRows.filter((t) => t.endDate && t.endDate >= todayStr);
+      return tripRows.filter((trip) => {
+        const startDate = resolveTripStartDate(trip);
+        return Boolean(startDate) && startDate >= todayDate;
+      });
     }
     if (tripFilter === 'Past') {
-      return tripRows.filter((t) => t.endDate && t.endDate < todayStr);
+      return tripRows.filter((trip) => {
+        const startDate = resolveTripStartDate(trip);
+        return Boolean(startDate) && startDate < todayDate;
+      });
     }
     return tripRows;
   }, [tripRows, tripFilter, todayStr]);
+
+  const comingUpTrips = useMemo(() => {
+    const todayDate = new Date(`${todayStr}T00:00:00`);
+    return tripRows
+      .map((trip) => {
+        const startDate = resolveTripStartDate(trip);
+        if (!startDate || startDate < todayDate) return null;
+        return {
+          id: trip.id,
+          name: trip.title || 'Untitled trip',
+          day: startDate.getDate(),
+          month: startDate.toLocaleDateString(undefined, { month: 'short' }).toUpperCase(),
+          departureDateLabel: startDate.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          departureDistanceLabel: formatDepartureDistance(startDate, todayDate),
+          ts: startDate.getTime(),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.ts - b.ts)
+      .slice(0, 3);
+  }, [tripRows, todayStr]);
+
+  const recentActivity = useMemo(() => {
+    const now = new Date();
+    return tripRows
+      .map((trip) => {
+        const createdAt = parseIsoDate(trip.raw?.createdAt);
+        const updatedAt = parseIsoDate(trip.raw?.updatedAt);
+        const activityDate = updatedAt || createdAt;
+        if (!activityDate) return null;
+
+        // Treat as "created" when updatedAt is missing or effectively same as createdAt.
+        const createdMs = createdAt ? createdAt.getTime() : null;
+        const updatedMs = updatedAt ? updatedAt.getTime() : null;
+        const isCreated =
+          updatedMs == null
+          || createdMs == null
+          || Math.abs(updatedMs - createdMs) < 60 * 1000;
+
+        return {
+          id: trip.id,
+          ts: activityDate.getTime(),
+          text: `${isCreated ? 'You created' : 'You updated'} ${trip.title || 'Untitled trip'}`,
+          timeLabel: formatRelativeTime(activityDate, now),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 5);
+  }, [tripRows]);
 
   return (
     <div className="dashboard">
@@ -346,16 +509,39 @@ export default function Dashboard({ user, onLogout }) {
               Plan trips, publish to Explore, or share from the menu on each card.
             </p>
             <div className="dashboard__filters">
-              {TRIP_FILTERS.map((filter) => (
+              <label htmlFor="trip-filter" className="dashboard__filter-label">Filter:</label>
+              <div className="dashboard__filter-dropdown" ref={tripFilterDropdownRef}>
                 <button
-                  key={filter}
+                  id="trip-filter"
                   type="button"
-                  className={`dashboard__filter ${tripFilter === filter ? 'dashboard__filter--active' : ''}`}
-                  onClick={() => setTripFilter(filter)}
+                  className={`dashboard__filter-btn ${openTripFilterDropdown ? 'dashboard__filter-btn--open' : ''}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={openTripFilterDropdown}
+                  onClick={() => setOpenTripFilterDropdown((o) => !o)}
                 >
-                  {filter}
+                  <span className="dashboard__filter-btn-text">{tripFilter}</span>
+                  <ChevronDown size={14} className="dashboard__filter-chevron" aria-hidden />
                 </button>
-              ))}
+                {openTripFilterDropdown && (
+                  <div className="dashboard__filter-menu" role="listbox" aria-label="Trip filter">
+                    {TRIP_FILTERS.map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        role="option"
+                        aria-selected={tripFilter === filter}
+                        className={`dashboard__filter-option ${tripFilter === filter ? 'dashboard__filter-option--active' : ''}`}
+                        onClick={() => {
+                          setTripFilter(filter);
+                          setOpenTripFilterDropdown(false);
+                        }}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             {myTripsLoading && <p className="dashboard__trips-status">Loading your trips…</p>}
             {!myTripsLoading && myTrips.length === 0 && (
@@ -516,6 +702,9 @@ export default function Dashboard({ user, onLogout }) {
                   </div>
                   <div className="trip-card__body">
                     <h3 className="trip-card__title">{trip.title}</h3>
+                    {trip.isSharedWithMe ? (
+                      <span className="trip-card__shared-badge">Shared with me</span>
+                    ) : null}
                     <p className="trip-card__dates">{trip.dateLabel}</p>
                   </div>
                 </li>
@@ -530,34 +719,44 @@ export default function Dashboard({ user, onLogout }) {
               <Clock size={18} aria-hidden />
               Coming Up
             </h3>
-            <ul className="sidebar-block__list">
-              {MOCK_COMING_UP.map((item) => (
-                <li key={item.id} className="coming-up-item">
-                  <div className="coming-up-item__date">
-                    <span className="coming-up-item__day">{item.day}</span>
-                    <span className="coming-up-item__month">{item.month}</span>
-                  </div>
-                  <div className="coming-up-item__info">
-                    <span className="coming-up-item__name">{item.name}</span>
-                    <span className="coming-up-item__label">{item.label}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {comingUpTrips.length === 0 ? (
+              <p className="dashboard__trips-empty">No upcoming trips yet.</p>
+            ) : (
+              <ul className="sidebar-block__list">
+                {comingUpTrips.map((item) => (
+                  <li key={item.id} className="coming-up-item">
+                    <div className="coming-up-item__date">
+                      <span className="coming-up-item__day">{item.day}</span>
+                      <span className="coming-up-item__month">{item.month}</span>
+                    </div>
+                    <div className="coming-up-item__info">
+                      <span className="coming-up-item__name">{item.name}</span>
+                      <span className="coming-up-item__label">
+                        {item.departureDateLabel} · {item.departureDistanceLabel}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
           <section className="sidebar-block">
             <h3 className="sidebar-block__title">
               <FileText size={18} aria-hidden />
               Recent Activity
             </h3>
-            <ul className="sidebar-block__list">
-              {MOCK_ACTIVITY.map((item) => (
-                <li key={item.id} className="activity-item">
-                  <span className="activity-item__text">{item.text}</span>
-                  <span className="activity-item__time">{item.time}</span>
-                </li>
-              ))}
-            </ul>
+            {recentActivity.length === 0 ? (
+              <p className="dashboard__trips-empty">No recent activity yet.</p>
+            ) : (
+              <ul className="sidebar-block__list">
+                {recentActivity.map((item) => (
+                  <li key={item.id} className="activity-item">
+                    <span className="activity-item__text">{item.text}</span>
+                    <span className="activity-item__time">{item.timeLabel}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </aside>
       </div>
@@ -629,8 +828,21 @@ export default function Dashboard({ user, onLogout }) {
         itinerary={publishTarget}
         onPublished={async () => {
           try {
-            const rows = await fetchMyItineraries();
-            setMyTrips(rows);
+            const [mineRows, sharedRows] = await Promise.all([
+              fetchMyItineraries(),
+              fetchSharedWithMeItineraries(),
+            ]);
+            const mine = Array.isArray(mineRows) ? mineRows : [];
+            const shared = (Array.isArray(sharedRows) ? sharedRows : []).map((row) => ({
+              ...row,
+              __sharedWithMe: true,
+            }));
+            const mergedById = new Map();
+            [...shared, ...mine].forEach((row) => {
+              const key = String(row?._id ?? row?.id ?? '');
+              if (key) mergedById.set(key, row);
+            });
+            setMyTrips(Array.from(mergedById.values()));
           } catch {
             /* ignore */
           }

@@ -16,7 +16,51 @@ export const LEGACY_DEFAULT_TRIP_COVER =
  * Popular destinations → Unsplash cover URLs (optimize with w/h/fit).
  * Keys: lowercase phrases to match inside destination/locations strings.
  */
-const COVER_LOOKUP = [
+function normalizeLocationText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    // Normalize separators/punctuation to spaces.
+    .replace(/['’`"]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Valid, fixed Unsplash images used for broad fallback coverage.
+const UNSPLASH_FALLBACK_POOL = [
+  'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&h=480&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1472396961693-142e6e269027?w=800&h=480&fit=crop&q=80',
+];
+
+function hashText(value = '') {
+  const s = String(value || '').trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function unsplashQueryUrl(query = '') {
+  const q = String(query || '').trim();
+  // source.unsplash.com query endpoints now frequently return 503.
+  // Use deterministic selection from known-good Unsplash CDN image URLs.
+  const idx = hashText(q || 'travel') % UNSPLASH_FALLBACK_POOL.length;
+  return UNSPLASH_FALLBACK_POOL[idx];
+}
+
+/**
+ * Curated high-quality, stable images for common destinations.
+ * (These use fixed photo IDs for consistency.)
+ */
+const COVER_LOOKUP_CURATED = [
   ['new york', 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=800&h=480&fit=crop&q=80'],
   ['maldives', 'https://images.unsplash.com/photo-1514282401047-d79a71a374e8?w=800&h=480&fit=crop&q=80'],
   ['singapore', 'https://images.unsplash.com/photo-1525625293380-5161e7bbcba0?w=800&h=480&fit=crop&q=80'],
@@ -37,6 +81,63 @@ const COVER_LOOKUP = [
   ['hawaii', 'https://images.unsplash.com/photo-1542256836392-6f5c1a3dce15?w=800&h=480&fit=crop&q=80'],
   ['iceland', 'https://images.unsplash.com/photo-1476610182048-b716b8518aae?w=800&h=480&fit=crop&q=80'],
   ['santorini', 'https://images.unsplash.com/photo-1613395877344-13d61c79b8e0?w=800&h=480&fit=crop&q=80'],
+];
+
+/** Keys sorted longest-first for substring matching */
+const COVER_ALIASES = [
+  // Vietnam / Ho Chi Minh variants
+  ['ho chi minh', unsplashQueryUrl('Ho Chi Minh City Vietnam skyline')],
+  ['hcmc', unsplashQueryUrl('Ho Chi Minh City Vietnam skyline')],
+  ['saigon', unsplashQueryUrl('Ho Chi Minh City Vietnam skyline')],
+  // New York variants
+  ['nyc', 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=800&h=480&fit=crop&q=80'],
+  ['manhattan', 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=800&h=480&fit=crop&q=80'],
+  // UAE variants
+  ['united arab emirates', 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=800&h=480&fit=crop&q=80'],
+  ['uae', 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=800&h=480&fit=crop&q=80'],
+  // Regional names
+  ['southeast asia', unsplashQueryUrl('Southeast Asia travel')],
+  ['south east asia', unsplashQueryUrl('Southeast Asia travel')],
+  ['se asia', unsplashQueryUrl('Southeast Asia travel')],
+  ['europe', unsplashQueryUrl('Europe travel')],
+  ['middle east', unsplashQueryUrl('Middle East travel')],
+  ['north africa', unsplashQueryUrl('North Africa travel')],
+  ['south america', unsplashQueryUrl('South America travel')],
+  ['central america', unsplashQueryUrl('Central America travel')],
+  ['caribbean', unsplashQueryUrl('Caribbean beach')],
+  ['scandinavia', unsplashQueryUrl('Scandinavia fjords')],
+  ['balkans', unsplashQueryUrl('Balkans travel')],
+];
+
+// All countries (at minimum).
+const COUNTRY_NAMES = [
+  'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina','Armenia','Australia','Austria',
+  'Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia',
+  'Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cabo Verde','Cambodia',
+  'Cameroon','Canada','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica',
+  "Cote d'Ivoire",'Croatia','Cuba','Cyprus','Czech Republic','Democratic Republic of the Congo','Denmark','Djibouti',
+  'Dominica','Dominican Republic','Ecuador','Egypt','El Salvador','Equatorial Guinea','Eritrea','Estonia','Eswatini',
+  'Ethiopia','Fiji','Finland','France','Gabon','Gambia','Georgia','Germany','Ghana','Greece','Grenada','Guatemala',
+  'Guinea','Guinea-Bissau','Guyana','Haiti','Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland',
+  'Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kuwait','Kyrgyzstan','Laos','Latvia',
+  'Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar','Malawi','Malaysia',
+  'Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia','Moldova','Monaco',
+  'Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal','Netherlands','New Zealand',
+  'Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan','Palau','Panama',
+  'Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rwanda',
+  'Saint Kitts and Nevis','Saint Lucia','Saint Vincent and the Grenadines','Samoa','San Marino','Sao Tome and Principe',
+  'Saudi Arabia','Senegal','Serbia','Seychelles','Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands',
+  'Somalia','South Africa','South Korea','South Sudan','Spain','Sri Lanka','Sudan','Suriname','Sweden','Switzerland',
+  'Syria','Taiwan','Tajikistan','Tanzania','Thailand','Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia',
+  'Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay',
+  'Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe',
+];
+
+// Final lookup used by matching logic.
+const COVER_LOOKUP = [
+  ...COVER_LOOKUP_CURATED,
+  ...COVER_ALIASES,
+  ...COUNTRY_NAMES.map((name) => [normalizeLocationText(name), unsplashQueryUrl(`${name} travel`)]),
 ];
 
 /** Keys sorted longest-first for substring matching */
@@ -164,7 +265,7 @@ const FLAG_LOOKUP = [
 const FLAG_KEYS_SORTED = [...FLAG_LOOKUP].sort((a, b) => b[0].length - a[0].length);
 
 function haystack(destination = '', locations = '') {
-  return `${destination} ${locations}`.toLowerCase().replace(/\s+/g, ' ').trim();
+  return normalizeLocationText(`${destination} ${locations}`);
 }
 
 /**
@@ -178,7 +279,8 @@ export function getCoverImageForDestination(destination = '', locations = '') {
   for (const [key, url] of COVER_KEYS_SORTED) {
     if (h.includes(key)) return url;
   }
-  return DEFAULT_TRIP_COVER_FALLBACK;
+  // Broad fallback: query Unsplash by the user's destination text so nearly anything yields a relevant cover.
+  return unsplashQueryUrl(`${h} travel`);
 }
 
 /**
@@ -220,9 +322,16 @@ export function isGenericDefaultCoverUrl(url) {
  */
 export function resolveTripCardCoverImage(raw) {
   const coverImages = Array.isArray(raw.coverImages) ? raw.coverImages.filter(Boolean) : [];
-  const primary = (raw.image && String(raw.image).trim()) || coverImages[0] || '';
+  const image = raw.image && String(raw.image).trim();
+  const primary = image || coverImages[0] || '';
   const dest = String(raw.destination || '').trim();
   const loc = String(raw.locations || '').trim();
+  // When a user duplicates a public itinerary ("Customize trip"), keep the source cover exactly.
+  // Do not replace "generic defaults" with destination-based images — the copy should look identical.
+  if (raw?.customizedFromItineraryId) {
+    const copiedCover = coverImages[0] || image || '';
+    return copiedCover;
+  }
   if (!primary || isGenericDefaultCoverUrl(primary)) {
     return getCoverImageForDestination(dest, loc);
   }

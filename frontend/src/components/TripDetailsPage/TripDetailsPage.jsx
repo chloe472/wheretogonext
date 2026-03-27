@@ -4492,7 +4492,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               <button type="button" className="trip-details__modal-cancel" onClick={() => setPendingDeleteItemId(null)}>Cancel</button>
               <button
                 type="button"
-                className="trip-details__modal-update"
+                className="trip-details__modal-delete"
                 onClick={() => {
                   setTripExpenseItems((prev) => prev.filter((it) => it.id !== pendingDeleteItemId));
                   setPendingDeleteItemId(null);

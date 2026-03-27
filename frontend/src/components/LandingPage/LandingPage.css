@@ -85,15 +85,15 @@
   padding: 0.875rem 1.75rem;
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
-  background: #000;
+  color: var(--wtg-primary-contrast);
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   transition: background 0.2s, transform 0.1s;
 }
 
 .hero__cta:hover {
-  background: #333;
+  background: #6b5344;
 }
 
 .hero__cta:active {

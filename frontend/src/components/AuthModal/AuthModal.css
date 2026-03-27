@@ -268,8 +268,8 @@
   padding: 0.75rem 1rem;
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
-  background: #1a1a1a;
+  color: var(--wtg-primary-contrast);
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   transition: background 0.2s, transform 0.1s;
@@ -281,7 +281,7 @@
 }
 
 .auth-modal__submit:hover {
-  background: #333;
+  background: #6b5344;
 }
 
 .auth-modal__submit:active {

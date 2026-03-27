@@ -162,6 +162,14 @@ export async function fetchMyItineraries(signal) {
   return Array.isArray(data.itineraries) ? data.itineraries : [];
 }
 
+/** GET /api/itineraries/shared-with-me */
+export async function fetchSharedWithMeItineraries(signal) {
+  const res = await fetch(apiUrl('/api/itineraries/shared-with-me'), { signal, headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to load shared itineraries');
+  return Array.isArray(data.itineraries) ? data.itineraries : [];
+}
+
 /** GET /api/itineraries/:id/customized-copy — whether user already duplicated from this source (auth) */
 export async function fetchCustomizedCopyExists(sourceItineraryId) {
   const res = await fetch(

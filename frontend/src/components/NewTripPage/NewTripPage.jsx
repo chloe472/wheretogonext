@@ -117,6 +117,7 @@ export default function NewTripPage({ user, onLogout }) {
       budget: '$0',
       budgetSpent: 0,
       travelers: 1 + (invitedEmails?.length || 0),
+      collaborators: invitedEmails,
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
       image: coverUrl,

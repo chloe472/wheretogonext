@@ -218,33 +218,94 @@
 
 .dashboard__filters {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  align-items: center;
   margin-bottom: 1.25rem;
 }
 
-.dashboard__filter {
-  padding: 0.5rem 1rem;
+.dashboard__filter-label {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--dash-text-muted);
-  background: transparent;
+}
+
+.dashboard__filter-dropdown {
+  position: relative;
+}
+
+.dashboard__filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--dash-text);
+  background: var(--dash-surface);
   border: 1px solid var(--dash-border);
   border-radius: 999px;
   cursor: pointer;
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.15s, background 0.15s, border-color 0.15s;
 }
 
-.dashboard__filter:hover {
+.dashboard__filter-btn:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.dashboard__filter-btn--open {
+  border-color: var(--dash-accent);
+}
+
+.dashboard__filter-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.18), 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.dashboard__filter-btn-text {
+  line-height: 1;
+}
+
+.dashboard__filter-chevron {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dashboard__filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  min-width: 140px;
+  padding: 0.5rem 0;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(61, 52, 40, 0.12);
+  z-index: 100;
+}
+
+.dashboard__filter-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--dash-text);
-  border-color: #c4b8a8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
 }
 
-.dashboard__filter--active {
-  color: #faf8f5;
-  background: var(--dash-primary);
-  border-color: var(--dash-primary);
+.dashboard__filter-option:hover {
+  background: var(--dash-hover);
 }
 
+.dashboard__filter-option--active {
+  font-weight: 700;
+}
 .dashboard__trip-list {
   list-style: none;
   margin: 0;
@@ -450,7 +511,8 @@
 }
 
 .trip-card__status--dreaming {
-  background-color: rgba(124, 58, 237, 0.16);
+  /* Match legibility/opacity of Planning & Upcoming */
+  background-color: #f3e8ff;
   color: #6d28d9;
 }
 
@@ -545,6 +607,20 @@
   font-size: 0.875rem;
   color: var(--dash-text-muted);
   line-height: 1.45;
+}
+
+.trip-card__shared-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: -0.1rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #1d4ed8;
+  background: #dbeafe;
 }
 
 /* Sidebar */
