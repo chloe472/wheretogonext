@@ -5,6 +5,7 @@ import multer from 'multer';
 import mongoose from 'mongoose';
 import Itinerary from '../models/Itinerary.js';
 import ItineraryComment from '../models/ItineraryComment.js';
+import User from '../models/User.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -183,6 +184,117 @@ function normalizeCoverImages(raw) {
   return raw.map((u) => String(u).trim()).filter(Boolean);
 }
 
+function normalizeCollaborators(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const normalized = [];
+
+  for (const entry of raw) {
+    let userId = null;
+    let email = '';
+    let role = 'editor';
+
+    if (typeof entry === 'string') {
+      email = entry;
+    } else if (entry && typeof entry === 'object') {
+      if (entry.userId && mongoose.isValidObjectId(String(entry.userId))) {
+        userId = new mongoose.Types.ObjectId(String(entry.userId));
+      }
+      email = entry.email != null ? String(entry.email) : '';
+      if (entry.role != null && String(entry.role).trim()) {
+        role = String(entry.role).trim();
+      }
+    } else {
+      continue;
+    }
+
+    email = email.trim().toLowerCase();
+    if (!email) continue;
+
+    const key = `${email}::${role.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    normalized.push({ userId, email, role });
+  }
+
+  return normalized;
+}
+
+async function attachCollaboratorUserIds(collaborators) {
+  if (!Array.isArray(collaborators) || collaborators.length === 0) return [];
+
+  const emailsToLookup = Array.from(
+    new Set(
+      collaborators
+        .filter((c) => !c.userId && c.email)
+        .map((c) => String(c.email).trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (emailsToLookup.length === 0) return collaborators;
+
+  const users = await User.find({ email: { $in: emailsToLookup } })
+    .select('_id email')
+    .lean();
+  const byEmail = new Map(users.map((u) => [String(u.email || '').trim().toLowerCase(), String(u._id)]));
+
+  return collaborators.map((c) => {
+    if (c.userId) return c;
+    const matchedId = byEmail.get(String(c.email || '').trim().toLowerCase());
+    if (!matchedId) return c;
+    return { ...c, userId: new mongoose.Types.ObjectId(matchedId) };
+  });
+}
+
+async function enrichCollaboratorsInItineraries(docs) {
+  const list = Array.isArray(docs) ? docs : docs ? [docs] : [];
+  if (list.length === 0) return Array.isArray(docs) ? [] : docs;
+
+  const emails = Array.from(
+    new Set(
+      list.flatMap((doc) =>
+        (Array.isArray(doc?.collaborators) ? doc.collaborators : [])
+          .map((c) => String(c?.email || '').trim().toLowerCase())
+          .filter(Boolean)
+      )
+    )
+  );
+
+  if (emails.length === 0) return docs;
+
+  const users = await User.find({ email: { $in: emails } })
+    .select('_id email name username picture')
+    .lean();
+  const byEmail = new Map(users.map((u) => [String(u.email || '').trim().toLowerCase(), u]));
+
+  const enriched = list.map((doc) => {
+    const collaborators = Array.isArray(doc?.collaborators) ? doc.collaborators : [];
+    return {
+      ...doc,
+      collaborators: collaborators.map((c) => {
+        const email = String(c?.email || '').trim().toLowerCase();
+        const matched = byEmail.get(email);
+        if (!matched) return c;
+        return {
+          ...c,
+          userId: c?.userId || matched._id,
+          user: {
+            id: String(matched._id),
+            email: matched.email || '',
+            name: matched.name || '',
+            username: matched.username || '',
+            picture: matched.picture || '',
+          },
+        };
+      }),
+    };
+  });
+
+  return Array.isArray(docs) ? enriched : enriched[0];
+}
+
 function toAbsoluteAssetUrl(req, rawUrl) {
   const u = String(rawUrl || '').trim();
   if (!u) return '';
@@ -248,7 +360,8 @@ router.get('/', async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.json({ itineraries: docs });
+    const enriched = await enrichCollaboratorsInItineraries(docs);
+    return res.json({ itineraries: enriched });
   } catch (err) {
     console.error('GET /itineraries error:', err);
     return res.status(500).json({ error: 'Failed to list itineraries' });
@@ -269,15 +382,50 @@ router.get('/mine', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.json({ itineraries: docs });
+    const enriched = await enrichCollaboratorsInItineraries(docs);
+    return res.json({ itineraries: enriched });
   } catch (err) {
     console.error('GET /itineraries/mine error:', err);
     return res.status(500).json({ error: 'Failed to load your itineraries' });
   }
 });
 
+
 /**
- * POST /api/itineraries/upload — single image (multipart field name: file)
+ * GET /api/itineraries/shared-with-me
+ */
+router.get('/shared-with-me', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const me = await User.findById(req.userId).select('email').lean();
+    const myEmail = String(me?.email || '').trim().toLowerCase();
+    if (!myEmail) {
+      return res.json({ itineraries: [] });
+    }
+
+    const escaped = escapeRegex(myEmail);
+    const docs = await Itinerary.find({
+      collaborators: {
+        $elemMatch: { email: { $regex: `^${escaped}$`, $options: 'i' } },
+      },
+    })
+      .sort({ updatedAt: -1 })
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    const enriched = await enrichCollaboratorsInItineraries(docs);
+    return res.json({ itineraries: enriched });
+  } catch (err) {
+    console.error('GET /itineraries/shared-with-me error:', err);
+    return res.status(500).json({ error: 'Failed to load shared itineraries' });
+  }
+});
+
+/**
+ * POST /api/itineraries/upload - single image (multipart field name: file)
  */
 router.post('/upload', requireAuth, (req, res, next) => {
   uploadMw.single('file')(req, res, (err) => {
@@ -502,7 +650,8 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.status(201).json({ itinerary: populated });
+    const enrichedOne = await enrichCollaboratorsInItineraries(populated);
+    return res.status(201).json({ itinerary: enrichedOne });
   } catch (err) {
     console.error('POST /itineraries/:id/duplicate error:', err);
     if (err.name === 'ValidationError') {
@@ -574,7 +723,8 @@ router.get('/:id', async (req, res) => {
 
     const commentCount = await ItineraryComment.countDocuments({ itineraryId: id });
 
-    return res.json({ itinerary: { ...itinerary, commentCount } });
+    const enrichedOne = await enrichCollaboratorsInItineraries({ ...itinerary, commentCount });
+    return res.json({ itinerary: enrichedOne });
   } catch (err) {
     console.error('GET /itineraries/:id error:', err);
     return res.status(500).json({ error: 'Failed to load itinerary' });
@@ -633,6 +783,10 @@ router.post('/', requireAuth, async (req, res) => {
       daysFinal = computeDaysFromPlaces(placesFinal);
     }
 
+    const collaborators = await attachCollaboratorUserIds(
+      normalizeCollaborators(req.body?.collaborators)
+    );
+
     const doc = await Itinerary.create({
       title,
       overview: req.body?.overview != null ? String(req.body.overview) : '',
@@ -651,6 +805,7 @@ router.post('/', requireAuth, async (req, res) => {
         req.body?.travelers != null && req.body.travelers !== ''
           ? Math.max(1, Number(req.body.travelers) || 1)
           : 1,
+      collaborators,
       status: req.body?.status != null ? String(req.body.status) : 'Planning',
       statusClass: req.body?.statusClass != null ? String(req.body.statusClass) : '',
       image: imageFromBody || (coverImagesFinal[0] ?? ''),
@@ -673,7 +828,8 @@ router.post('/', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.status(201).json({ itinerary: populated });
+    const enrichedOne = await enrichCollaboratorsInItineraries(populated);
+    return res.status(201).json({ itinerary: enrichedOne });
   } catch (err) {
     console.error('POST /itineraries error:', err);
     if (err.name === 'ValidationError') {
@@ -721,6 +877,11 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.travelers != null && body.travelers !== '') {
       existing.travelers = Math.max(1, Number(body.travelers) || 1);
     }
+    if (body.collaborators != null) {
+      existing.collaborators = await attachCollaboratorUserIds(
+        normalizeCollaborators(body.collaborators)
+      );
+    }
     if (body.status != null) existing.status = String(body.status);
     if (body.statusClass != null) existing.statusClass = String(body.statusClass);
     if (body.image != null) existing.image = String(body.image).trim();
@@ -758,7 +919,8 @@ router.put('/:id', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.json({ itinerary: populated });
+    const enrichedOne = await enrichCollaboratorsInItineraries(populated);
+    return res.json({ itinerary: enrichedOne });
   } catch (err) {
     console.error('PUT /itineraries/:id error:', err);
     if (err.name === 'ValidationError') {
@@ -850,7 +1012,8 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
-    return res.json({ itinerary: populated });
+    const enrichedOne = await enrichCollaboratorsInItineraries(populated);
+    return res.json({ itinerary: enrichedOne });
   } catch (err) {
     console.error('POST /itineraries/:id/publish error:', err);
     if (err.name === 'ValidationError') {

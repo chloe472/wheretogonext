@@ -1543,14 +1543,29 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #ea580c;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .trip-details__modal-update:hover {
-  background: #c2410c;
+  background: #6b5344;
+}
+
+.trip-details__modal-delete {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-primary-contrast);
+  background: #dc2626;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-delete:hover {
+  background: #b91c1c;
 }
 
 /* When (date) modal – unified range picker */
@@ -1721,14 +1736,14 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #0d9488;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .trip-details__when-done:hover {
-  background: #0f766e;
+  background: #6b5344;
 }
 
 /* Optimize Route modal */
@@ -1828,14 +1843,14 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #dc2626;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .trip-details__optimize-route-submit:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 /* Budget / Estimated expenses modal */
@@ -2671,7 +2686,7 @@
 
 .trip-details__edit-place-view-details {
   font-size: 0.875rem;
-  color: var(--color-primary, #dc2626);
+  color: var(--wtg-primary);
   text-decoration: none;
 }
 
@@ -2959,14 +2974,14 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #dc2626;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .trip-details__edit-place-save:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 /* Public Transport Directions modal */
@@ -4201,7 +4216,7 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  background: #dc2626;
+  background: var(--wtg-primary);
   color: var(--wtg-primary-contrast);
   border: none;
   border-radius: 8px;
@@ -4210,7 +4225,7 @@
 }
 
 .trip-details__add-transport-search:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 .trip-details__add-transport-search:disabled {
@@ -4433,7 +4448,7 @@
 .trip-details__add-transport-result-add {
   width: 100%;
   padding: 0.75rem 1.5rem;
-  background: #dc2626;
+  background: var(--wtg-primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -4444,7 +4459,7 @@
 }
 
 .trip-details__add-transport-result-add:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 /* Compact flight card variant (matches lightweight result row style) */
@@ -4968,14 +4983,14 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #dc2626;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .trip-details__custom-transport-submit:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 @media (max-width: 560px) {
@@ -5244,7 +5259,7 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-primary-contrast);
-  background: #dc2626;
+  background: var(--wtg-primary);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -5268,7 +5283,7 @@
 }
 
 .trip-details__custom-place-submit:hover {
-  background: #b91c1c;
+  background: #6b5344;
 }
 
 /* Add to Trip Preview Section */
