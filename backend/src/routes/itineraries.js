@@ -183,6 +183,16 @@ function normalizeCoverImages(raw) {
   return raw.map((u) => String(u).trim()).filter(Boolean);
 }
 
+function toAbsoluteAssetUrl(req, rawUrl) {
+  const u = String(rawUrl || '').trim();
+  if (!u) return '';
+  if (/^(https?:)?\/\//i.test(u) || u.startsWith('data:')) return u;
+  if (!u.startsWith('/')) return u;
+  const host = req.get('host') || 'localhost:5000';
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  return `${proto}://${host}${u}`;
+}
+
 /**
  * GET /api/itineraries
  * Public community list: published + public only.
@@ -397,6 +407,141 @@ router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST like comment error:', err);
     return res.status(500).json({ error: 'Failed to update like' });
+  }
+});
+
+/**
+ * POST /api/itineraries/:id/duplicate
+ * Copy an itinerary into the current user's account as a new private, unpublished trip.
+ * Source must be public+published (community) or owned by the user.
+ */
+router.post('/:id/duplicate', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const src = await Itinerary.findById(id).lean();
+    if (!src) {
+      return res.status(404).json({ error: 'Itinerary not found' });
+    }
+
+    const isOwner = String(src.creator) === req.userId;
+    const isPublicTemplate = Boolean(src.published && src.visibility === 'public');
+    if (!isOwner && !isPublicTemplate) {
+      return res.status(403).json({ error: 'Not allowed to copy this itinerary' });
+    }
+
+    const tripExpenseItemsIn = (() => {
+      if (!Array.isArray(src.tripExpenseItems)) return [];
+      try {
+        return JSON.parse(JSON.stringify(src.tripExpenseItems));
+      } catch {
+        return [];
+      }
+    })();
+
+    const startDate = src.startDate != null ? String(src.startDate).trim() : '';
+    let placesFinal = normalizePlaces(src.places || []);
+    if (placesFinal.length === 0 && tripExpenseItemsIn.length > 0) {
+      placesFinal = placesFromTripExpenseItems(tripExpenseItemsIn, startDate);
+    }
+
+    let daysFinal = Number.isFinite(Number(src.days)) && Number(src.days) >= 1 ? Number(src.days) : 1;
+    if (placesFinal.length > 0) {
+      daysFinal = computeDaysFromPlaces(placesFinal);
+    } else if (startDate && src.endDate) {
+      daysFinal = computeDaysFromDateRange(startDate, String(src.endDate).trim());
+    }
+
+    const coverImages = normalizeCoverImages(src.coverImages).map((u) => toAbsoluteAssetUrl(req, u));
+    const imageFromSrc = toAbsoluteAssetUrl(req, src.image != null ? String(src.image).trim() : '');
+    const coverImagesFinal =
+      coverImages.length > 0 ? coverImages : imageFromSrc ? [imageFromSrc] : [];
+
+    const doc = await Itinerary.create({
+      title: String(src.title || 'Untitled trip').trim() || 'Untitled trip',
+      overview: src.overview != null ? String(src.overview) : '',
+      creator: req.userId,
+      customizedFromItineraryId: new mongoose.Types.ObjectId(id),
+      destination: src.destination != null ? String(src.destination).trim() : '',
+      locations: src.locations != null ? String(src.locations).trim() : '',
+      startDate,
+      endDate: src.endDate != null ? String(src.endDate).trim() : '',
+      dates: src.dates != null ? String(src.dates) : '',
+      budget: src.budget != null ? String(src.budget) : '$0',
+      budgetSpent:
+        src.budgetSpent != null && src.budgetSpent !== ''
+          ? Math.max(0, Number(src.budgetSpent) || 0)
+          : 0,
+      travelers:
+        src.travelers != null && src.travelers !== ''
+          ? Math.max(1, Number(src.travelers) || 1)
+          : 1,
+      status: src.status != null ? String(src.status) : 'Planning',
+      statusClass: src.statusClass != null ? String(src.statusClass) : '',
+      image: imageFromSrc || (coverImagesFinal[0] ?? ''),
+      placesSaved: placesFinal.length,
+      days: daysFinal,
+      categories: normalizeCategories(src.categories),
+      coverImages: coverImagesFinal,
+      tripExpenseItems: tripExpenseItemsIn,
+      places: placesFinal,
+      viewCount: 0,
+      published: false,
+      visibility: 'private',
+      publishedAt: null,
+    });
+
+    const populated = await Itinerary.findById(doc._id)
+      .populate('creator', 'name email picture username')
+      .lean();
+
+    return res.status(201).json({ itinerary: populated });
+  } catch (err) {
+    console.error('POST /itineraries/:id/duplicate error:', err);
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors || {}).map((e) => e.message).join(' ') || err.message;
+      return res.status(400).json({ error: msg });
+    }
+    return res.status(500).json({ error: 'Failed to duplicate itinerary' });
+  }
+});
+
+/**
+ * GET /api/itineraries/:id/customized-copy
+ * Whether the current user already has a trip duplicated from this source itinerary.
+ */
+router.get('/:id/customized-copy', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Invalid itinerary id' });
+    }
+
+    const existing = await Itinerary.findOne({
+      creator: req.userId,
+      customizedFromItineraryId: id,
+    })
+      .select('_id')
+      .lean();
+
+    return res.json({
+      hasCopy: Boolean(existing),
+      copyId: existing?._id ? String(existing._id) : undefined,
+    });
+  } catch (err) {
+    console.error('GET /itineraries/:id/customized-copy error:', err);
+    return res.status(500).json({ error: 'Failed to check customized copy' });
   }
 });
 

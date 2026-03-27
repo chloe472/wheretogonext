@@ -105,7 +105,12 @@ function App() {
             )
           }
         />
-        <Route path="/itineraries/:id" element={<ItineraryDetailPage user={user} onLogout={handleLogout} />} />
+        <Route
+          path="/itineraries/:id"
+          element={
+            <ItineraryDetailPage user={user} onLogout={handleLogout} onRequireLogin={openAuthModal} />
+          }
+        />
       </Routes>
       {authModalOpen && (
         <AuthModal

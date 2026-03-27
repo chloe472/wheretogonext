@@ -106,6 +106,19 @@
   display: block;
 }
 
+.itinerary-card__flag {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  width: 24px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
 .itinerary-card__nav {
   position: absolute;
   top: 50%;
@@ -140,24 +153,18 @@
 }
 
 .itinerary-card__views {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 2;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--wtg-primary-contrast);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 999px;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6b7280;
 }
 
 .itinerary-card__views svg {
   flex-shrink: 0;
-  opacity: 0.95;
+  opacity: 0.85;
 }
 
 .itinerary-card__dots {

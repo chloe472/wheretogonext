@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Share2,
@@ -8,6 +8,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   X,
   User,
   Send,
@@ -20,10 +21,13 @@ import {
   toggleCommentLike,
   fetchPublicItineraries,
   mapItineraryToCard,
+  duplicateItinerary,
+  fetchCustomizedCopyExists,
 } from '../api/itinerariesApi';
 import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import { formatViewCount } from '../lib/formatViewCount';
-import ItineraryPlacesMap from './ItineraryPlacesMap';
+import { buildItineraryMapMarkers } from '../lib/itineraryMapMarkers';
+import TripMap from './TripMap';
 import ItineraryCard from './ItineraryCard';
 import DashboardHeader from './DashboardHeader';
 import './ItineraryDetailPage.css';
@@ -220,7 +224,7 @@ function CommentBranch({
   );
 }
 
-export default function ItineraryDetailPage({ user, onLogout }) {
+export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [itinerary, setItinerary] = useState(null);
@@ -231,10 +235,14 @@ export default function ItineraryDetailPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxThumbsRef = useRef(null);
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
   const [shareDone, setShareDone] = useState(false);
+  const [customizeBusy, setCustomizeBusy] = useState(false);
+  const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
 
   const loadComments = useCallback(async () => {
     if (!id) return;
@@ -315,10 +323,53 @@ export default function ItineraryDetailPage({ user, onLogout }) {
   }, [itinerary?._id, itinerary?.categories]);
 
   const places = itinerary?.places || [];
+
+  const { markers: mapMarkers, center: mapCenter } = useMemo(
+    () => buildItineraryMapMarkers(itinerary),
+    [itinerary]
+  );
+
   const coverImages = useMemo(
     () => (Array.isArray(itinerary?.coverImages) ? itinerary.coverImages.filter(Boolean) : []),
     [itinerary]
   );
+
+  const openLightbox = useCallback(
+    (index = 0) => {
+      const n = coverImages.length;
+      if (!n) return;
+      setLightboxIndex(Math.max(0, Math.min(index, n - 1)));
+      setPhotosOpen(true);
+    },
+    [coverImages.length]
+  );
+
+  useEffect(() => {
+    if (!photosOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPhotosOpen(false);
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setLightboxIndex((i) => (i - 1 + coverImages.length) % coverImages.length);
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setLightboxIndex((i) => (i + 1) % coverImages.length);
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [photosOpen, coverImages.length]);
+
+  useEffect(() => {
+    if (!photosOpen || !lightboxThumbsRef.current) return;
+    const btn = lightboxThumbsRef.current.querySelector(`[data-thumb-index="${lightboxIndex}"]`);
+    btn?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [photosOpen, lightboxIndex]);
 
   const daysGrouped = useMemo(() => {
     const map = {};
@@ -363,6 +414,55 @@ export default function ItineraryDetailPage({ user, onLogout }) {
       : `${overviewText.slice(0, OVERVIEW_PREVIEW)}…`;
 
   const commentTree = useMemo(() => buildCommentTree(comments), [comments]);
+
+  const performDuplicate = useCallback(async () => {
+    const copy = await duplicateItinerary(id);
+    const newId = copy?._id ?? copy?.id;
+    if (!newId) throw new Error('Copy did not return an id.');
+    navigate(`/trip/${newId}`);
+  }, [id, navigate]);
+
+  const handleCustomizeTrip = async () => {
+    if (!id) return;
+    if (!user) {
+      onRequireLogin?.();
+      return;
+    }
+    setCustomizeBusy(true);
+    try {
+      const { hasCopy } = await fetchCustomizedCopyExists(id);
+      if (hasCopy) {
+        setCustomizeConfirmOpen(true);
+        return;
+      }
+      await performDuplicate();
+    } catch (e) {
+      alert(e?.message || 'Could not copy this itinerary. Please try again.');
+    } finally {
+      setCustomizeBusy(false);
+    }
+  };
+
+  const handleConfirmAnotherCopy = async () => {
+    setCustomizeConfirmOpen(false);
+    setCustomizeBusy(true);
+    try {
+      await performDuplicate();
+    } catch (e) {
+      alert(e?.message || 'Could not copy this itinerary. Please try again.');
+    } finally {
+      setCustomizeBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!customizeConfirmOpen) return;
+    function onKey(e) {
+      if (e.key === 'Escape') setCustomizeConfirmOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [customizeConfirmOpen]);
 
   const handleShare = async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -473,31 +573,56 @@ export default function ItineraryDetailPage({ user, onLogout }) {
             )}
 
             {coverImages.length > 0 && (
-              <div className="itinerary-detail__photo-grid">
+              <div
+                className={`itinerary-detail__photo-grid ${coverImages.length === 1 ? 'itinerary-detail__photo-grid--single' : ''}`}
+              >
                 <div className="itinerary-detail__photo-main">
-                  <img
-                    src={resolveImageUrl(coverImages[0], itinerary.title, 'itinerary')}
-                    alt=""
-                    onError={(e) => applyImageFallback(e)}
-                  />
+                  <button
+                    type="button"
+                    className="itinerary-detail__photo-tile"
+                    onClick={() => openLightbox(0)}
+                    aria-label="Open photo 1 in gallery"
+                  >
+                    <img
+                      src={resolveImageUrl(coverImages[0], itinerary.title, 'itinerary')}
+                      alt=""
+                      onError={(e) => applyImageFallback(e)}
+                    />
+                  </button>
                 </div>
                 {coverImages.length > 1 && (
                   <div className="itinerary-detail__photo-stack">
-                    {coverImages.slice(1, 3).map((src, i) => (
+                    {[coverImages[1], coverImages[2] || coverImages[1]].map((src, i) => (
                       <div key={i} className="itinerary-detail__photo-stack-item">
-                        <img
-                          src={resolveImageUrl(src, itinerary.title, 'itinerary')}
-                          alt=""
-                          onError={(e) => applyImageFallback(e)}
-                        />
+                        <button
+                          type="button"
+                          className="itinerary-detail__photo-tile"
+                          onClick={() => openLightbox(i + 1)}
+                          aria-label={`Open photo ${i + 2} in gallery`}
+                        >
+                          <img
+                            src={resolveImageUrl(src, itinerary.title, 'itinerary')}
+                            alt=""
+                            onError={(e) => applyImageFallback(e)}
+                          />
+                        </button>
+                        {i === 1 && (
+                          <button
+                            type="button"
+                            className="itinerary-detail__see-photos itinerary-detail__see-photos--overlay"
+                            onClick={() => openLightbox(0)}
+                          >
+                            See all photos ({coverImages.length})
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
-            {coverImages.length > 0 && (
-              <button type="button" className="itinerary-detail__see-photos" onClick={() => setPhotosOpen(true)}>
+            {coverImages.length === 1 && (
+              <button type="button" className="itinerary-detail__see-photos" onClick={() => openLightbox(0)}>
                 See all photos ({coverImages.length})
               </button>
             )}
@@ -540,16 +665,35 @@ export default function ItineraryDetailPage({ user, onLogout }) {
                   )}
                 </div>
                 <h3 className="itinerary-detail__h3">Map</h3>
-                <ItineraryPlacesMap places={places} className="itinerary-detail__map-embed" height={300} />
+                <div className="itinerary-detail__map-embed itinerary-detail__map-wrap" style={{ height: 300 }}>
+                  <TripMap
+                    className="itinerary-detail__trip-map"
+                    center={mapCenter}
+                    zoom={11}
+                    markers={mapMarkers}
+                    fitBounds={mapMarkers.length > 0}
+                    popupMode="basic"
+                  />
+                </div>
               </section>
             )}
 
             {activeTab === 'map' && (
               <section className="itinerary-detail__panel">
-                <ItineraryPlacesMap places={places} height={420} />
-                {places.filter((p) => p.lat != null && p.lng != null).length === 0 && (
+                <div className="itinerary-detail__map-wrap" style={{ height: 420 }}>
+                  <TripMap
+                    className="itinerary-detail__trip-map"
+                    center={mapCenter}
+                    zoom={11}
+                    markers={mapMarkers}
+                    fitBounds={mapMarkers.length > 0}
+                    popupMode="basic"
+                  />
+                </div>
+                {mapMarkers.length === 0 && (
                   <p className="itinerary-detail__muted itinerary-detail__map-hint">
-                    Places need latitude & longitude to appear on the map. Edit the itinerary to add coordinates.
+                    No saved locations with coordinates on this itinerary yet. Stops added in trip planning with
+                    map pins will appear here.
                   </p>
                 )}
               </section>
@@ -698,9 +842,10 @@ export default function ItineraryDetailPage({ user, onLogout }) {
             <button
               type="button"
               className="itinerary-detail__customize"
-              onClick={() => navigate('/new-trip', { state: { fromItineraryId: id } })}
+              disabled={customizeBusy || !itinerary || customizeConfirmOpen}
+              onClick={handleCustomizeTrip}
             >
-              Customize trip
+              {customizeBusy ? 'Copying…' : 'Customize trip'}
             </button>
             <p className="itinerary-detail__cta-hint">Start from this plan and make it yours.</p>
           </div>
@@ -733,25 +878,111 @@ export default function ItineraryDetailPage({ user, onLogout }) {
         </aside>
       </div>
 
-      {photosOpen && (
-        <div className="itinerary-detail__modal" role="dialog" aria-modal="true" aria-label="All photos">
-          <button type="button" className="itinerary-detail__modal-backdrop" onClick={() => setPhotosOpen(false)} aria-label="Close" />
-          <div className="itinerary-detail__modal-content">
-            <div className="itinerary-detail__modal-head">
-              <h2>Photos</h2>
-              <button type="button" className="itinerary-detail__modal-close" onClick={() => setPhotosOpen(false)} aria-label="Close">
-                <X size={22} />
+      {photosOpen && coverImages.length > 0 && (
+        <div
+          className="itinerary-detail__lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo gallery"
+          onClick={() => setPhotosOpen(false)}
+        >
+          <div className="itinerary-detail__lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="itinerary-detail__lightbox-top">
+              <span className="itinerary-detail__lightbox-count" aria-live="polite">
+                {lightboxIndex + 1} / {coverImages.length}
+              </span>
+              <button
+                type="button"
+                className="itinerary-detail__lightbox-close"
+                onClick={() => setPhotosOpen(false)}
+                aria-label="Close gallery"
+              >
+                <X size={26} />
               </button>
             </div>
-            <div className="itinerary-detail__modal-grid">
-              {coverImages.map((src, i) => (
+            <div className="itinerary-detail__lightbox-stage">
+              <button
+                type="button"
+                className="itinerary-detail__lightbox-arrow itinerary-detail__lightbox-arrow--prev"
+                onClick={() =>
+                  setLightboxIndex((i) => (i - 1 + coverImages.length) % coverImages.length)
+                }
+                aria-label="Previous photo"
+              >
+                <ChevronLeft size={40} strokeWidth={2} />
+              </button>
+              <div className="itinerary-detail__lightbox-main">
                 <img
-                  key={i}
-                  src={resolveImageUrl(src, itinerary.title, 'itinerary')}
+                  src={resolveImageUrl(coverImages[lightboxIndex], itinerary.title, 'itinerary')}
                   alt=""
+                  className="itinerary-detail__lightbox-img"
                   onError={(e) => applyImageFallback(e)}
                 />
+              </div>
+              <button
+                type="button"
+                className="itinerary-detail__lightbox-arrow itinerary-detail__lightbox-arrow--next"
+                onClick={() => setLightboxIndex((i) => (i + 1) % coverImages.length)}
+                aria-label="Next photo"
+              >
+                <ChevronRight size={40} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="itinerary-detail__lightbox-thumbs-wrap" ref={lightboxThumbsRef}>
+              {coverImages.map((src, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  data-thumb-index={i}
+                  className={`itinerary-detail__lightbox-thumb ${i === lightboxIndex ? 'itinerary-detail__lightbox-thumb--active' : ''}`}
+                  onClick={() => setLightboxIndex(i)}
+                  aria-label={`Photo ${i + 1}`}
+                  aria-current={i === lightboxIndex ? 'true' : undefined}
+                >
+                  <img
+                    src={resolveImageUrl(src, itinerary.title, 'itinerary')}
+                    alt=""
+                    onError={(e) => applyImageFallback(e)}
+                  />
+                </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {customizeConfirmOpen && (
+        <div
+          className="itinerary-detail__customize-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="itinerary-customize-confirm-title"
+        >
+          <button
+            type="button"
+            className="itinerary-detail__customize-modal-backdrop"
+            onClick={() => setCustomizeConfirmOpen(false)}
+            aria-label="Close"
+          />
+          <div className="itinerary-detail__customize-modal-panel">
+            <p id="itinerary-customize-confirm-title" className="itinerary-detail__customize-modal-text">
+              You&apos;ve already customized this itinerary. Do you want to create another copy?
+            </p>
+            <div className="itinerary-detail__customize-modal-actions">
+              <button
+                type="button"
+                className="itinerary-detail__customize-modal-btn itinerary-detail__customize-modal-btn--secondary"
+                onClick={() => setCustomizeConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="itinerary-detail__customize-modal-btn itinerary-detail__customize-modal-btn--primary"
+                onClick={handleConfirmAnotherCopy}
+              >
+                Create another copy
+              </button>
             </div>
           </div>
         </div>

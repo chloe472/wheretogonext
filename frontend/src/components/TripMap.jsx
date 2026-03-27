@@ -74,6 +74,11 @@ function FitBounds({ markers, disabled = false }) {
     if (disabled) return;
     if (!markers || markers.length === 0) return;
     try {
+      if (markers.length === 1) {
+        const m = markers[0];
+        map.setView([m.lat, m.lng], 13, { animate: false });
+        return;
+      }
       const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng]));
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
     } catch (_) {
