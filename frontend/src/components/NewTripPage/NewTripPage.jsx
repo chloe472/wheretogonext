@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
-import { searchLocations } from '../data/mockLocations';
-import { createItinerary } from '../api/itinerariesApi';
-import { getCoverImageForDestination } from '../data/tripDestinationMeta';
-import DateRangePickerModal from './DateRangePickerModal';
+import { searchLocations } from '../../data/mockLocations';
+import { createItinerary } from '../../api/itinerariesApi';
+import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
+import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -24,8 +24,8 @@ function resolveTypedLocation(query) {
   const exactMatch = searchLocations(value).find((loc) => {
     const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
     return (
-      loc.name.toLowerCase() === value.toLowerCase() ||
-      full.toLowerCase() === value.toLowerCase()
+      loc.name.toLowerCase() === value.toLowerCase()
+      || full.toLowerCase() === value.toLowerCase()
     );
   });
   if (exactMatch) return exactMatch;

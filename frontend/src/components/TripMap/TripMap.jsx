@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import './TripMap.css';
 
 const DAY_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#7c3aed', '#ea580c'];

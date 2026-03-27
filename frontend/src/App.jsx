@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import LandingPage from './components/LandingPage';
-import AuthModal from './components/AuthModal';
-import Dashboard from './components/Dashboard';
-import TripDetailsPage from './components/TripDetailsPage';
-import NewTripPage from './components/NewTripPage';
-import ProfilePage from './components/ProfilePage';
-import SearchResultsPage from './components/SearchResultsPage';
-import ItineraryDetailPage from './components/ItineraryDetailPage';
+import LandingPage from './components/LandingPage/LandingPage';
+import AuthModal from './components/AuthModal/AuthModal';
+import Dashboard from './components/Dashboard/Dashboard';
+import TripDetailsPage from './components/TripDetailsPage/TripDetailsPage';
+import NewTripPage from './components/NewTripPage/NewTripPage';
+import ProfilePage from './components/ProfilePage/ProfilePage';
+import SearchResultsPage from './components/SearchResultsPage/SearchResultsPage';
+import ItineraryDetailPage from './components/ItineraryDetailPage/ItineraryDetailPage';
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);

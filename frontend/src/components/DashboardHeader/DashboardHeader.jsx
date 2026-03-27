@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Bell, User, Search } from 'lucide-react';
-import { searchLocations } from '../data/mockLocations';
+import { searchLocations } from '../../data/mockLocations';
 import './DashboardHeader.css';
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Pencil, Share2, UserPlus, UserMinus } from 'lucide-react';
-import { fetchMyProfile, fetchProfile, updateMyProfile, addFriend, removeFriend } from '../api/profileApi';
+import { fetchMyProfile, fetchProfile, updateMyProfile, addFriend, removeFriend } from '../../api/profileApi';
 import './ProfilePage.css';
 
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {

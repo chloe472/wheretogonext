@@ -1,22 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { searchLocations } from '../data/mockLocations';
+import { searchLocations } from '../../data/mockLocations';
 import {
   ADVENTURE_TYPES,
   DURATIONS,
   SORT_OPTIONS,
-} from '../data/communitySearchConstants';
+} from '../../data/communitySearchConstants';
 import {
   fetchPublicItineraries,
   mapItineraryToCard,
   mapSortToApiParam,
   applyClientSort,
-} from '../api/itinerariesApi';
-import { EXPLORE_HERO_IMAGES } from '../assets/exploreHeroImages';
-import ItineraryCard from './ItineraryCard';
-import DashboardHeader from './DashboardHeader';
-import HeroSlideshowBackground from './HeroSlideshowBackground';
+} from '../../api/itinerariesApi';
+import { EXPLORE_HERO_IMAGES } from '../../assets/exploreHeroImages';
+import ItineraryCard from '../ItineraryCard/ItineraryCard';
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import HeroSlideshowBackground from '../HeroSlideshowBackground/HeroSlideshowBackground';
 import './SearchResultsPage.css';
 
 const RECENT_DESTINATIONS = ['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'];

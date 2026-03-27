@@ -1,5 +1,5 @@
 import React from "react";
-import { MOCK_TRIPS } from "./data/mockTrips.js";
+import { MOCK_TRIPS } from "../../data/mockTrips.js";
 import { FaMapMarkerAlt, FaCalendarAlt, FaImage, FaDollarSign, FaClipboardList } from "react-icons/fa";
 import './TripHeader.css';
 

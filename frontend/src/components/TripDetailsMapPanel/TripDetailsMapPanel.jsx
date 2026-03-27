@@ -1,5 +1,5 @@
 import { ChevronDown, ZoomIn, Filter, Info } from 'lucide-react';
-import TripMap from './TripMap';
+import TripMap from '../TripMap/TripMap';
 
 const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
 const MAP_FILTERS = ['Default', 'Food & Beverages', 'Experiences', 'My Trip'];

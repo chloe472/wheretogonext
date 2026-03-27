@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
-import { publishItinerary, uploadItineraryImage } from '../api/itinerariesApi';
-import { PUBLISH_CATEGORY_OPTIONS } from '../data/communitySearchConstants';
+import { publishItinerary, uploadItineraryImage } from '../../api/itinerariesApi';
+import { PUBLISH_CATEGORY_OPTIONS } from '../../data/communitySearchConstants';
 import './PublishItineraryModal.css';
 
 export { PUBLISH_CATEGORY_OPTIONS };

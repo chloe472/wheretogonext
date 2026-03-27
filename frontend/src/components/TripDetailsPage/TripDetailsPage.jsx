@@ -54,31 +54,31 @@ import {
   ArrowLeft,
   ExternalLink,
 } from 'lucide-react';
-import { fetchItineraryById, updateItinerary, deleteItinerary } from '../api/itinerariesApi';
+import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
 import {
   searchAddressSuggestions,
   getMapCenterForDestination,
   PLACE_FILTER_TAGS,
   PLACE_SORT_OPTIONS,
-} from '../data/mockPlaces';
+} from '../../data/mockPlaces';
 import {
   searchFoodAddressSuggestions,
   FOOD_SORT_OPTIONS,
-} from '../data/mockFoodAndBeverages';
+} from '../../data/mockFoodAndBeverages';
 import {
   EXPERIENCE_TYPES,
   EXPERIENCE_PRICE_RANGES,
   EXPERIENCE_DURATIONS,
   EXPERIENCE_SORT_OPTIONS,
-} from '../data/mockExperiences';
-import { searchLocations } from '../data/mockLocations';
-import { fetchDiscoveryData } from '../api/discoveryApi';
-import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
-import countriesData from '../data/countries.json';
-import DateRangePickerModal from './DateRangePickerModal';
-import TripMap from './TripMap';
-import TripDetailsMapPanel from './TripDetailsMapPanel';
-import FriendlyModal from './FriendlyModal';
+} from '../../data/mockExperiences';
+import { searchLocations } from '../../data/mockLocations';
+import { fetchDiscoveryData } from '../../api/discoveryApi';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import countriesData from '../../data/countries.json';
+import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
+import TripMap from '../TripMap/TripMap';
+import TripDetailsMapPanel from '../TripDetailsMapPanel/TripDetailsMapPanel';
+import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import './TripDetailsPage.css';
 import './TripDetailsPage.map.css';
 

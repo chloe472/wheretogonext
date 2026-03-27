@@ -11,8 +11,8 @@ import {
   Globe,
   ArrowRight,
 } from 'lucide-react';
-import { EXPLORE_HERO_IMAGES } from '../assets/exploreHeroImages';
-import HeroSlideshowBackground from './HeroSlideshowBackground';
+import { EXPLORE_HERO_IMAGES } from '../../assets/exploreHeroImages';
+import HeroSlideshowBackground from '../HeroSlideshowBackground/HeroSlideshowBackground';
 import './LandingPage.css';
 
 const FEATURES = [

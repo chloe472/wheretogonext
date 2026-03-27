@@ -24,14 +24,14 @@ import {
   mapItineraryToCard,
   duplicateItinerary,
   fetchCustomizedCopyExists,
-} from '../api/itinerariesApi';
-import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
-import { formatViewCount } from '../lib/formatViewCount';
-import { buildItineraryMapMarkers } from '../lib/itineraryMapMarkers';
-import TripMap from './TripMap';
-import ItineraryCard from './ItineraryCard';
-import DashboardHeader from './DashboardHeader';
-import FriendlyModal from './FriendlyModal';
+} from '../../api/itinerariesApi';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { formatViewCount } from '../../lib/formatViewCount';
+import { buildItineraryMapMarkers } from '../../lib/itineraryMapMarkers';
+import TripMap from '../TripMap/TripMap';
+import ItineraryCard from '../ItineraryCard/ItineraryCard';
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import './ItineraryDetailPage.css';
 
 const TABS = [
