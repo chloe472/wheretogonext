@@ -11,6 +11,8 @@ import {
   Globe,
   ArrowRight,
 } from 'lucide-react';
+import { EXPLORE_HERO_IMAGES } from '../assets/exploreHeroImages';
+import HeroSlideshowBackground from './HeroSlideshowBackground';
 import './LandingPage.css';
 
 const FEATURES = [
@@ -72,7 +74,7 @@ export default function LandingPage({ onStartPlanning }) {
     <div className="landing">
       {/* Hero */}
       <header className="hero">
-        <div className="hero__bg" aria-hidden="true" />
+        <HeroSlideshowBackground images={EXPLORE_HERO_IMAGES} />
         <div className="hero__content">
           <h1 className="hero__title">
             where to go{' '}

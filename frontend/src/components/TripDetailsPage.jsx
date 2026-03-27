@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
@@ -77,6 +78,7 @@ import countriesData from '../data/countries.json';
 import DateRangePickerModal from './DateRangePickerModal';
 import TripMap from './TripMap';
 import TripDetailsMapPanel from './TripDetailsMapPanel';
+import FriendlyModal from './FriendlyModal';
 import './TripDetailsPage.css';
 import './TripDetailsPage.map.css';
 
@@ -1208,6 +1210,15 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [tripData, localDestination, localLocations]);
 
   const [currency, setCurrency] = useState('USD');
+  const [friendlyDialog, setFriendlyDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    showCancel: false,
+    confirmText: 'OK',
+    cancelText: 'Cancel',
+    onConfirm: null,
+  });
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleEditValue, setTitleEditValue] = useState('');
@@ -1387,6 +1398,8 @@ export default function TripDetailsPage({ user, onLogout }) {
   const calendarTimelineRef = useRef(null);
   const calendarResizeSessionRef = useRef(null);
   const hydratedTripItemsForIdRef = useRef(null);
+  /** Counts expense-item persists per trip; first persist is hydration — skip toast. */
+  const expensePersistCountByTripRef = useRef({ tripId: null, count: 0 });
   const titleDropdownRef = useRef(null);
   const titleLastClickRef = useRef(0);
   const [transportModeBySegment, setTransportModeBySegment] = useState({});
@@ -1632,10 +1645,21 @@ export default function TripDetailsPage({ user, onLogout }) {
   useEffect(() => {
     if (tripLoading || !tripData) return;
     if (hydratedTripItemsForIdRef.current !== tripId) return;
+    const meta = expensePersistCountByTripRef.current;
+    if (meta.tripId !== tripId) {
+      expensePersistCountByTripRef.current = { tripId, count: 0 };
+    }
     let cancelled = false;
     (async () => {
       try {
         await updateItinerary(tripId, { tripExpenseItems });
+        if (cancelled) return;
+        const m = expensePersistCountByTripRef.current;
+        if (m.tripId !== tripId) return;
+        m.count += 1;
+        if (m.count > 1) {
+          toast.success('Changes saved', { id: 'trip-details-saved' });
+        }
       } catch (e) {
         if (!cancelled) console.error('Failed to save trip items', e);
       }
@@ -3066,6 +3090,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const updated = await updateItinerary(tripId, { title: v });
                         if (updated) setServerItinerary(updated);
                         setTitleDisplay(v);
+                        toast.success('Changes saved', { id: 'trip-details-saved' });
                       } catch (e) {
                         console.error(e);
                       }
@@ -3124,15 +3149,31 @@ export default function TripDetailsPage({ user, onLogout }) {
                       role="menuitem"
                       onClick={() => {
                         setTitleDropdownOpen(false);
-                        if (!window.confirm('Delete this trip? This cannot be undone.')) return;
-                        (async () => {
-                          try {
-                            await deleteItinerary(tripId);
-                            navigate('/');
-                          } catch (e) {
-                            alert(e?.message || 'Could not delete trip.');
-                          }
-                        })();
+                        setFriendlyDialog({
+                          open: true,
+                          title: 'Delete trip',
+                          message: 'Delete this trip? This cannot be undone.',
+                          showCancel: true,
+                          confirmText: 'Delete',
+                          cancelText: 'Cancel',
+                          onConfirm: async () => {
+                            try {
+                              await deleteItinerary(tripId);
+                              toast.success('Trip deleted');
+                              navigate('/');
+                            } catch (e) {
+                              setFriendlyDialog({
+                                open: true,
+                                title: 'Could not delete trip',
+                                message: e?.message || 'Please try again.',
+                                showCancel: false,
+                                confirmText: 'OK',
+                                cancelText: 'Cancel',
+                                onConfirm: null,
+                              });
+                            }
+                          },
+                        });
                       }}
                     >
                       Delete trip
@@ -3985,9 +4026,18 @@ export default function TripDetailsPage({ user, onLogout }) {
                       });
                       if (updated) setServerItinerary(updated);
                       setLocationUpdateKey((prev) => prev + 1);
+                      toast.success('Changes saved', { id: 'trip-details-saved' });
                     } catch (e) {
                       console.error(e);
-                      alert(e?.message || 'Could not update destination.');
+                      setFriendlyDialog({
+                        open: true,
+                        title: 'Could not update destination',
+                        message: e?.message || 'Please try again.',
+                        showCancel: false,
+                        confirmText: 'OK',
+                        cancelText: 'Cancel',
+                        onConfirm: null,
+                      });
                     }
                   })();
                 }}
@@ -8011,7 +8061,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                   const checkIn = parseDateTimeLocal(addToTripCheckInDate, addToTripCheckInTime);
                   const checkOut = parseDateTimeLocal(addToTripCheckOutDate, addToTripCheckOutTime);
                   if (!checkIn || !checkOut || checkOut <= checkIn) {
-                    window.alert('Check-out must be after check-in.');
+                    setFriendlyDialog({
+                      open: true,
+                      title: 'Invalid stay dates',
+                      message: 'Check-out must be after check-in.',
+                      showCancel: false,
+                      confirmText: 'OK',
+                      cancelText: 'Cancel',
+                      onConfirm: null,
+                    });
                     return;
                   }
                 }
@@ -8435,6 +8493,23 @@ export default function TripDetailsPage({ user, onLogout }) {
           </div>
         </>
       )}
+      <FriendlyModal
+        open={friendlyDialog.open}
+        title={friendlyDialog.title}
+        message={friendlyDialog.message}
+        showCancel={friendlyDialog.showCancel}
+        confirmText={friendlyDialog.confirmText}
+        cancelText={friendlyDialog.cancelText}
+        onClose={() => setFriendlyDialog((prev) => ({ ...prev, open: false, onConfirm: null }))}
+        onConfirm={async () => {
+          if (typeof friendlyDialog.onConfirm === 'function') {
+            await friendlyDialog.onConfirm();
+            setFriendlyDialog((prev) => ({ ...prev, open: false, onConfirm: null }));
+            return;
+          }
+          setFriendlyDialog((prev) => ({ ...prev, open: false, onConfirm: null }));
+        }}
+      />
     </div>
   );
 }

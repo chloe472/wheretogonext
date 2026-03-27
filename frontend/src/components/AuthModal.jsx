@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useGoogleLogin } from '@react-oauth/google';
 import {
   X,
@@ -64,10 +65,12 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       });
       const data = await parseRes(res);
       if (onLoginSuccess && data.user && data.token) {
-        onLoginSuccess(data.user, data.token);
+        onLoginSuccess(data.user, data.token, { action: 'login' });
       }
     } catch (err) {
-      setError(err.message || 'Log in failed. Try again.');
+      const msg = err.message || 'Log in failed. Try again.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -110,10 +113,12 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       });
       const data = await parseRes(res);
       if (onLoginSuccess && data.user && data.token) {
-        onLoginSuccess(data.user, data.token);
+        onLoginSuccess(data.user, data.token, { action: 'signup' });
       }
     } catch (err) {
-      setError(err.message || 'Sign up failed. Try again.');
+      const msg = err.message || 'Sign up failed. Try again.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -145,17 +150,20 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
         }
         if (!res.ok) throw new Error(data.error || 'Sign-in failed');
         if (onLoginSuccess && data.user && data.token) {
-          onLoginSuccess(data.user, data.token);
+          onLoginSuccess(data.user, data.token, { action: 'login' });
         }
       } catch (err) {
-        setError(err.message || 'Google sign-in failed. Try again.');
+        const msg = err.message || 'Google sign-in failed. Try again.';
+        setError(msg);
+        toast.error(msg);
       } finally {
         setLoading(false);
       }
     },
     onError: () => {
-      setError('Google sign-in was cancelled or failed.');
-      setLoading(false);
+      const msg = 'Google sign-in was cancelled or failed.';
+      setError(msg);
+      toast.error(msg);
     },
   });
 

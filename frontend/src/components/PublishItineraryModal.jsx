@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
 import { publishItinerary, uploadItineraryImage } from '../api/itinerariesApi';
 import { PUBLISH_CATEGORY_OPTIONS } from '../data/communitySearchConstants';
@@ -222,9 +223,11 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         categories,
         coverImages: coverUrls,
       });
+      toast.success('Itinerary published!');
       setSuccess(true);
       onPublished?.();
     } catch (e) {
+      toast.error('Failed to publish');
       setSubmitError(e?.message || 'Publish failed');
     } finally {
       setSubmitting(false);

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import {
   Plus,
   Clock,
@@ -14,6 +15,7 @@ import {
   updateItinerary,
 } from '../api/itinerariesApi';
 import PublishItineraryModal from './PublishItineraryModal';
+import FriendlyModal from './FriendlyModal';
 import DashboardHeader from './DashboardHeader';
 import {
   resolveTripCardCoverImage,
@@ -75,9 +77,24 @@ const MOCK_ACTIVITY = [
 const TRIP_FILTERS = ['All', 'Upcoming', 'Past'];
 
 const TRIP_STATUS_OPTIONS = [
-  { value: 'Planning', class: 'trip-card__status--planning', dotColor: '#d4c4a8' },
-  { value: 'Upcoming', class: 'trip-card__status--upcoming', dotColor: '#a89f91' },
-  { value: 'Dreaming', class: 'trip-card__status--dreaming', dotColor: '#c4b8a8' },
+  {
+    value: 'Planning',
+    class: 'trip-card__status--planning',
+    optionClass: 'trip-card__status-option--planning',
+    dotColor: '#fdba74',
+  },
+  {
+    value: 'Upcoming',
+    class: 'trip-card__status--upcoming',
+    optionClass: 'trip-card__status-option--upcoming',
+    dotColor: '#0d9488',
+  },
+  {
+    value: 'Dreaming',
+    class: 'trip-card__status--dreaming',
+    optionClass: 'trip-card__status-option--dreaming',
+    dotColor: '#7c3aed',
+  },
 ];
 
 function getStatusClass(status) {
@@ -86,6 +103,15 @@ function getStatusClass(status) {
 }
 
 export default function Dashboard({ user, onLogout }) {
+  const DIALOG_CLOSED = {
+    open: false,
+    title: '',
+    message: '',
+    showCancel: false,
+    confirmText: 'OK',
+    cancelText: 'Cancel',
+    onConfirm: null,
+  };
   const navigate = useNavigate();
   const [tripFilter, setTripFilter] = useState('All');
   const [tripStatuses, setTripStatuses] = useState({});
@@ -100,6 +126,7 @@ export default function Dashboard({ user, onLogout }) {
   /** Raw itinerary doc while rename modal is open */
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
+  const [dialog, setDialog] = useState(DIALOG_CLOSED);
 
   const tripRows = useMemo(() => myTrips.map(mapItineraryToTripRow), [myTrips]);
 
@@ -142,15 +169,47 @@ export default function Dashboard({ user, onLogout }) {
       );
       setRenameTarget(null);
       setRenameTitleDraft('');
+      toast.success('Trip renamed');
     } catch (err) {
-      alert(err?.message || 'Could not rename trip');
+      setDialog({
+        ...DIALOG_CLOSED,
+        open: true,
+        title: 'Could not rename trip',
+        message: err?.message || 'Please try again.',
+      });
     }
   };
 
   const handleItineraryOwnerMenu = (rawItinerary, action) => {
     if (action === 'share') {
-      const url = `${window.location.origin}/itineraries/${rawItinerary._id}`;
-      navigator.clipboard.writeText(url).catch(() => {});
+      (async () => {
+        const tripId = String(rawItinerary?._id ?? rawItinerary?.id ?? '').trim();
+        if (!tripId) {
+          toast.error('Trip link is unavailable for this item.');
+          return;
+        }
+        const url = `${window.location.origin}/itineraries/${encodeURIComponent(tripId)}`;
+        try {
+          if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            ta.style.pointerEvents = 'none';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (!ok) throw new Error('Copy command failed');
+          }
+          toast.success('Link copied to clipboard!');
+        } catch (e) {
+          toast.error(e?.message || 'Could not copy link. Try copying from the address bar.');
+        }
+      })();
       return;
     }
     if (action === 'publish') {
@@ -190,22 +249,37 @@ export default function Dashboard({ user, onLogout }) {
           });
           const rows = await fetchMyItineraries();
           setMyTrips(rows);
+          toast.success('Trip duplicated successfully');
         } catch (e) {
-          alert(e?.message || 'Could not duplicate');
+          toast.error(e?.message || 'Could not duplicate trip. Please try again.');
         }
       })();
       return;
     }
     if (action === 'delete') {
-      if (!window.confirm('Delete this trip? This cannot be undone.')) return;
-      (async () => {
-        try {
-          await deleteItinerary(String(rawItinerary._id));
-          setMyTrips((prev) => prev.filter((x) => String(x._id) !== String(rawItinerary._id)));
-        } catch (e) {
-          alert(e?.message || 'Delete failed');
-        }
-      })();
+      setDialog({
+        ...DIALOG_CLOSED,
+        open: true,
+        title: 'Delete trip',
+        message: 'Delete this trip? This cannot be undone.',
+        showCancel: true,
+        confirmText: 'Delete',
+        onConfirm: async () => {
+          try {
+            await deleteItinerary(String(rawItinerary._id));
+            setMyTrips((prev) => prev.filter((x) => String(x._id) !== String(rawItinerary._id)));
+            setDialog(DIALOG_CLOSED);
+            toast.success('Trip deleted');
+          } catch (e) {
+            setDialog({
+              ...DIALOG_CLOSED,
+              open: true,
+              title: 'Delete failed',
+              message: e?.message || 'Please try again.',
+            });
+          }
+        },
+      });
     }
   };
 
@@ -426,7 +500,7 @@ export default function Dashboard({ user, onLogout }) {
                               type="button"
                               role="option"
                               aria-selected={(tripStatuses[trip.id] ?? trip.status) === opt.value}
-                              className="trip-card__status-option"
+                              className={`trip-card__status-option ${opt.optionClass}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setTripStatus(trip.id, opt.value);
@@ -560,6 +634,22 @@ export default function Dashboard({ user, onLogout }) {
           } catch {
             /* ignore */
           }
+        }}
+      />
+      <FriendlyModal
+        open={dialog.open}
+        title={dialog.title}
+        message={dialog.message}
+        showCancel={dialog.showCancel}
+        confirmText={dialog.confirmText}
+        cancelText={dialog.cancelText}
+        onClose={() => setDialog(DIALOG_CLOSED)}
+        onConfirm={async () => {
+          if (typeof dialog.onConfirm === 'function') {
+            await dialog.onConfirm();
+            return;
+          }
+          setDialog(DIALOG_CLOSED);
         }}
       />
     </div>

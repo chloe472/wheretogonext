@@ -957,6 +957,13 @@
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
 }
 
+.itinerary-detail__customize-modal-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--wtg-text, #1c1917);
+}
+
 .itinerary-detail__customize-modal-text {
   margin: 0 0 1.25rem;
   font-size: 0.9375rem;

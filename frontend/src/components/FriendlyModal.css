@@ -1,0 +1,87 @@
+.friendly-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.friendly-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.friendly-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  padding: 1.5rem;
+  background: var(--wtg-surface, #fff);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.friendly-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--wtg-text, #1c1917);
+}
+
+.friendly-modal__sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.friendly-modal__message {
+  margin: 0 0 1.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--wtg-text, #1c1917);
+}
+
+.friendly-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.friendly-modal__btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.friendly-modal__btn--secondary {
+  background: transparent;
+  border-color: var(--wtg-border, #e7e5e4);
+  color: var(--wtg-text, #1c1917);
+}
+
+.friendly-modal__btn--secondary:hover {
+  background: var(--wtg-hover, #f5f5f4);
+}
+
+.friendly-modal__btn--primary {
+  background: var(--wtg-primary, #44403c);
+  color: #fff;
+}
+
+.friendly-modal__btn--primary:hover {
+  filter: brightness(1.06);
+}
