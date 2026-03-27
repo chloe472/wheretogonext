@@ -50,11 +50,19 @@ const itinerarySchema = new mongoose.Schema(
     published: { type: Boolean, default: false },
     visibility: { type: String, enum: ['public', 'private'], default: 'private' },
     publishedAt: { type: Date, default: null },
+    /** Set when this trip was created via "Customize" from another itinerary (community source). */
+    customizedFromItineraryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Itinerary',
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
 itinerarySchema.index({ creator: 1, updatedAt: -1 });
+itinerarySchema.index({ creator: 1, customizedFromItineraryId: 1 });
 itinerarySchema.index({ visibility: 1, published: 1, publishedAt: -1 });
 
 export default mongoose.model('Itinerary', itinerarySchema);

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye, User, MoreVertical } from 'lucide-react';
 import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
 import { formatViewCount } from '../lib/formatViewCount';
+import { getFlagImageForDestination } from '../data/tripDestinationMeta';
 import './ItineraryCard.css';
 
 /**
@@ -15,6 +16,8 @@ import './ItineraryCard.css';
  * @param {string} props.creatorName
  * @param {string|null} [props.creatorAvatar]
  * @param {string} [props.creatorId]
+ * @param {string} [props.destination]
+ * @param {string} [props.locations]
  * @param {string} [props.itineraryId] — navigates to detail when card is clicked (carousel buttons excluded)
  * @param {boolean} [props.ownerMenu] — show kebab with Share / Publish / Duplicate / Delete
  * @param {function(string): void} [props.onOwnerMenu]
@@ -28,6 +31,8 @@ export default function ItineraryCard({
   creatorName,
   creatorAvatar,
   creatorId,
+  destination = '',
+  locations = '',
   itineraryId,
   ownerMenu = false,
   onOwnerMenu,
@@ -80,6 +85,7 @@ export default function ItineraryCard({
   };
 
   const creatorLink = creatorId ? `/profile/${encodeURIComponent(creatorId)}` : null;
+  const flagImage = getFlagImageForDestination(destination, locations);
 
   return (
     <article
@@ -199,10 +205,15 @@ export default function ItineraryCard({
           )}
         </div>
 
-        <div className="itinerary-card__views" aria-label="Views">
-          <Eye size={16} aria-hidden />
-          <span>{formatViewCount(views)}</span>
-        </div>
+        {flagImage?.url ? (
+          <img
+            src={flagImage.url}
+            alt={`${flagImage.countryName} flag`}
+            className="itinerary-card__flag"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
 
         {len > 1 && (
           <div className="itinerary-card__dots" role="tablist" aria-label="Photos">
@@ -222,6 +233,10 @@ export default function ItineraryCard({
       </div>
 
       <div className="itinerary-card__body">
+        <div className="itinerary-card__views" aria-label="Views">
+          <Eye size={16} aria-hidden />
+          <span>{formatViewCount(views)} views</span>
+        </div>
         <h3 className="itinerary-card__title">{title}</h3>
         <div className="itinerary-card__pills">
           <span className="itinerary-card__pill">{durationLabel}</span>

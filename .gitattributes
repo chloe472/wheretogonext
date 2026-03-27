@@ -1,0 +1,20 @@
+# Normalize line endings: store as LF in the repository and check out as LF.
+# Reduces noisy CRLF vs LF diffs on cross-platform teams (standard for JS/Node).
+* text=auto eol=lf
+
+# Source & config (explicit LF — matches most formatters / ESLint / Prettier defaults)
+*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,css,scss,html,md,mdx,yml,yaml,toml} text eol=lf
+*.{sh,bash} text eol=lf
+
+# Common binary assets — do not touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary

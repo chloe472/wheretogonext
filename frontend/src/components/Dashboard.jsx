@@ -17,9 +17,11 @@ import PublishItineraryModal from './PublishItineraryModal';
 import DashboardHeader from './DashboardHeader';
 import {
   resolveTripCardCoverImage,
-  getFlagEmojiForDestination,
+  getCoverImageForDestination,
+  getFlagImageForDestination,
   formatTripCardDateRange,
 } from '../data/tripDestinationMeta';
+import { resolveImageUrl } from '../lib/imageFallback';
 import './Dashboard.css';
 
 /** Map Mongo itinerary doc → trip card row (same shape the mock list used). */
@@ -29,18 +31,33 @@ function mapItineraryToTripRow(raw) {
   const locations = String(raw.locations || '').trim();
   const image = resolveTripCardCoverImage(raw);
   const dateLabel = formatTripCardDateRange(raw.startDate, raw.endDate, raw.dates);
-  const flagEmoji = getFlagEmojiForDestination(destination, locations);
+  const flagImage = getFlagImageForDestination(destination, locations);
   return {
     raw,
     id,
     title: raw.title || '',
     dateLabel,
     image,
-    flagEmoji,
+    flagImage,
     status: raw.status || 'Planning',
     endDate: raw.endDate || '',
     startDate: raw.startDate || '',
   };
+}
+
+function resolveDashboardTripImage(trip) {
+  const primary = String(trip?.image || '').trim();
+  const cover0 = String(trip?.raw?.coverImages?.[0] || '').trim();
+  const destFallback = getCoverImageForDestination(trip?.raw?.destination, trip?.raw?.locations);
+  if (primary) {
+    const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
+    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
+  }
+  if (cover0) {
+    const resolvedCover = resolveImageUrl(cover0, trip?.title || 'Trip cover', 'trip');
+    if (resolvedCover && !resolvedCover.startsWith('data:image/')) return resolvedCover;
+  }
+  return destFallback;
 }
 
 const MOCK_COMING_UP = [
@@ -291,15 +308,19 @@ export default function Dashboard({ user, onLogout }) {
                   <div className="trip-card__image-wrap">
                     <div className="trip-card__image-crop">
                       <img
-                        src={trip.image}
+                        src={resolveDashboardTripImage(trip)}
                         alt=""
                         className="trip-card__image"
                       />
                     </div>
-                    {trip.flagEmoji ? (
-                      <span className="trip-card__flag" aria-hidden>
-                        {trip.flagEmoji}
-                      </span>
+                    {trip.flagImage?.url ? (
+                      <img
+                        src={trip.flagImage.url}
+                        alt={`${trip.flagImage.countryName} flag`}
+                        className="trip-card__flag"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : null}
                     <div
                       className="trip-card__owner-menu"

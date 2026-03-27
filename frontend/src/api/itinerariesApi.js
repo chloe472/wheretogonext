@@ -18,6 +18,7 @@ export function mapItineraryToCard(it) {
     id: String(it._id ?? it.id ?? ''),
     title: it.title || '',
     destination: it.destination || '',
+    locations: it.locations || '',
     image: cover,
     coverImages,
     views: Number(it.viewCount) || 0,
@@ -159,6 +160,31 @@ export async function fetchMyItineraries(signal) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Failed to load your itineraries');
   return Array.isArray(data.itineraries) ? data.itineraries : [];
+}
+
+/** GET /api/itineraries/:id/customized-copy — whether user already duplicated from this source (auth) */
+export async function fetchCustomizedCopyExists(sourceItineraryId) {
+  const res = await fetch(
+    `${apiUrl('/api/itineraries')}/${encodeURIComponent(sourceItineraryId)}/customized-copy`,
+    { headers: authHeaders() }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to check existing copy');
+  return {
+    hasCopy: Boolean(data.hasCopy),
+    copyId: data.copyId != null ? String(data.copyId) : null,
+  };
+}
+
+/** POST /api/itineraries/:id/duplicate — copy into current user's trips (auth) */
+export async function duplicateItinerary(id) {
+  const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to copy itinerary');
+  return data.itinerary;
 }
 
 /** POST /api/itineraries — create (used for duplicate) */

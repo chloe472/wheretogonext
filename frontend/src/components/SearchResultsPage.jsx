@@ -6,7 +6,6 @@ import {
   ADVENTURE_TYPES,
   DURATIONS,
   SORT_OPTIONS,
-  CREATOR_NATIONALITIES,
 } from '../data/communitySearchConstants';
 import {
   fetchPublicItineraries,
@@ -18,6 +17,8 @@ import ItineraryCard from './ItineraryCard';
 import DashboardHeader from './DashboardHeader';
 import './SearchResultsPage.css';
 
+const RECENT_DESTINATIONS = ['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'];
+
 export default function SearchResultsPage({ user, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
@@ -25,7 +26,6 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [sortBy, setSortBy] = useState('Most Popular');
   const [adventureType, setAdventureType] = useState('All');
   const [duration, setDuration] = useState('');
-  const [creatorNationality, setCreatorNationality] = useState('');
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [itineraries, setItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +94,12 @@ export default function SearchResultsPage({ user, onLogout }) {
     setSuggestOpen(false);
   };
 
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchParams({});
+    setSuggestOpen(false);
+  };
+
   const handleSelectSuggestion = (loc) => {
     const term = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
     setSearchInput(term);
@@ -118,6 +124,16 @@ export default function SearchResultsPage({ user, onLogout }) {
             onFocus={() => setSuggestOpen(true)}
             aria-label="Search destinations or itineraries"
           />
+          {(q || searchInput.trim()) && (
+            <button
+              type="button"
+              className="search-results__search-clear"
+              onClick={handleClearSearch}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
           {suggestOpen && suggestions.length > 0 && (
             <ul className="search-results__suggestions" role="listbox" ref={suggestRef}>
               {suggestions.slice(0, 8).map((loc) => (
@@ -133,11 +149,28 @@ export default function SearchResultsPage({ user, onLogout }) {
         </form>
         <p className="search-results__hero-hint">Search by your most recent destination</p>
         <div className="search-results__tags">
-          {['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'].map((dest) => (
-            <button key={dest} type="button" className="search-results__tag" onClick={() => { setSearchInput(dest); setSearchParams({ q: dest }); setSuggestOpen(false); }}>
+          {RECENT_DESTINATIONS.map((dest) => {
+            const isActive = q.trim().toLowerCase() === dest.toLowerCase();
+            return (
+              <button
+                key={dest}
+                type="button"
+                className={`search-results__tag ${isActive ? 'search-results__tag--active' : ''}`}
+                onClick={() => {
+                  if (isActive) {
+                    handleClearSearch();
+                    return;
+                  }
+                  setSearchInput(dest);
+                  setSearchParams({ q: dest });
+                  setSuggestOpen(false);
+                }}
+                aria-pressed={isActive}
+              >
               {dest}
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -170,15 +203,6 @@ export default function SearchResultsPage({ user, onLogout }) {
               ))}
             </div>
           </div>
-          <div className="search-results__filter-block">
-            <h3 className="search-results__filter-title">Creator Nationality</h3>
-            <p className="search-results__filter-note">Coming soon — not applied to saved itineraries yet.</p>
-            <div className="search-results__filter-tags">
-              {CREATOR_NATIONALITIES.map((n) => (
-                <button key={n} type="button" className={`search-results__filter-tag ${creatorNationality === n ? 'search-results__filter-tag--active' : ''}`} onClick={() => setCreatorNationality(creatorNationality === n ? '' : n)}>{n}</button>
-              ))}
-            </div>
-          </div>
         </aside>
 
         <div className="search-results__content">
@@ -197,6 +221,8 @@ export default function SearchResultsPage({ user, onLogout }) {
                 itineraryId={it.id}
                 title={it.title}
                 coverImages={it.coverImages}
+                destination={it.destination}
+                locations={it.locations}
                 views={it.views}
                 durationLabel={it.duration}
                 placesCount={it.placesCount ?? 0}

@@ -1,22 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
 import { publishItinerary, uploadItineraryImage } from '../api/itinerariesApi';
+import { PUBLISH_CATEGORY_OPTIONS } from '../data/communitySearchConstants';
 import './PublishItineraryModal.css';
 
-export const PUBLISH_CATEGORY_OPTIONS = [
-  'Sightseeing',
-  'Hiking & Trekking',
-  'Adventure',
-  'Culture & Art',
-  'Outdoor & Nature',
-  'Foodie',
-  'Luxury',
-  'Cruises',
-  'Beaches & Sun',
-  'Nightlife',
-  'Wellness',
-  'Shopping',
-];
+export { PUBLISH_CATEGORY_OPTIONS };
 
 const MAX_OVERVIEW = 1000;
 const MIN_IMAGES = 3;
