@@ -1,9 +1,9 @@
 import './Moodboard.css';
 import { useState } from "react";
-import { MOCK_FOLDERS } from "./data/mockMoodboard.js";
+import { MOCK_FOLDERS } from "../../data/mockMoodboard.js";
 import { useNavigate } from 'react-router-dom';
-import DashboardHeader from './DashboardHeader';
-import TripHeader from './TripHeader';
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import TripHeader from '../TripHeader/TripHeader';
 
 export default function Moodboard({ user, onLogout }) {
   const navigate = useNavigate();

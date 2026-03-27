@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye, User, MoreVertical } from 'lucide-react';
-import { resolveImageUrl, applyImageFallback } from '../lib/imageFallback';
-import { formatViewCount } from '../lib/formatViewCount';
-import { getFlagImageForDestination } from '../data/tripDestinationMeta';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { formatViewCount } from '../../lib/formatViewCount';
+import { getFlagImageForDestination } from '../../data/tripDestinationMeta';
 import './ItineraryCard.css';
 
 /**

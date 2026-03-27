@@ -13,17 +13,17 @@ import {
   deleteItinerary,
   createItinerary,
   updateItinerary,
-} from '../api/itinerariesApi';
-import PublishItineraryModal from './PublishItineraryModal';
-import FriendlyModal from './FriendlyModal';
-import DashboardHeader from './DashboardHeader';
+} from '../../api/itinerariesApi';
+import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
+import FriendlyModal from '../FriendlyModal/FriendlyModal';
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import {
   resolveTripCardCoverImage,
   getCoverImageForDestination,
   getFlagImageForDestination,
   formatTripCardDateRange,
-} from '../data/tripDestinationMeta';
-import { resolveImageUrl } from '../lib/imageFallback';
+} from '../../data/tripDestinationMeta';
+import { resolveImageUrl } from '../../lib/imageFallback';
 import './Dashboard.css';
 
 /** Map Mongo itinerary doc → trip card row (same shape the mock list used). */

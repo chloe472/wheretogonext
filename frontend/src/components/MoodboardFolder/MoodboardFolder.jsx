@@ -1,9 +1,9 @@
 import './MoodboardFolder.css';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { MOCK_FOLDERS } from "./data/mockMoodboard.js";
-import DashboardHeader from './DashboardHeader';
-import TripHeader from './TripHeader';
+import { MOCK_FOLDERS } from "../../data/mockMoodboard.js";
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import TripHeader from '../TripHeader/TripHeader';
 
 export default function MoodboardFolder() {
   const { id: folderId } = useParams();
