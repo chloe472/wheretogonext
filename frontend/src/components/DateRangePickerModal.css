@@ -150,22 +150,22 @@
 }
 
 .date-range-modal__cell--range {
-  background: #fecaca;
+  background: var(--wtg-hover);
   color: var(--wtg-text);
 }
 
 .date-range-modal__cell--range:hover {
-  background: #fca5a5;
+  background: var(--wtg-border);
 }
 
 .date-range-modal__cell--end {
-  background: #dc2626;
-  color: #fff;
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
 }
 
 .date-range-modal__cell--end:hover {
-  background: #b91c1c;
-  color: #fff;
+  background: var(--wtg-text);
+  color: var(--wtg-primary-contrast);
 }
 
 .date-range-modal__actions {

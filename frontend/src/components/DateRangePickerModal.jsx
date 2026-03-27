@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import './DateRangePickerModal.css';
 
@@ -15,6 +15,35 @@ function formatDateRangeLabel(startDate, endDate) {
   return `${dayNames[s.getDay()]}, ${s.getDate()} ${MONTH_SHORT[s.getMonth()]} - ${dayNames[e.getDay()]}, ${e.getDate()} ${MONTH_SHORT[e.getMonth()]} - ${days} days`;
 }
 
+function toDateKeyLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseDateKey(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function monthKeyFromDate(date) {
+  if (!date) return '';
+  return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function inSelectedRange(dateStr, rangeStart, rangeEnd) {
+  if (!rangeStart || !rangeEnd) return false;
+  const date = parseDateKey(dateStr);
+  const start = parseDateKey(rangeStart);
+  const end = parseDateKey(rangeEnd);
+  if (!date || !start || !end) return false;
+  const t = date.getTime();
+  return t >= start.getTime() && t <= end.getTime();
+}
+
 function getWhenCalendarCells(year, month, rangeStart, rangeEnd) {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
@@ -25,18 +54,39 @@ function getWhenCalendarCells(year, month, rangeStart, rangeEnd) {
   for (let i = 0; i < startOffset; i++) {
     const d = prevCount - startOffset + i + 1;
     const date = new Date(year, month - 1, d);
-    const dateStr = date.toISOString().slice(0, 10);
-    cells.push({ dateStr, day: d, currentMonth: false, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
+    const dateStr = toDateKeyLocal(date);
+    cells.push({
+      dateStr,
+      day: d,
+      currentMonth: false,
+      isStart: dateStr === rangeStart,
+      isEnd: dateStr === rangeEnd,
+      inRange: inSelectedRange(dateStr, rangeStart, rangeEnd),
+    });
   }
   for (let d = 1; d <= last.getDate(); d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    cells.push({ dateStr, day: d, currentMonth: true, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
+    cells.push({
+      dateStr,
+      day: d,
+      currentMonth: true,
+      isStart: dateStr === rangeStart,
+      isEnd: dateStr === rangeEnd,
+      inRange: inSelectedRange(dateStr, rangeStart, rangeEnd),
+    });
   }
   const remaining = 42 - cells.length;
   for (let d = 1; d <= remaining; d++) {
     const date = new Date(year, month + 1, d);
-    const dateStr = date.toISOString().slice(0, 10);
-    cells.push({ dateStr, day: d, currentMonth: false, isStart: dateStr === rangeStart, isEnd: dateStr === rangeEnd, inRange: rangeStart && rangeEnd && dateStr >= rangeStart && dateStr <= rangeEnd });
+    const dateStr = toDateKeyLocal(date);
+    cells.push({
+      dateStr,
+      day: d,
+      currentMonth: false,
+      isStart: dateStr === rangeStart,
+      isEnd: dateStr === rangeEnd,
+      inRange: inSelectedRange(dateStr, rangeStart, rangeEnd),
+    });
   }
   return cells;
 }
@@ -52,20 +102,37 @@ export default function DateRangePickerModal({
 }) {
   const [modalStart, setModalStart] = useState(start);
   const [modalEnd, setModalEnd] = useState(end);
+  const [viewAnchor, setViewAnchor] = useState(null);
   const [calendarOffset, setCalendarOffset] = useState(0);
+  const lastDateClickRef = useRef({ dateStr: '', at: 0 });
 
   useEffect(() => {
     if (open) {
       setModalStart(start);
       setModalEnd(end);
+      setViewAnchor(displayStartForMonth ?? start ?? toDateKeyLocal(new Date()));
       setCalendarOffset(0);
     }
-  }, [open, start, end]);
+  }, [open, start, end, displayStartForMonth]);
 
-  const displayStart = displayStartForMonth ?? modalStart ?? null;
-  const baseDate = displayStart ? new Date(displayStart) : new Date();
+  const baseDate = parseDateKey(viewAnchor) ?? new Date();
+  const visibleMonthKeys = new Set(
+    [0, 1].map((i) => {
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + calendarOffset + i, 1);
+      return monthKeyFromDate(d);
+    }),
+  );
 
   const handleDateClick = (dateStr) => {
+    const now = Date.now();
+    if (
+      lastDateClickRef.current.dateStr === dateStr
+      && now - lastDateClickRef.current.at < 250
+    ) {
+      return;
+    }
+    lastDateClickRef.current = { dateStr, at: now };
+
     if (modalStart && modalEnd) {
       setModalStart(dateStr);
       setModalEnd(null);
@@ -145,14 +212,31 @@ export default function DateRangePickerModal({
                 </div>
                 <div className="date-range-modal__grid">
                   {cells.map((cell) => (
-                    <button
-                      key={`${cell.dateStr}-${cell.currentMonth ? 'cur' : 'other'}-${i}`}
-                      type="button"
-                      className={`date-range-modal__cell ${!cell.currentMonth ? 'date-range-modal__cell--other' : ''} ${(cell.isStart || cell.isEnd) && cell.currentMonth ? 'date-range-modal__cell--end' : ''} ${cell.inRange ? 'date-range-modal__cell--range' : ''}`}
-                      onClick={() => handleDateClick(cell.dateStr)}
-                    >
-                      {cell.day}
-                    </button>
+                    (() => {
+                      const cellDate = parseDateKey(cell.dateStr);
+                      const cellMonthKey = monthKeyFromDate(cellDate);
+                      const duplicatedInVisiblePanels = !cell.currentMonth && visibleMonthKeys.has(cellMonthKey);
+                      const showRange = cell.inRange && !duplicatedInVisiblePanels;
+                      const showEnd = (cell.isStart || cell.isEnd) && !duplicatedInVisiblePanels;
+                      return (
+                        <button
+                          key={`${cell.dateStr}-${cell.currentMonth ? 'cur' : 'other'}-${i}`}
+                          type="button"
+                          className={`date-range-modal__cell ${!cell.currentMonth ? 'date-range-modal__cell--other' : ''} ${showEnd ? 'date-range-modal__cell--end' : ''} ${showRange ? 'date-range-modal__cell--range' : ''}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDateClick(cell.dateStr);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          {cell.day}
+                        </button>
+                      );
+                    })()
                   ))}
                 </div>
               </div>
