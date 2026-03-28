@@ -1,21 +1,28 @@
+:root {
+  --dashboard-header-height: 70px;
+}
+
 /* Shared navbar — uses global theme tokens so it works on any page */
 .dashboard__header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  font-family: var(--font-sans);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 1rem 2rem;
   border-bottom: 1px solid var(--wtg-border);
   background: var(--wtg-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 3000;
+  height: var(--dashboard-header-height);
 }
 
-.dashboard__brand-link {
-  text-decoration: none;
-  color: inherit;
-}
-
-.dashboard__brand-link:hover {
-  text-decoration: none;
+body > #root {
+  padding-top: 80px;
 }
 
 .dashboard__brand {
@@ -97,46 +104,6 @@
   box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.2);
 }
 
-.dashboard__search-suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin: 4px 0 0;
-  padding: 6px 0;
-  list-style: none;
-  background: var(--wtg-surface);
-  border: 1px solid var(--wtg-border);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(61, 52, 40, 0.12);
-  max-height: 280px;
-  overflow-y: auto;
-  z-index: 50;
-}
-
-.dashboard__search-suggestion {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.9375rem;
-  text-align: left;
-  color: var(--wtg-text);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.dashboard__search-suggestion:hover {
-  background: var(--wtg-hover);
-}
-
-.dashboard__search-suggestion-meta {
-  font-size: 0.8125rem;
-  color: var(--wtg-text-muted);
-}
-
 .dashboard__nav {
   display: flex;
   align-items: center;
@@ -154,12 +121,6 @@
 
 .dashboard__nav-link:hover {
   background: var(--wtg-hover);
-  text-decoration: none;
-}
-
-.dashboard__nav-link--active {
-  background: var(--wtg-hover);
-  font-weight: 600;
 }
 
 .dashboard__icon-btn {
@@ -168,7 +129,6 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  padding: 0;
   border: none;
   background: transparent;
   color: var(--wtg-text);
@@ -182,7 +142,7 @@
 
 .dashboard__icon-btn--avatar {
   background: var(--wtg-accent);
-  color: var(--wtg-primary-contrast);
+  color: var(--wtg-surface);
 }
 
 .dashboard__profile-wrap {
@@ -192,7 +152,7 @@
 .dashboard__profile-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1090;
+  z-index: 1;
   border: none;
   background: transparent;
   cursor: default;
@@ -202,7 +162,7 @@
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 1100;
+  z-index: 2;
   margin-top: 0.25rem;
   min-width: 160px;
   padding: 0.5rem;
@@ -244,8 +204,6 @@
 .dashboard__profile-logout {
   background: transparent;
   color: var(--wtg-text);
-  border: none;
-  font-family: inherit;
 }
 
 .dashboard__profile-logout:hover {

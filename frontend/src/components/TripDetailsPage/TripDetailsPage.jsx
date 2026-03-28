@@ -78,6 +78,7 @@ import countriesData from '../../data/countries.json';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import TripMap from '../TripMap/TripMap';
 import TripDetailsMapPanel from '../TripDetailsMapPanel/TripDetailsMapPanel';
+import TripHeader from '../TripHeader/TripHeader';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import './TripDetailsPage.css';
 import './TripDetailsPage.map.css';
@@ -3274,6 +3275,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           </button>
         </div>
       </header>
+      <TripHeader trip={trip} />
 
       {inAppNotice ? (
         <div className={`trip-details__inline-notice trip-details__inline-notice--${inAppNotice.type}`} role="status" aria-live="polite">

@@ -1,19 +1,16 @@
 .trip-header-container {
-  position: fixed;
-  top: 70px;
+  position: sticky;
+  top: var(--dashboard-header-height, 70px);
   left: 0;
+  right: 0;
   width: 100%;
   padding: 1.5rem 2rem;
   background: #fff;
   border-bottom: 2px solid #eee;
   box-shadow: 0 8px 20px rgba(0,0,0,0.05);
   border-radius: 0;
-  z-index: 999;
+  z-index: 30;
   margin-bottom: 0;
-}
-
-body > #root {
-  padding-top: 180px;
 }
 
 .trip-header-top {
@@ -27,31 +24,16 @@ body > #root {
 
 .trip-info h1 {
   font-size: 3rem;
-  font-weight: 800;
   margin-bottom: 0.25rem;
+  color: #5c4a3d;
 }
 
 .trip-meta {
-  color: #666;
+  color: #5c4a3d;
   font-size: 0.95rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.ai-assistant {
-  background: #FF6B6B;
-  color: #fff;
-  padding: 0.6rem 1.2rem;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.ai-assistant:hover {
-  opacity: 0.85;
 }
 
 .trip-tabs {
@@ -72,14 +54,20 @@ body > #root {
   align-items: center;
   gap: 1rem;
   position: relative;
-  color: #666;
+  color: #725c4c;
 }
 
 .tab.active {
   border-bottom: px solid #FF6B6B;
-  color: #000;
+  color: #1c1713;
 }
 
 .tab:hover {
   opacity: 0.8;
+}
+
+.trip-header__subtitle {
+  color: #5c4a3d;
+  margin-top: 0.35rem;
+  font-size: 1rem;
 }

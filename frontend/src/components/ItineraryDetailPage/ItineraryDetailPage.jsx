@@ -31,6 +31,7 @@ import { buildItineraryMapMarkers } from '../../lib/itineraryMapMarkers';
 import TripMap from '../TripMap/TripMap';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import TripHeader from '../TripHeader/TripHeader';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import './ItineraryDetailPage.css';
 
@@ -525,6 +526,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
     return (
       <div className="itinerary-detail">
         <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
+        <TripHeader trip={{ id }} />
         <div className="itinerary-detail--center">
           <p>Loading itinerary…</p>
         </div>
@@ -552,6 +554,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   return (
     <div className="itinerary-detail">
       <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
+      <TripHeader trip={itinerary} />
 
       <div className="itinerary-detail__layout">
         <main className="itinerary-detail__main">

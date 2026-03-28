@@ -15,6 +15,7 @@ import {
   createItinerary,
   updateItinerary,
 } from '../../api/itinerariesApi';
+import { getAllTrips } from '../../data/mockTrips';
 import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
