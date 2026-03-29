@@ -41,6 +41,19 @@ export async function updateMyProfile(payload) {
   return handleJsonResponse(res);
 }
 
+export async function uploadProfilePhoto(file) {
+  const form = new FormData();
+  form.append('photo', file);
+  const headers = getBearerAuthHeaders();
+  delete headers['Content-Type'];
+  const res = await fetch(apiUrl('/api/profile/me/photo'), {
+    method: 'POST',
+    headers,
+    body: form,
+  });
+  return handleJsonResponse(res);
+}
+
 export async function addFriend(userId) {
   const res = await fetch(`${apiUrl('/api/profile')}/${encodeURIComponent(userId)}/friends`, {
     method: 'POST',
@@ -51,6 +64,38 @@ export async function addFriend(userId) {
 
 export async function removeFriend(userId) {
   const res = await fetch(`${apiUrl('/api/profile')}/${encodeURIComponent(userId)}/friends`, {
+    method: 'DELETE',
+    headers: getBearerAuthHeaders(),
+  });
+  return handleJsonResponse(res);
+}
+
+export async function fetchFriendRequests() {
+  const res = await fetch(apiUrl('/api/profile/requests'), {
+    method: 'GET',
+    headers: getBearerAuthHeaders(),
+  });
+  return handleJsonResponse(res);
+}
+
+export async function fetchOutgoingFriendRequests() {
+  const res = await fetch(apiUrl('/api/profile/requests/outgoing'), {
+    method: 'GET',
+    headers: getBearerAuthHeaders(),
+  });
+  return handleJsonResponse(res);
+}
+
+export async function acceptFriendRequest(requestId) {
+  const res = await fetch(`${apiUrl('/api/profile/requests')}/${encodeURIComponent(requestId)}/accept`, {
+    method: 'POST',
+    headers: getBearerAuthHeaders(),
+  });
+  return handleJsonResponse(res);
+}
+
+export async function declineFriendRequest(requestId) {
+  const res = await fetch(`${apiUrl('/api/profile/requests')}/${encodeURIComponent(requestId)}`, {
     method: 'DELETE',
     headers: getBearerAuthHeaders(),
   });
