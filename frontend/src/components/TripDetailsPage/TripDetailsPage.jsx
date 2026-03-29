@@ -53,6 +53,7 @@ import {
   Star,
   ArrowLeft,
   ExternalLink,
+  Image
 } from 'lucide-react';
 import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
 import {
@@ -3247,6 +3248,15 @@ export default function TripDetailsPage({ user, onLogout }) {
         </div>
 
         <div className="trip-details__actions">
+          <button
+            type="button"
+            className="trip-details__icon-btn"
+            onClick={() => navigate(`/trip/${tripId}/moodboard`)}
+            title="Moodboard"
+          >
+            <Image size={18} />
+          </button>
+
           <div className="trip-details__view-toggle" role="group" aria-label="View mode">
             <button
               type="button"

@@ -1,7 +1,6 @@
 import './Moodboard.css';
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import { useParams, useNavigate } from 'react-router-dom';
 import { fetchItineraryById } from '../../api/itinerariesApi';
 import {
   fetchMoodboardFolders,
@@ -9,10 +8,11 @@ import {
   updateMoodboardFolder,
   deleteMoodboardFolder,
 } from '../../api/moodboardApi';
+import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 
 export default function Moodboard({ user, onLogout }) {
-  const navigate = useNavigate();
   const { tripId } = useParams();
+  const navigate = useNavigate();
 
   const [trip, setTrip] = useState(null);
   const [folders, setFolders] = useState([]);
@@ -28,9 +28,7 @@ export default function Moodboard({ user, onLogout }) {
 
   useEffect(() => {
     const load = async () => {
-      if (!tripId) return;
       setLoading(true);
-      setError('');
       try {
         const [tripData, folderData] = await Promise.all([
           fetchItineraryById(tripId),
@@ -47,21 +45,17 @@ export default function Moodboard({ user, onLogout }) {
     load();
   }, [tripId]);
 
-  const saveFolders = (updatedFolders) => {
-    setFolders(updatedFolders);
-  };
+  // Folder handlers
+  const saveFolders = (updatedFolders) => setFolders(updatedFolders);
 
   const handleCreate = async () => {
     if (!newFolderName.trim()) return;
     setLoading(true);
-    setError('');
     try {
       const updated = await createMoodboardFolder(tripId, newFolderName.trim());
       saveFolders(updated);
       setShowCreate(false);
       setNewFolderName('');
-    } catch (err) {
-      setError(err.message || 'Failed to create folder');
     } finally {
       setLoading(false);
     }
@@ -70,19 +64,12 @@ export default function Moodboard({ user, onLogout }) {
   const handleEdit = async () => {
     if (!currentFolder || !newFolderName.trim()) return;
     setLoading(true);
-    setError('');
     try {
-      const updated = await updateMoodboardFolder(
-        tripId,
-        currentFolder.id,
-        newFolderName.trim()
-      );
+      const updated = await updateMoodboardFolder(tripId, currentFolder.id, newFolderName.trim());
       saveFolders(updated);
       setShowEdit(false);
       setCurrentFolder(null);
       setNewFolderName('');
-    } catch (err) {
-      setError(err.message || 'Failed to rename folder');
     } finally {
       setLoading(false);
     }
@@ -91,14 +78,11 @@ export default function Moodboard({ user, onLogout }) {
   const handleDelete = async () => {
     if (!currentFolder) return;
     setLoading(true);
-    setError('');
     try {
       const updated = await deleteMoodboardFolder(tripId, currentFolder.id);
       saveFolders(updated);
       setShowDelete(false);
       setCurrentFolder(null);
-    } catch (err) {
-      setError(err.message || 'Failed to delete folder');
     } finally {
       setLoading(false);
     }
@@ -106,11 +90,16 @@ export default function Moodboard({ user, onLogout }) {
 
   return (
     <div className="moodboard-page">
-      {/* 🔥 FULL WIDTH HEADERS */}
-      <DashboardHeader user={user} onLogout={onLogout} />
-      <TripHeader trip={trip} />
+      {trip && (
+        <TripHeader
+          trip={trip}
+          spent={trip.budgetSpent || 0}
+          currency="SGD"
+          onNotesOpen={() => console.log('Open Notes modal')}
+        />
+      )}
 
-      {/* 🔥 CONTENT ONLY */}
+      {/* MOODBOARD CONTENT */}
       <div className="container">
         <header className="header-section">
           <div className="header-left">
@@ -133,22 +122,14 @@ export default function Moodboard({ user, onLogout }) {
           ) : (
             folders.map((folder) => (
               <div
-                className="folder-card"
                 key={folder.id}
-                onClick={() =>
-                  navigate(`/trip/${tripId}/moodboard/${folder.id}`)
-                }
+                className="folder-card"
+                onClick={() => navigate(`/trip/${tripId}/moodboard/${folder.id}`)}
               >
                 <div className="folder-preview-grid">
-                  {Array.isArray(folder.images) &&
-                    folder.images.slice(0, 3).map((img, idx) => (
-                      <img
-                        key={img.id || idx}
-                        src={img.url}
-                        alt={`preview-${idx}`}
-                      />
-                    ))}
-
+                  {folder.images?.slice(0, 3).map((img, idx) => (
+                    <img key={img.id || idx} src={img.url} alt={`preview-${idx}`} />
+                  ))}
                   {(!folder.images || folder.images.length === 0) && (
                     <div className="folder-placeholder"></div>
                   )}
@@ -157,33 +138,21 @@ export default function Moodboard({ user, onLogout }) {
                 <div className="folder-info-row">
                   <div className="folder-info">
                     <h2>{folder.name}</h2>
-                    <p>
-                      {Array.isArray(folder.images)
-                        ? folder.images.length
-                        : 0}{' '}
-                      images
-                    </p>
+                    <p>{folder.images?.length || 0} images</p>
                   </div>
-
                   <div className="folder-menu">
                     <button
                       className="menu-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenMenuId(
-                          openMenuId === folder.id ? null : folder.id
-                        );
+                        setOpenMenuId(openMenuId === folder.id ? null : folder.id);
                       }}
                     >
                       ⋯
                     </button>
-
                     <div
                       className="menu-dropdown"
-                      style={{
-                        display:
-                          openMenuId === folder.id ? 'block' : 'none',
-                      }}
+                      style={{ display: openMenuId === folder.id ? 'block' : 'none' }}
                     >
                       <button
                         className="menu-item edit"
@@ -216,53 +185,6 @@ export default function Moodboard({ user, onLogout }) {
           )}
         </div>
       </div>
-
-      {/* 🔥 POPUPS ABOVE EVERYTHING */}
-      {showCreate && (
-        <div className="url">
-          <div className="create-folder">
-            <h2>New Folder</h2>
-            <input
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              placeholder="Folder Name"
-            />
-            <div className="folder-actions">
-              <button onClick={() => setShowCreate(false)}>Cancel</button>
-              <button onClick={handleCreate}>Create</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEdit && (
-        <div className="url">
-          <div className="create-folder">
-            <h2>Edit Folder</h2>
-            <input
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-            />
-            <div className="folder-actions">
-              <button onClick={() => setShowEdit(false)}>Cancel</button>
-              <button onClick={handleEdit}>Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDelete && (
-        <div className="url">
-          <div className="create-folder">
-            <h2>Delete Folder?</h2>
-            <p>Are you sure?</p>
-            <div className="folder-actions">
-              <button onClick={() => setShowDelete(false)}>Cancel</button>
-              <button onClick={handleDelete}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
