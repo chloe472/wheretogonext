@@ -9,6 +9,8 @@ export default function DashboardHeader({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const searchSuggestions = searchLocations(searchQuery);
 
@@ -16,6 +18,9 @@ export default function DashboardHeader({ user, onLogout }) {
     function handleClickOutside(e) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -89,17 +94,25 @@ export default function DashboardHeader({ user, onLogout }) {
         <button type="button" className="dashboard__icon-btn" aria-label="Notifications">
           <Bell size={20} aria-hidden />
         </button>
-        <div className="dashboard__profile-wrap">
-          <button type="button" className="dashboard__icon-btn dashboard__icon-btn--avatar" aria-label="Profile">
+        <div className="dashboard__profile-wrap" ref={profileRef}>
+          <button
+            type="button"
+            className="dashboard__icon-btn dashboard__icon-btn--avatar"
+            aria-label="Profile"
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen((prev) => !prev)}
+          >
             <User size={20} aria-hidden />
           </button>
-          <div className="dashboard__profile-menu">
-            {user?.name && <span className="dashboard__profile-name">{user.name}</span>}
-            <Link to="/profile" className="dashboard__profile-link">Profile</Link>
-            <button type="button" className="dashboard__profile-logout" onClick={onLogout}>
-              Log out
-            </button>
-          </div>
+          {profileOpen && (
+            <div className="dashboard__profile-menu">
+              {user?.name && <span className="dashboard__profile-name">{user.name}</span>}
+              <Link to="/profile" className="dashboard__profile-link" onClick={() => setProfileOpen(false)}>Profile</Link>
+              <button type="button" className="dashboard__profile-logout" onClick={onLogout}>
+                Log out
+              </button>
+            </div>
+          )}
         </div>
       </nav>
     </header>
