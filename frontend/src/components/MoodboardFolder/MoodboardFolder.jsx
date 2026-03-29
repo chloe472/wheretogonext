@@ -2,7 +2,6 @@ import './MoodboardFolder.css';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
-import TripHeader from '../TripHeader/TripHeader';
 import { fetchMoodboardFolder, addMoodboardImage, deleteMoodboardImage } from '../../api/moodboardApi';
 import { fetchItineraryById } from '../../api/itinerariesApi';
 
