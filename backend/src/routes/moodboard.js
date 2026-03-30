@@ -88,20 +88,33 @@ router.post('/trip/:tripId/folder/:folderId/image', requireAuth, async (req, res
 });
 
 router.post('/trip/:tripId/folder/:folderId/image/:imageId/reaction', requireAuth, async (req, res) => {
-  const { tripId, folderId, imageId } = req.params;
-  const { emoji } = req.body;
-
   try {
-    const moodboard = await Moodboard.findOne({ tripId, 'folders._id': folderId });
+    const { tripId, folderId, imageId } = req.params;
+    const { emoji, user } = req.body;
+    if (!emoji || !user) return res.status(400).json({ error: 'Emoji and user required' });
+
+    const moodboard = await Moodboard.findOne({ tripId });
     if (!moodboard) return res.status(404).json({ error: 'Moodboard not found' });
 
     const folder = moodboard.folders.id(folderId);
+    if (!folder) return res.status(404).json({ error: 'Folder not found' });
+
     const image = folder.images.id(imageId);
     if (!image) return res.status(404).json({ error: 'Image not found' });
 
-    image.reactions.set(emoji, (image.reactions.get(emoji) || 0) + 1);
+    if (!image.reactions) image.reactions = new Map();
+
+    const users = image.reactions.get(emoji) || [];
+
+    const updatedUsers = users.includes(user)
+      ? users.filter(u => u !== user)
+      : [...users, user];
+
+    image.reactions.set(emoji, updatedUsers);
+
     await moodboard.save();
-    res.json(image.reactions);
+
+    res.json({ id: image._id, reactions: Object.fromEntries(image.reactions) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to react to image' });

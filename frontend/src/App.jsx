@@ -84,7 +84,7 @@ function App() {
             )
           }
         />
-                <Route
+        <Route
           path="/trip/:tripId/moodboard"
           element={
             user ? (
