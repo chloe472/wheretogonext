@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { Camera } from 'lucide-react';
-import { fetchDiscoveryData } from '../../api/discoveryApi';
+import { analyzeSocialImport } from '../../api/socialImportApi';
 import { placeKeySocialImport } from './socialImportUtils';
 
 /**
@@ -12,8 +12,6 @@ export function useSocialImport({
   appendItemToTrip,
   days,
   cityQuery,
-  discoveryData,
-  filteredPlaces,
 }) {
   const [socialImportOpen, setSocialImportOpen] = useState(false);
   const [socialImportDay, setSocialImportDay] = useState(1);
@@ -23,6 +21,7 @@ export function useSocialImport({
   const [socialImportFilePreviews, setSocialImportFilePreviews] = useState([]);
   const [socialImportResults, setSocialImportResults] = useState([]);
   const [socialImportSelected, setSocialImportSelected] = useState(() => new Set());
+  const [socialImportLocationInsight, setSocialImportLocationInsight] = useState(null);
   const socialImportFileInputRef = useRef(null);
 
   const resetSocialImportModal = useCallback(() => {
@@ -33,6 +32,7 @@ export function useSocialImport({
     setSocialImportFilePreviews([]);
     setSocialImportResults([]);
     setSocialImportSelected(new Set());
+    setSocialImportLocationInsight(null);
     if (socialImportFileInputRef.current) socialImportFileInputRef.current.value = '';
   }, []);
 
@@ -86,34 +86,38 @@ export function useSocialImport({
       return;
     }
     setSocialImportStep('analyzing');
-    await new Promise((r) => setTimeout(r, 1400));
     try {
-      let places = [];
-      if (Array.isArray(discoveryData?.places) && discoveryData.places.length > 0) {
-        places = filteredPlaces.slice(0, 12);
-      } else {
-        const data = await fetchDiscoveryData(cityQuery, 28);
-        const raw = Array.isArray(data.places) ? data.places : [];
-        const scorePlace = (p) =>
-          Number(p.recommendedScore || 0)
-          + Number(p.rating || 0) * 8
-          + Math.log10(Number(p.reviewCount || 0) + 1) * 5;
-        places = [...raw].sort((a, b) => scorePlace(b) - scorePlace(a)).slice(0, 12);
-      }
+      const data = await analyzeSocialImport({
+        destination: cityQuery,
+        url: socialImportUrl,
+        imageFiles: socialImportFiles,
+      });
+      setSocialImportLocationInsight(data.locationInsight || null);
+      const places = Array.isArray(data.places) ? data.places : [];
       if (places.length === 0) {
-        toast.error('No places found for this destination. Try again later.');
+        toast.error(data.warning || 'No matching places found. Try another link or clearer screenshots.');
         setSocialImportStep('input');
         return;
+      }
+      if (data.warning) {
+        toast(data.warning, { icon: 'ℹ️' });
       }
       setSocialImportResults(places);
       const defaultSel = new Set(places.slice(0, 5).map((p, i) => placeKeySocialImport(p, i)));
       setSocialImportSelected(defaultSel);
       setSocialImportStep('results');
     } catch (e) {
-      toast.error(e?.message || 'Could not load suggestions');
+      if (e?.status === 422 && (e?.code === 'LLM_REQUIRED' || e?.code === 'OPENAI_REQUIRED')) {
+        toast.error(
+          'Screenshot analysis needs GEMINI_API_KEY in the backend .env. You can still paste a link without screenshots.',
+          { duration: 6000 },
+        );
+      } else {
+        toast.error(e?.message || 'Could not analyze this post. Try again.');
+      }
       setSocialImportStep('input');
     }
-  }, [socialImportUrl, socialImportFiles, cityQuery, discoveryData?.places, filteredPlaces]);
+  }, [socialImportUrl, socialImportFiles, cityQuery]);
 
   const toggleSocialImportPlace = useCallback((key) => {
     setSocialImportSelected((prev) => {
@@ -206,6 +210,7 @@ export function useSocialImport({
       selectedKeys: socialImportSelected,
       onTogglePlace: toggleSocialImportPlace,
       onAddSelectedToTrip: addSocialImportPlacesToTrip,
+      locationInsight: socialImportLocationInsight,
     },
   };
 }

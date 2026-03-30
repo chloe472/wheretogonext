@@ -5455,3 +5455,298 @@
     align-items: stretch;
   }
 }
+
+/* Import from social media modal */
+.trip-details__social-import-modal {
+  max-width: 480px;
+  max-height: min(90vh, 640px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.trip-details__social-import-body {
+  padding: 0 1.25rem 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.trip-details__social-import-meta {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__social-import-hint {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__social-import-field {
+  margin-bottom: 1rem;
+}
+
+.trip-details__social-import-upload-wrap {
+  margin-top: 0.35rem;
+}
+
+.trip-details__social-import-preview-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.trip-details__social-import-preview-tile {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f3f2ef;
+  border: 1px solid rgba(125, 107, 90, 0.22);
+}
+
+.trip-details__social-import-preview-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.trip-details__social-import-preview-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  color: #111827;
+  cursor: pointer;
+}
+
+.trip-details__social-import-preview-remove:hover {
+  background: #ffffff;
+}
+
+.trip-details__social-import-add-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 10px;
+  border: 2px dashed #c8c8c8;
+  background: #faf9f7;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.trip-details__social-import-add-tile:hover {
+  border-color: #a3a3a3;
+  background: #f3f2ef;
+}
+
+.trip-details__social-import-add-tile:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.25);
+}
+
+.trip-details__social-import-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.trip-details__social-import-add-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+
+.trip-details__social-import-plus {
+  color: #9ca3af;
+}
+.trip-details__social-import-add-caption {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.01em;
+}
+
+.trip-details__social-import-file-count {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__social-import-analyzing {
+  padding: 2rem 1.5rem 2.5rem;
+  text-align: center;
+}
+
+.trip-details__social-import-analyzing p {
+  margin: 0.75rem 0 0;
+  font-size: 0.9375rem;
+  color: var(--wtg-text);
+}
+
+.trip-details__social-import-analyzing-sub {
+  font-size: 0.8125rem !important;
+  color: var(--wtg-text-muted) !important;
+}
+
+.trip-details__social-import-spinner {
+  animation: trip-details-spin 0.9s linear infinite;
+  color: var(--wtg-primary);
+}
+
+@keyframes trip-details-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.trip-details__social-import-results-intro {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text);
+}
+
+.trip-details__social-import-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.trip-details__social-import-row {
+  margin: 0;
+}
+
+.trip-details__social-import-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.trip-details__social-import-label:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__social-import-checkbox {
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.trip-details__social-import-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--wtg-hover);
+}
+
+.trip-details__social-import-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.trip-details__social-import-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--wtg-text);
+}
+
+.trip-details__social-import-address {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  line-height: 1.35;
+}
+
+.trip-details__social-import-location-banner {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(14, 165, 233, 0.06));
+}
+
+.trip-details__social-import-location-banner-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: #7c3aed;
+}
+
+.trip-details__social-import-location-banner-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.trip-details__social-import-location-banner-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__social-import-location-banner-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--wtg-text);
+}
+
+.trip-details__social-import-location-banner-btn {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #0ea5e9);
+}
+
+.trip-details__social-import-location-banner-btn:hover {
+  filter: brightness(1.06);
+}
