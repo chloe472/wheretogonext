@@ -17,3 +17,8 @@ GEMINI_API_KEY=
 OPENAI_API_KEY=
 # Optional:
 GEMINI_MODEL=gemini-2.0-flash
+
+# Open Exchange Rates (live FX conversion)
+OPEN_EXCHANGE_RATES_APP_ID=
+# Optional cache TTL for /api/currency/rates endpoint (default: 43200 = 12h)
+OPEN_EXCHANGE_RATES_CACHE_SECONDS=43200

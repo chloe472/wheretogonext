@@ -150,6 +150,13 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function bayesianRatingScore(rating = 0, reviewCount = 0, priorMean = 4.2, priorWeight = 120) {
+  const r = Number(rating || 0);
+  const v = Math.max(0, Number(reviewCount || 0));
+  if (r <= 0) return priorMean;
+  return ((v * r) + (priorWeight * priorMean)) / (v + priorWeight);
+}
+
 function stableHash(value = '') {
   let hash = 0;
   const text = String(value || '');
@@ -165,7 +172,7 @@ function buildPlaceTags(item, rating, reviewCount, distanceKm) {
   const tourismType = String(item.tourismType || '').toLowerCase();
   const isIconicType = ['attraction', 'museum', 'theme_park', 'zoo', 'monument'].includes(tourismType);
 
-  if (isIconicType || rating >= 4.6 || reviewCount >= 12000) {
+  if (isIconicType || (rating >= 4.6 && reviewCount >= 200) || reviewCount >= 12000) {
     tags.push('Must go');
   }
 
@@ -1969,15 +1976,20 @@ router.get('/destination', async (req, res) => {
     const ranked = normalized
       .map((item) => ({
         ...item,
+        confidenceRating: bayesianRatingScore(item.rating, item.reviewCount),
+      }))
+      .map((item) => ({
+        ...item,
         score: useGooglePlaces 
-          ? (item.rating * 10 + Math.log10(item.reviewCount + 1) * 5)
+          ? (item.confidenceRating * 12 + Math.log10((item.reviewCount || 0) + 1) * 6)
           : scoreElement(item, geo.lat, geo.lon),
       }))
       // When using Google Places, allow slightly lower-rated items and include unrated items (rating === 0)
       .filter((item) => {
         if (useGooglePlaces) {
           const rating = Number(item.rating || 0);
-          return rating === 0 || rating >= 3.6;
+          const confidenceRating = Number(item.confidenceRating || 0);
+          return rating === 0 || confidenceRating >= 3.8;
         }
         return item.score >= 9;
       })
@@ -2003,9 +2015,10 @@ router.get('/destination', async (req, res) => {
         })();
         
         const tags = buildPlaceTags(it, rating, reviewCount, distanceKm);
+        const confidenceRating = bayesianRatingScore(rating, reviewCount);
         const recommendedScore = Number((
           it.score * 1.5
-          + (rating - 4) * 7
+          + (confidenceRating - 4) * 9
           + Math.log10(reviewCount + 1) * 2.4
           + (it.website ? 1.2 : 0)
           + (it.phone ? 0.8 : 0)

@@ -74,6 +74,7 @@ import {
 } from '../../data/mockExperiences';
 import { searchLocations } from '../../data/mockLocations';
 import { fetchDiscoveryData } from '../../api/discoveryApi';
+import { fetchUsdExchangeRates } from '../../api/currencyApi';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import countriesData from '../../data/countries.json';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
@@ -157,25 +158,63 @@ function buildStayFallbackLink(stay = {}, city = '') {
 
 const WHERE_TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
 
-const CURRENCY_LIST = [
-  { code: 'USD', name: 'United States dollar' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'GBP', name: 'British pound' },
-  { code: 'AUD', name: 'Australian dollar' },
-  { code: 'CAD', name: 'Canadian dollar' },
-  { code: 'CHF', name: 'Swiss franc' },
-  { code: 'CNY', name: 'Chinese yuan' },
-  { code: 'JPY', name: 'Japanese yen' },
-  { code: 'NZD', name: 'New Zealand dollar' },
-  { code: 'PLN', name: 'Polish złoty' },
-  { code: 'RON', name: 'Romanian leu' },
-  { code: 'SEK', name: 'Swedish krona' },
-  { code: 'SGD', name: 'Singapore dollar' },
-  { code: 'THB', name: 'Thai baht' },
-  { code: 'TWD', name: 'New Taiwan dollar' },
-  { code: 'VND', name: 'Vietnamese dong' },
-  { code: 'ZAR', name: 'South African rand' },
-];
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND']);
+
+function currencyRate(code = 'USD', ratesTable = {}) {
+  const currencyCode = String(code || 'USD').toUpperCase();
+  const fromLiveRates = Number(ratesTable?.[currencyCode]);
+  if (Number.isFinite(fromLiveRates) && fromLiveRates > 0) return fromLiveRates;
+  if (currencyCode === 'USD') return 1;
+  return null;
+}
+
+function convertUsdToCurrency(amount, code = 'USD', ratesTable = {}) {
+  const n = Number(amount || 0);
+  if (!Number.isFinite(n)) return 0;
+  const rate = currencyRate(code, ratesTable);
+  if (!Number.isFinite(rate) || rate <= 0) return n;
+  return n * rate;
+}
+
+function convertCurrencyToUsd(amount, code = 'USD', ratesTable = {}) {
+  const n = Number(amount || 0);
+  if (!Number.isFinite(n)) return 0;
+  const rate = currencyRate(code, ratesTable);
+  return Number.isFinite(rate) && rate > 0 ? (n / rate) : n;
+}
+
+function formatCurrencyAmount(amount, code = 'USD') {
+  const value = Number(amount || 0);
+  const currencyCode = String(code || 'USD').toUpperCase();
+  const digits = ZERO_DECIMAL_CURRENCIES.has(currencyCode) ? 0 : 2;
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(value);
+  } catch (_) {
+    return `${currencyCode} ${value.toFixed(digits)}`;
+  }
+}
+
+function formatUsdAsCurrency(usdAmount, code = 'USD', ratesTable = {}) {
+  return formatCurrencyAmount(convertUsdToCurrency(usdAmount, code, ratesTable), code);
+}
+
+function getCurrencyDisplayName(code) {
+  const currencyCode = String(code || 'USD').toUpperCase();
+  try {
+    if (typeof Intl?.DisplayNames === 'function') {
+      const display = new Intl.DisplayNames(['en'], { type: 'currency' });
+      return display.of(currencyCode) || currencyCode;
+    }
+  } catch (_) {
+    // fall through
+  }
+  return currencyCode;
+}
 // Keep one slot for the manual-add card so 3-column pages don't end with a lone card row.
 const ADD_PLACES_PAGE_SIZE = 17;
 
@@ -641,37 +680,57 @@ function distanceBetween(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+function hasValidLatLng(place) {
+  const lat = Number(place?.lat);
+  const lng = Number(place?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
 /** Reorder items between start and end (inclusive) by proximity: start fixed, end fixed last, middle ordered by nearest neighbour. */
 function reorderByProximity(items, startId, endId) {
-  if (!items.length) return items;
-  const startIdx = items.findIndex((i) => i.id === startId);
-  const endIdx = items.findIndex((i) => i.id === endId);
-  if (startIdx < 0 || endIdx < 0 || startIdx > endIdx) return items;
-  const startItem = items[startIdx];
-  const endItem = items[endIdx];
-  const middle = items.slice(startIdx + 1, endIdx);
-  if (middle.length === 0) return items;
-  const ordered = [startItem];
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+
+  const startItem = items.find((i) => String(i.id) === String(startId)) || items[0];
+  let endItem = items.find((i) => String(i.id) === String(endId)) || items[items.length - 1];
+
+  if (String(startItem?.id) === String(endItem?.id) && items.length > 1) {
+    endItem = items.find((i) => String(i.id) !== String(startItem.id)) || endItem;
+  }
+
+  const middle = items.filter((it) => (
+    String(it.id) !== String(startItem?.id)
+    && String(it.id) !== String(endItem?.id)
+  ));
+  if (middle.length === 0) return String(startItem?.id) === String(endItem?.id) ? [startItem] : [startItem, endItem];
+
+  const withCoords = middle.filter((it) => hasValidLatLng(it));
+  const withoutCoords = middle.filter((it) => !hasValidLatLng(it));
+  const orderedMiddle = [];
   let current = startItem;
-  const remaining = [...middle];
-  while (remaining.length > 0) {
-    let nearestIdx = 0;
-    let nearestDist = distanceBetween(current, remaining[0]);
-    for (let i = 1; i < remaining.length; i++) {
-      const d = distanceBetween(current, remaining[i]);
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearestIdx = i;
+
+  while (withCoords.length > 0) {
+    let bestIdx = 0;
+    let bestObjective = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < withCoords.length; i += 1) {
+      const candidate = withCoords[i];
+      const distFromCurrent = hasValidLatLng(current) ? distanceBetween(current, candidate) : 0;
+      const distToEnd = hasValidLatLng(endItem) ? distanceBetween(candidate, endItem) : 0;
+      const objective = distFromCurrent + (distToEnd * 0.35);
+      if (objective < bestObjective) {
+        bestObjective = objective;
+        bestIdx = i;
       }
     }
-    const next = remaining.splice(nearestIdx, 1)[0];
-    ordered.push(next);
+
+    const next = withCoords.splice(bestIdx, 1)[0];
+    orderedMiddle.push(next);
     current = next;
   }
-  ordered.push(endItem);
-  const before = items.slice(0, startIdx);
-  const after = items.slice(endIdx + 1);
-  return [...before, ...ordered, ...after];
+
+  const ordered = [startItem, ...orderedMiddle, ...withoutCoords];
+  if (String(endItem?.id) !== String(startItem?.id)) ordered.push(endItem);
+  return ordered;
 }
 
 const DAY_COLOR_OPTIONS = [
@@ -874,31 +933,27 @@ const EXPENSE_CATEGORIES = [
   { id: 'experiences', label: 'Experiences', color: '#7c3aed' },
 ];
 
-/** Mock budget breakdown for the trip (in production would come from API). extraItems merged into items and added to places total. */
+/** Build budget breakdown from actual trip items (totals are stored in USD). */
 function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) {
   const prefix = currencyCode === 'USD' ? 'US' : currencyCode;
   const symbol = currencyCode === 'USD' ? 'US$' : `${currencyCode} `;
-  const byCategory = [
-    { id: 'stays', label: 'Stays', amount: 842, color: '#2563eb' },
-    { id: 'food', label: 'Food & Beverages', amount: 0, color: '#dc2626' },
-    { id: 'transportations', label: 'Transportations', amount: 0, color: '#ea580c' },
-    { id: 'places', label: 'Places', amount: 0, color: '#16a34a' },
-    { id: 'experiences', label: 'Experiences', amount: 65.14, color: '#7c3aed' },
-  ];
-  const items = [
-    { id: '1', name: 'The Belltown Inn', category: 'Stays', categoryId: 'stays', startDate: trip?.startDate || '2026-03-23', endDate: trip?.endDate || '2026-03-29', detail: '140.33 × 6 nights x 1 room', total: 842, Icon: Building2 },
-    { id: '2', name: 'Seattle Sky View Observatory tickets', category: 'Experience', categoryId: 'experiences', date: '2026-03-24', detail: '17.16 × 1 pax', total: 17.16, Icon: Ticket },
-    { id: '3', name: 'Seattle: Space Needle & Chihuly Garden and Glass Ticket', category: 'Experience', categoryId: 'experiences', date: '2026-03-27', detail: '47.97 × 1 pax', total: 47.97, Icon: Ticket },
-  ];
-  const placesExtra = extraItems.filter((i) => (i.categoryId || i.category) === 'places');
-  const transportExtra = extraItems.filter((i) => (i.categoryId || i.category) === 'transportations');
-  const placesAmount = placesExtra.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
-  const transportAmount = transportExtra.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
-  const merged = [...items, ...extraItems.map((i, idx) => ({ ...i, id: i.id || `extra-${idx}` }))];
-  const catPlaces = byCategory.find((c) => c.id === 'places');
-  const catTransport = byCategory.find((c) => c.id === 'transportations');
-  if (catPlaces) catPlaces.amount = placesAmount;
-  if (catTransport) catTransport.amount = transportAmount;
+  const byCategory = EXPENSE_CATEGORIES.map((c) => ({ ...c, amount: 0 }));
+  const merged = (Array.isArray(extraItems) ? extraItems : []).map((i, idx) => ({
+    ...i,
+    id: i.id || `expense-${idx}`,
+    total: Number(i.total) || 0,
+  }));
+
+  merged.forEach((item) => {
+    const raw = String(item.categoryId || item.category || '').toLowerCase();
+    const key = raw === 'place' ? 'places'
+      : raw === 'experience' ? 'experiences'
+      : raw === 'transportation' ? 'transportations'
+      : raw;
+    const category = byCategory.find((c) => c.id === key);
+    if (category) category.amount += Number(item.total) || 0;
+  });
+
   const total = byCategory.reduce((sum, c) => sum + c.amount, 0);
   return { total, byCategory, items: merged, symbol, prefix };
 }
@@ -1269,6 +1324,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [tripData, localDestination, localLocations]);
 
   const [currency, setCurrency] = useState('USD');
+  const [exchangeRates, setExchangeRates] = useState({});
   const [friendlyDialog, setFriendlyDialog] = useState({
     open: false,
     title: '',
@@ -1279,6 +1335,52 @@ export default function TripDetailsPage({ user, onLogout }) {
     onConfirm: null,
   });
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
+
+  const loadExchangeRates = useCallback(async (signal) => {
+    try {
+      const payload = await fetchUsdExchangeRates(signal);
+      if (!payload?.rates || typeof payload.rates !== 'object') return false;
+      setExchangeRates(payload.rates);
+      return true;
+    } catch (error) {
+      console.warn('Live currency rates unavailable.', error?.message || error);
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    (async () => {
+      const ok = await loadExchangeRates(controller.signal);
+      if (!ok || cancelled) return;
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [loadExchangeRates]);
+
+  const currencyOptions = useMemo(() => {
+    const codes = Object.keys(exchangeRates || {})
+      .map((c) => String(c || '').toUpperCase())
+      .filter((c) => /^[A-Z]{3}$/.test(c));
+    const unique = Array.from(new Set(codes));
+    unique.sort((a, b) => {
+      if (a === 'USD') return -1;
+      if (b === 'USD') return 1;
+      return a.localeCompare(b);
+    });
+    return unique.map((code) => ({ code, name: getCurrencyDisplayName(code) }));
+  }, [exchangeRates]);
+
+  const currencyOptionsForModal = useMemo(() => {
+    if (currencyOptions.length > 0) return currencyOptions;
+    return [{ code: 'USD', name: getCurrencyDisplayName('USD') }];
+  }, [currencyOptions]);
+
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleEditValue, setTitleEditValue] = useState('');
   const [titleDisplay, setTitleDisplay] = useState('');
@@ -1297,6 +1399,14 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [modalCurrency, setModalCurrency] = useState('USD');
+  useEffect(() => {
+    if (currency !== 'USD' && !exchangeRates?.[currency]) {
+      setCurrency('USD');
+    }
+    if (modalCurrency !== 'USD' && !exchangeRates?.[modalCurrency]) {
+      setModalCurrency('USD');
+    }
+  }, [currency, exchangeRates, modalCurrency]);
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
   const [addExperiencesOpen, setAddExperiencesOpen] = useState(false);
@@ -1478,7 +1588,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [optimizeRouteDay, setOptimizeRouteDay] = useState(null);
   const [optimizeRouteStartId, setOptimizeRouteStartId] = useState('');
   const [optimizeRouteEndId, setOptimizeRouteEndId] = useState('');
-  const [optimizationsLeft, setOptimizationsLeft] = useState(3);
   const [discoveryData, setDiscoveryData] = useState({
     places: [],
     foods: [],
@@ -1851,7 +1960,12 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [trip, dateRange?.startDate, dateRange?.endDate]);
 
   const days = trip ? getTripDaysFromTrip(displayTrip ?? trip) : [];
-  const spent = trip?.budgetSpent ?? 0;
+  const spent = useMemo(
+    () => (Array.isArray(tripExpenseItems)
+      ? tripExpenseItems.reduce((sum, item) => sum + (Number(item?.total) || 0), 0)
+      : 0),
+    [tripExpenseItems],
+  );
 
   const displayStart = trip ? (dateRange?.startDate ?? trip.startDate) : undefined;
   const displayEnd = trip ? (dateRange?.endDate ?? trip.endDate) : undefined;
@@ -2225,10 +2339,11 @@ export default function TripDetailsPage({ user, onLogout }) {
     Icon = Car,
     transportType = 'transport',
   }) => {
+    const normalizedTotalUsd = convertCurrencyToUsd(Number(total) || 0, currency, exchangeRates);
     setTripExpenseItems((prev) => [...prev, {
       id: id || `transport-${Date.now()}`,
       name,
-      total: Number(total) || 0,
+      total: normalizedTotalUsd,
       categoryId: 'transportations',
       category: 'Transportations',
       date: date || days[0]?.date,
@@ -2281,10 +2396,18 @@ export default function TripDetailsPage({ user, onLogout }) {
     };
 
     const scorePlaceRecommendation = (place) => {
+      const recommended = Number(place?.recommendedScore || 0);
+      const rating = Number(place?.rating || 0);
+      const reviewCount = Math.max(0, Number(place?.reviewCount || 0));
+      const priorMean = 4.2;
+      const priorWeight = 120;
+      const confidenceRating = ((reviewCount * rating) + (priorWeight * priorMean)) / (reviewCount + priorWeight);
+
       let score = 0;
-      score += Number(place?.recommendedScore || 0);
-      score += Number(place?.rating || 0) * 8;
-      score += Math.log10(Number(place?.reviewCount || 0) + 1) * 5;
+      score += recommended;
+      score += confidenceRating * 11;
+      score += Math.log10(reviewCount + 1) * 6;
+      if (reviewCount < 15) score -= 2;
       return score;
     };
 
@@ -2495,149 +2618,153 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [discoveryData?.stays]);
 
   const routeIdeas = useMemo(() => {
-    const placePool = Array.isArray(discoveryData?.places) && discoveryData.places.length > 0
-      ? discoveryData.places
-      : filteredPlaces;
+    const PRIOR_MEAN = 4.2;
+    const PRIOR_WEIGHT = 120;
+    const MIN_PRIMARY_REVIEWS = 120;
+    const MIN_PRIMARY_CONFIDENCE = 4.1;
+    const MIN_FALLBACK_REVIEWS = 60;
+    const MIN_FALLBACK_CONFIDENCE = 3.95;
+
+    // Use the same "Recommended" sorted list users see in Add Places first.
+    const placePool = Array.isArray(filteredPlaces) && filteredPlaces.length > 0
+      ? filteredPlaces
+      : (Array.isArray(discoveryData?.places) ? discoveryData.places : []);
     if (!Array.isArray(placePool) || placePool.length === 0) return [];
 
     const normalizedPlaces = placePool
       .filter((place) => place && place.lat != null && place.lng != null)
       .map((place, index) => {
         const rating = Number(place.rating || 0);
-        const reviewCount = Number(place.reviewCount || 0);
-        const score = rating * 100 + Math.log10(reviewCount + 1) * 50;
+        const reviewCount = Math.max(0, Number(place.reviewCount || 0));
+        const confidenceRating = ((reviewCount * rating) + (PRIOR_WEIGHT * PRIOR_MEAN)) / (reviewCount + PRIOR_WEIGHT);
+        const recommended = Number(place.recommendedScore || 0);
+        const popularityScore = (recommended * 12) + (confidenceRating * 120) + (Math.log10(reviewCount + 1) * 70);
         return {
           ...place,
           _idx: index,
-          _score: score,
+          _score: popularityScore,
           _rating: rating,
+          _confidenceRating: confidenceRating,
           _reviewCount: reviewCount,
         };
       });
 
-    if (normalizedPlaces.length === 0) return [];
+    const tripDayCount = Math.max(1, Number(days?.length || 0) || 3);
+    const minNeededPlaces = Math.max(tripDayCount, 3);
 
-    const rankedPlaces = [...normalizedPlaces].sort((a, b) => {
+    const candidateTiers = [
+      normalizedPlaces.filter((place) => place._reviewCount >= MIN_PRIMARY_REVIEWS && place._confidenceRating >= MIN_PRIMARY_CONFIDENCE),
+      normalizedPlaces.filter((place) => place._reviewCount >= MIN_FALLBACK_REVIEWS && place._confidenceRating >= MIN_FALLBACK_CONFIDENCE),
+      normalizedPlaces.filter((place) => place._reviewCount >= 20),
+      normalizedPlaces,
+    ];
+
+    const candidatePlaces = candidateTiers.find((tier) => tier.length >= minNeededPlaces)
+      || candidateTiers[candidateTiers.length - 1];
+    if (candidatePlaces.length === 0) return [];
+
+    const rankedPlaces = [...candidatePlaces].sort((a, b) => {
       if (b._score !== a._score) return b._score - a._score;
+      if (b._reviewCount !== a._reviewCount) return b._reviewCount - a._reviewCount;
       return (b._rating || 0) - (a._rating || 0);
     });
 
-    const CLUSTER_DISTANCE_KM = 2;
-    const clusters = [];
-    rankedPlaces.forEach((place) => {
-      let bestClusterIdx = -1;
-      let bestDistance = Number.POSITIVE_INFINITY;
+    // Plan across the full trip duration (no 7-day cap / feasibility cap).
+    const dayCount = tripDayCount;
+    const targetStops = dayCount * 5;
 
-      for (let i = 0; i < clusters.length; i += 1) {
-        const cluster = clusters[i];
-        const dist = distanceBetween(place, { lat: cluster.centerLat, lng: cluster.centerLng });
-        if (dist <= CLUSTER_DISTANCE_KM && dist < bestDistance) {
-          bestDistance = dist;
-          bestClusterIdx = i;
+    // Keep only top popular candidates so recommendations match user expectation.
+    const topCandidateWindow = Math.max(targetStops * 3, targetStops);
+    const workingPool = rankedPlaces.slice(0, Math.min(rankedPlaces.length, topCandidateWindow));
+
+    const remaining = [...workingPool];
+    const orderedDayPlaces = Array.from({ length: dayCount }, (_, idx) => ({
+      dayNum: idx + 1,
+      ordered: [],
+    }));
+    const CLUSTER_RADIUS_KM = 6;
+    const MAX_REASONABLE_RADIUS_KM = 12;
+
+    // Pass 1: choose one seed per day, balancing popularity + spatial spread.
+    const seededPlaces = [];
+    for (let dayIdx = 0; dayIdx < orderedDayPlaces.length; dayIdx += 1) {
+      if (remaining.length === 0) break;
+
+      let bestIdx = 0;
+      let bestObjective = Number.NEGATIVE_INFINITY;
+
+      for (let i = 0; i < remaining.length; i += 1) {
+        const candidate = remaining[i];
+        const spreadBonus = seededPlaces.length > 0
+          ? Math.min(
+            seededPlaces.reduce((minDist, seeded) => Math.min(minDist, distanceBetween(seeded, candidate)), Number.POSITIVE_INFINITY),
+            15,
+          ) * 18
+          : 0;
+        const objective = candidate._score + spreadBonus;
+        if (objective > bestObjective) {
+          bestObjective = objective;
+          bestIdx = i;
         }
       }
 
-      if (bestClusterIdx >= 0) {
-        const cluster = clusters[bestClusterIdx];
-        cluster.members.push(place);
-        cluster.totalScore += place._score;
-        cluster.centerLat = cluster.members.reduce((sum, p) => sum + Number(p.lat || 0), 0) / cluster.members.length;
-        cluster.centerLng = cluster.members.reduce((sum, p) => sum + Number(p.lng || 0), 0) / cluster.members.length;
-      } else {
-        clusters.push({
-          id: `cluster-${clusters.length + 1}`,
-          centerLat: Number(place.lat || 0),
-          centerLng: Number(place.lng || 0),
-          totalScore: place._score,
-          members: [place],
-        });
-      }
-    });
+      const seed = remaining.splice(bestIdx, 1)[0];
+      orderedDayPlaces[dayIdx].ordered.push(seed);
+      seededPlaces.push(seed);
+    }
 
-    const rankedClusters = clusters
-      .map((cluster) => ({
-        ...cluster,
-        members: [...cluster.members].sort((a, b) => b._score - a._score),
-      }))
-      .sort((a, b) => {
-        if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-        return b.members.length - a.members.length;
+    // If place pool is smaller than trip days, reuse top ranked places so every day still has suggestions.
+    const reusablePool = rankedPlaces.length > 0 ? rankedPlaces : workingPool;
+    let reuseIdx = 0;
+    for (let dayIdx = 0; dayIdx < orderedDayPlaces.length; dayIdx += 1) {
+      if (orderedDayPlaces[dayIdx].ordered.length > 0) continue;
+      const fallback = reusablePool[reuseIdx % reusablePool.length];
+      if (fallback) orderedDayPlaces[dayIdx].ordered.push(fallback);
+      reuseIdx += 1;
+    }
+
+    // Pass 2: top up each day up to 5 places, preferring nearby candidates first.
+    let fillCursor = 0;
+    while (remaining.length > 0 && orderedDayPlaces.some((d) => d.ordered.length < 5)) {
+      const day = orderedDayPlaces[fillCursor % orderedDayPlaces.length];
+      fillCursor += 1;
+      if (day.ordered.length >= 5) continue;
+
+      const anchor = day.ordered[day.ordered.length - 1] || remaining[0];
+      let preferredIndices = [];
+
+      for (let i = 0; i < remaining.length; i += 1) {
+        const distKm = distanceBetween(anchor, remaining[i]);
+        if (distKm <= CLUSTER_RADIUS_KM) preferredIndices.push(i);
+      }
+      if (preferredIndices.length === 0) {
+        for (let i = 0; i < remaining.length; i += 1) {
+          const distKm = distanceBetween(anchor, remaining[i]);
+          if (distKm <= MAX_REASONABLE_RADIUS_KM) preferredIndices.push(i);
+        }
+      }
+      if (preferredIndices.length === 0) {
+        preferredIndices = Array.from({ length: remaining.length }, (_, i) => i);
+      }
+
+      let bestIdx = preferredIndices[0];
+      let bestObjective = Number.NEGATIVE_INFINITY;
+      preferredIndices.forEach((idx) => {
+        const candidate = remaining[idx];
+        const distKm = distanceBetween(anchor, candidate);
+        const objective = candidate._score - (distKm * 22);
+        if (objective > bestObjective) {
+          bestObjective = objective;
+          bestIdx = idx;
+        }
       });
 
-    const tripDayCount = Math.max(1, Number(days?.length || 0) || 3);
-    const maxFeasibleDays = Math.max(1, Math.floor(rankedPlaces.length / 3));
-    const dayCount = Math.max(1, Math.min(tripDayCount, maxFeasibleDays, 7));
-
-    const dayBuckets = Array.from({ length: dayCount }, (_, idx) => ({
-      dayNum: idx + 1,
-      title: `Day ${idx + 1}`,
-      places: [],
-      clusterIds: [],
-    }));
-
-    rankedClusters.forEach((cluster, idx) => {
-      const bucket = dayBuckets[idx % dayBuckets.length];
-      bucket.clusterIds.push(cluster.id);
-      bucket.places.push(...cluster.members);
-    });
-
-    const getPlaceKey = (place) => String(place?.id || `idx-${place?._idx || '0'}`);
-    const usedIds = new Set();
-    const orderedDayPlaces = dayBuckets.map((bucket) => {
-      const localPool = bucket.places.filter((place) => !usedIds.has(getPlaceKey(place)));
-      if (localPool.length === 0) {
-        return { ...bucket, ordered: [] };
-      }
-
-      const seed = [...localPool].sort((a, b) => b._score - a._score)[0];
-      const remaining = localPool.filter((place) => getPlaceKey(place) !== getPlaceKey(seed));
-      const ordered = [seed];
-      let current = seed;
-
-      while (remaining.length > 0 && ordered.length < 5) {
-        let nearestIdx = 0;
-        let nearestDist = distanceBetween(current, remaining[0]);
-        for (let i = 1; i < remaining.length; i += 1) {
-          const dist = distanceBetween(current, remaining[i]);
-          if (dist < nearestDist) {
-            nearestDist = dist;
-            nearestIdx = i;
-          }
-        }
-        const next = remaining.splice(nearestIdx, 1)[0];
-        ordered.push(next);
-        current = next;
-      }
-
-      ordered.forEach((place) => usedIds.add(getPlaceKey(place)));
-      return { ...bucket, ordered };
-    });
-
-    const leftovers = rankedPlaces.filter((place) => !usedIds.has(getPlaceKey(place)));
-    for (let i = 0; i < orderedDayPlaces.length; i += 1) {
-      while (orderedDayPlaces[i].ordered.length < 3 && leftovers.length > 0) {
-        const currentList = orderedDayPlaces[i].ordered;
-        if (currentList.length === 0) {
-          currentList.push(leftovers.shift());
-          continue;
-        }
-        const anchor = currentList[currentList.length - 1];
-        let nearestIdx = 0;
-        let nearestDist = distanceBetween(anchor, leftovers[0]);
-        for (let j = 1; j < leftovers.length; j += 1) {
-          const dist = distanceBetween(anchor, leftovers[j]);
-          if (dist < nearestDist) {
-            nearestDist = dist;
-            nearestIdx = j;
-          }
-        }
-        currentList.push(leftovers.splice(nearestIdx, 1)[0]);
-      }
+      day.ordered.push(remaining.splice(bestIdx, 1)[0]);
     }
 
     const itineraryPlaces = orderedDayPlaces
       .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => ({
-        id: `smart-itinerary-${source.id || source._idx || `${bucket.dayNum}-${index}`}`,
+        id: `smart-itinerary-${bucket.dayNum}-${index}-${source.id || source._idx || 'place'}`,
         name: source.name || `Stop ${index + 1}`,
         lat: source.lat,
         lng: source.lng,
@@ -2645,14 +2772,16 @@ export default function TripDetailsPage({ user, onLogout }) {
         address: source.address || cityQuery,
         rating: source._rating || 4.2,
         reviewCount: source._reviewCount || 0,
-        overview: source.overview || source.description || `${source.name || 'This stop'} is selected based on proximity and popularity.`,
+        overview: source.overview || source.description || `${source.name || 'This stop'} is selected from high-popularity places and ordered for smoother routing.`,
         website: source.website || '',
         tags: Array.isArray(source.tags) && source.tags.length > 0 ? source.tags : ['Smart-picked'],
         dayNum: bucket.dayNum,
         dayTitle: `Day ${bucket.dayNum}`,
         durationLabel: source.estimatedDuration || `${Math.max(1, Math.min(4, Number(source.durationHours || 2)))} hr`,
       })))
-      .slice(0, dayCount * 5);
+      .slice(0, targetStops);
+
+    if (itineraryPlaces.length === 0) return [];
 
     return [{
       id: 'smart-itinerary-generator',
@@ -2671,6 +2800,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       tags: ['Popularity-ranked', 'Clustered by 2km', 'Nearest-neighbor ordered'],
       views: 0,
       countriesCount: 1,
+      dayCount,
       places: itineraryPlaces,
     }];
   }, [discoveryData?.places, filteredPlaces, cityQuery, days?.length]);
@@ -2747,6 +2877,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const appendItemToTrip = ({ itemType, data, categoryId, category, Icon, values }) => {
     const isStayCategory = String(categoryId || '').toLowerCase() === 'stays';
     const costNum = parseFloat(values?.cost) || 0;
+    const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
     const durationHrsNum = isStayCategory ? 0 : Number(values?.durationHrs || 0);
     const durationMinsNum = isStayCategory ? 0 : Number(values?.durationMins || 0);
     const startTime = isStayCategory
@@ -2800,7 +2931,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       id: `${itemType}-${data.id}-${Date.now()}`,
       sourcePlaceId: data.id || null,
       name: data.name,
-      total: costNum,
+      total: costNumUsd,
       categoryId,
       category,
       date: resolvedDate,
@@ -3334,7 +3465,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               </>
             )}
             <p className="trip-details__spent">
-              Spent: {currency} ${spent.toFixed(2)}{' '}
+              Spent: {formatUsdAsCurrency(spent, currency, exchangeRates)}{' '}
               <button type="button" className="trip-details__details-link" onClick={() => setBudgetModalOpen(true)}>Details</button>
             </p>
           </div>
@@ -3380,7 +3511,13 @@ export default function TripDetailsPage({ user, onLogout }) {
             <button
               type="button"
               className="trip-details__currency-btn"
-              onClick={() => { setModalCurrency(currency); setCurrencyModalOpen(true); }}
+              onClick={async () => {
+                if (!currencyOptions.length) {
+                  await loadExchangeRates();
+                }
+                setModalCurrency(currency);
+                setCurrencyModalOpen(true);
+              }}
               aria-label="Change currency"
             >
               {currency}
@@ -3824,7 +3961,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                     ) : null}
                                     {itemHasCost ? (
                                       <p className="trip-details__itinerary-meta-line">
-                                        <strong>Cost:</strong> {currency} {Number(item.total).toFixed(2)}
+                                        <strong>Cost:</strong> {formatUsdAsCurrency(Number(item.total), currency, exchangeRates)}
                                       </p>
                                     ) : null}
                                     {itemExternalLink ? (
@@ -4133,8 +4270,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <X size={20} aria-hidden />
               </button>
             </div>
+            {currencyOptions.length === 0 ? (
+              <p className="trip-details__itinerary-meta-line">Live exchange rates are loading. Showing USD for now.</p>
+            ) : null}
             <ul className="trip-details__currency-list">
-              {CURRENCY_LIST.map(({ code, name }) => (
+              {currencyOptionsForModal.map(({ code, name }) => (
                 <li key={code}>
                   <button
                     type="button"
@@ -4503,6 +4643,25 @@ export default function TripDetailsPage({ user, onLogout }) {
         const isStayEditing = isStayItem(item);
         const stayWindow = isStayEditing ? getStayWindow(item) : null;
         const update = (updates) => setTripExpenseItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, ...updates } : it)));
+        const updateWithOverlapValidation = (updates) => {
+          const candidate = {
+            ...item,
+            ...updates,
+          };
+          const overlapping = findTimeOverlapItem(tripExpenseItems, {
+            date: candidate.date,
+            startTime: candidate.startTime,
+            durationHrs: candidate.durationHrs,
+            durationMins: candidate.durationMins,
+            categoryId: candidate.categoryId,
+            excludeId: item.id,
+          });
+          if (overlapping) {
+            showInAppNotice('This time overlaps with another item in your itinerary.', 'warning');
+            return;
+          }
+          update(updates);
+        };
         const updateStayWindow = (updates) => {
           const nextCheckInDate = updates.checkInDate ?? (stayWindow?.checkInDate || item.date || '');
           const nextCheckInTime = updates.checkInTime ?? (stayWindow?.checkInTime || item.startTime || '15:00');
@@ -4618,7 +4777,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <select
                           className="trip-details__edit-place-select"
                           value={item.date || ''}
-                          onChange={(e) => update({ date: e.target.value })}
+                          onChange={(e) => updateWithOverlapValidation({ date: e.target.value })}
                           required
                         >
                           {days.map((d) => (
@@ -4634,7 +4793,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             type="time"
                             className="trip-details__edit-place-input"
                             value={item.startTime || '07:00'}
-                            onChange={(e) => update({ startTime: e.target.value })}
+                            onChange={(e) => updateWithOverlapValidation({ startTime: e.target.value })}
                           />
                         </span>
                       </label>
@@ -4647,7 +4806,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             max={23}
                             className="trip-details__edit-place-duration-input"
                             value={item.durationHrs ?? 1}
-                            onChange={(e) => update({ durationHrs: Number(e.target.value) || 0 })}
+                            onChange={(e) => updateWithOverlapValidation({ durationHrs: Number(e.target.value) || 0 })}
                             aria-label="Hours"
                           />
                           <span className="trip-details__edit-place-duration-sep">hrs</span>
@@ -4658,7 +4817,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             max={59}
                             className="trip-details__edit-place-duration-input"
                             value={item.durationMins ?? 0}
-                            onChange={(e) => update({ durationMins: Number(e.target.value) || 0 })}
+                            onChange={(e) => updateWithOverlapValidation({ durationMins: Number(e.target.value) || 0 })}
                             aria-label="Minutes"
                           />
                           <span className="trip-details__edit-place-duration-sep">mins</span>
@@ -4806,9 +4965,6 @@ export default function TripDetailsPage({ user, onLogout }) {
             <div className="trip-details__optimize-route-modal" role="dialog" aria-labelledby="optimize-route-title" aria-modal="true">
               <div className="trip-details__optimize-route-head">
                 <h2 id="optimize-route-title" className="trip-details__optimize-route-title">Optimize Route</h2>
-                {optimizationsLeft >= 0 && (
-                  <span className="trip-details__optimize-route-count">{optimizationsLeft} Optimizations Left</span>
-                )}
                 <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setOptimizeRouteModalOpen(false)}>
                   <X size={20} aria-hidden />
                 </button>
@@ -4848,24 +5004,30 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <button
                   type="button"
                   className="trip-details__optimize-route-submit"
-                  disabled={optimizationsLeft <= 0}
                   onClick={() => {
-                    if (!optimizeRouteDay || !startItem || !endItem || dayItems.length < 2 || optimizationsLeft <= 0) { setOptimizeRouteModalOpen(false); return; }
+                    if (!optimizeRouteDay || !startItem || !endItem || dayItems.length < 2) { setOptimizeRouteModalOpen(false); return; }
+                    if (String(optimizeRouteStartId) === String(optimizeRouteEndId)) {
+                      showInAppNotice('Start and end point cannot be the same.', 'warning');
+                      return;
+                    }
                     const reordered = reorderByProximity(dayItems, optimizeRouteStartId, optimizeRouteEndId);
-                    const startTimes = [];
-                    let timeMins = 8 * 60;
+                    const startTimes = new Map();
+                    const baseStartRaw = String(dayItems[0]?.startTime || '08:00');
+                    const baseStartMins = /^\d{2}:\d{2}$/.test(baseStartRaw)
+                      ? timeToMinutes(baseStartRaw)
+                      : (8 * 60);
+                    let timeMins = baseStartMins;
                     reordered.forEach((it, i) => {
-                      const hrs = Math.floor(timeMins / 60);
-                      const mins = timeMins % 60;
-                      startTimes.push({ id: it.id, startTime: `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}` });
+                      startTimes.set(String(it.id), minutesToHHmm(timeMins));
                       const durationMins = (it.durationHrs ?? 1) * 60 + (it.durationMins ?? 0);
                       timeMins += Math.max(durationMins, 30);
                     });
                     setTripExpenseItems((prev) => prev.map((it) => {
-                      const assigned = startTimes.find((s) => s.id === it.id);
-                      return assigned ? { ...it, startTime: assigned.startTime } : it;
+                      if (it.date !== optimizeRouteDay.date || isStayItem(it)) return it;
+                      const assigned = startTimes.get(String(it.id));
+                      return assigned ? { ...it, startTime: assigned } : it;
                     }));
-                    setOptimizationsLeft((n) => Math.max(0, n - 1));
+                    showInAppNotice(`Optimized Day ${optimizeRouteDay.dayNum} route.`, 'success');
                     setOptimizeRouteModalOpen(false);
                   }}
                 >
@@ -5520,6 +5682,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const costNum = parseFloat(customTransportCost) || 0;
+                const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
                 const detailParts = [
                   customTransportAirline || 'Flight',
                   customTransportFlightNumber ? `Flight ${customTransportFlightNumber}` : '',
@@ -5531,7 +5694,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setTripExpenseItems((prev) => [...prev, {
                   id: `transport-${Date.now()}`,
                   name: `${customTransportFrom || 'From'} → ${customTransportTo || 'To'}${customTransportFlightNumber ? ` (${customTransportFlightNumber})` : ''}`,
-                  total: costNum,
+                  total: costNumUsd,
                   categoryId: 'transportations',
                   category: 'Transportations',
                   date: customTransportDepartureDate || days[0]?.date,
@@ -5998,20 +6161,30 @@ export default function TripDetailsPage({ user, onLogout }) {
           })
           : [];
         const itineraryDayGroups = showingItineraryDetail
-          ? Object.values(
-            itineraryPlaces.reduce((acc, place) => {
+          ? (() => {
+            const plannedDays = Math.max(1, Number(itineraryDetailsView?.dayCount || days.length || 1));
+            const base = {};
+            for (let d = 1; d <= plannedDays; d += 1) {
+              base[d] = {
+                dayNum: d,
+                title: `Exploring ${cityQuery} - Day ${d}`,
+                places: [],
+              };
+            }
+            itineraryPlaces.forEach((place) => {
               const dayNum = Number(place.dayNum || 1);
-              if (!acc[dayNum]) {
-                acc[dayNum] = {
+              if (!base[dayNum]) {
+                base[dayNum] = {
                   dayNum,
-                  title: place.dayTitle || `Exploring ${cityQuery} - Day ${dayNum}`,
+                  title: `Exploring ${cityQuery} - Day ${dayNum}`,
                   places: [],
                 };
               }
-              acc[dayNum].places.push(place);
-              return acc;
-            }, {}),
-          ).sort((a, b) => a.dayNum - b.dayNum)
+              if (place.dayTitle) base[dayNum].title = place.dayTitle;
+              base[dayNum].places.push(place);
+            });
+            return Object.values(base).sort((a, b) => a.dayNum - b.dayNum);
+          })()
           : [];
         const selectedItineraryPlace = itineraryPlaces.find((place) => String(place.id) === String(selectedPlaceMarkerId)) || null;
 
@@ -6093,6 +6266,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                             <span className="trip-details__itinerary-detail-day-title">{dayGroup.title}</span>
                           </div>
                           <div className="trip-details__itinerary-detail-places">
+                            {dayGroup.places.length === 0 ? (
+                              <p className="trip-details__add-places-results">No recommendations for this day yet.</p>
+                            ) : null}
                             {dayGroup.places.map((place) => (
                               <div
                                 key={place.id}
@@ -6919,7 +7095,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                           {Number(stayDetailsView.total || 0) > 0 && (
                             <div className="trip-details__place-detail-section">
                               <h3 className="trip-details__place-detail-section-title">Cost</h3>
-                              <p className="trip-details__place-detail-section-text">{currency} {Number(stayDetailsView.total).toFixed(2)}</p>
+                              <p className="trip-details__place-detail-section-text">{formatUsdAsCurrency(Number(stayDetailsView.total), currency, exchangeRates)}</p>
                             </div>
                           )}
                           {String(stayDetailsView.notes || '').trim() && (
@@ -7686,6 +7862,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 e.preventDefault();
                 const [fallbackLat, fallbackLng] = mapCenter;
                 const costNum = parseFloat(customExperienceCost) || 0;
+                const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
                 const overlapping = findTimeOverlapItem(tripExpenseItems, {
                   date: customExperienceDateKey,
                   startTime: customExperienceStartTime,
@@ -7699,7 +7876,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setTripExpenseItems((prev) => [...prev, {
                   id: `experience-${Date.now()}`,
                   name: customExperienceName,
-                  total: costNum,
+                  total: costNumUsd,
                   categoryId: 'experiences',
                   category: 'Experience',
                   date: customExperienceDateKey,
@@ -7831,6 +8008,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const costNum = parseFloat(customPlaceCost) || 0;
+                const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
                 const resolvedAddress = customPlaceAddressSelection
                   ?? searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress)[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
@@ -7847,7 +8025,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setTripExpenseItems((prev) => [...prev, {
                   id: `place-${Date.now()}`,
                   name: customPlaceName,
-                  total: costNum,
+                  total: costNumUsd,
                   categoryId: 'places',
                   category: 'Places',
                   date: customPlaceDateKey,
@@ -8034,6 +8212,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const costNum = parseFloat(customFoodCost) || 0;
+                const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
                 const resolvedAddress = customFoodAddressSelection
                   ?? searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress)[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
@@ -8050,7 +8229,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 setTripExpenseItems((prev) => [...prev, {
                   id: `food-${Date.now()}`,
                   name: customFoodName,
-                  total: costNum,
+                  total: costNumUsd,
                   categoryId: 'food',
                   category: 'Food & Beverage',
                   date: customFoodDateKey,
@@ -8246,7 +8425,7 @@ export default function TripDetailsPage({ user, onLogout }) {
               </div>
               <div className="trip-details__budget-your-expenses">
                 <span className="trip-details__budget-your-label">Your expenses</span>
-                <span className="trip-details__budget-total">{breakdown.prefix}$ {total.toFixed(2)}</span>
+                <span className="trip-details__budget-total">{formatUsdAsCurrency(total, currency, exchangeRates)}</span>
                 <Wallet size={24} className="trip-details__budget-wallet-icon" aria-hidden />
               </div>
               <div className="trip-details__budget-summary">
@@ -8260,12 +8439,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <li key={c.id} className="trip-details__budget-category-item">
                         <span className="trip-details__budget-category-dot" style={{ backgroundColor: c.color }} aria-hidden />
                         <span className="trip-details__budget-category-label">{c.label}</span>
-                        <span className="trip-details__budget-category-amount">{breakdown.symbol}{c.amount.toFixed(2)}</span>
+                        <span className="trip-details__budget-category-amount">{formatUsdAsCurrency(c.amount, currency, exchangeRates)}</span>
                       </li>
                     ))}
                   </ul>
                   <p className="trip-details__budget-details-total">
-                    <strong>Total</strong> {breakdown.symbol}{total.toFixed(2)}
+                    <strong>Total</strong> {formatUsdAsCurrency(total, currency, exchangeRates)}
                   </p>
                 </div>
               </div>
@@ -8290,8 +8469,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <span className="trip-details__budget-item-dates">
                           {item.endDate ? `${formatExpenseDate(item.startDate)} - ${formatExpenseDate(item.endDate)}` : formatExpenseDate(item.date)}
                         </span>
-                        <span className="trip-details__budget-item-detail">{breakdown.symbol}{item.detail}</span>
-                        <span className="trip-details__budget-item-total">{breakdown.symbol}{item.total.toFixed(2)}</span>
+                        <span className="trip-details__budget-item-detail">{item.detail}</span>
+                        <span className="trip-details__budget-item-total">{formatUsdAsCurrency(item.total, currency, exchangeRates)}</span>
                       </div>
                     </li>
                   ))}

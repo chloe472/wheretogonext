@@ -35,9 +35,11 @@ async function start() {
   const { default: profileRoutes } = await import('./routes/profile.js');
   const { default: moodboardRoutes } = await import('./routes/moodboard.js');
   const { default: socialImportRoutes } = await import('./routes/socialImport.js');
+  const { default: currencyRoutes } = await import('./routes/currency.js');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/discovery', discoveryRoutes);
+  app.use('/api/currency', currencyRoutes);
   app.use('/api/social-import', socialImportRoutes);
   app.use('/api/itineraries', itinerariesRoutes);
   app.use('/api/profile', profileRoutes);
