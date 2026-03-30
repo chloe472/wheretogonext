@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
-import { searchLocations } from '../../data/mockLocations';
 import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../api/itinerariesApi';
+import { fetchCitySuggestions } from '../../api/locationsApi';
 import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
@@ -18,17 +18,13 @@ function formatTripDates(startDate, endDate) {
 
 const TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
 
+function isCityLocation(loc) {
+  return String(loc?.type || '').toLowerCase() === 'city';
+}
+
 function resolveTypedLocation(query) {
   const value = String(query || '').trim();
   if (!value) return null;
-  const exactMatch = searchLocations(value).find((loc) => {
-    const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
-    return (
-      loc.name.toLowerCase() === value.toLowerCase()
-      || full.toLowerCase() === value.toLowerCase()
-    );
-  });
-  if (exactMatch) return exactMatch;
 
   const [name, ...rest] = value.split(',').map((part) => part.trim()).filter(Boolean);
   return {
@@ -114,8 +110,11 @@ async function waitForItineraryReadable(itineraryId, attempts = 12, delayMs = 40
 export default function NewTripPage({ user, onLogout }) {
   const navigate = useNavigate();
   const [whereQuery, setWhereQuery] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [cityDayRanges, setCityDayRanges] = useState({});
+  const [cityDayDrafts, setCityDayDrafts] = useState({});
   const [whereOpen, setWhereOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -133,6 +132,35 @@ export default function NewTripPage({ user, onLogout }) {
   const defaultCityDayRanges = buildDefaultCityDayRanges(selectedLocations, totalTripDays || 1);
 
   useEffect(() => {
+    const trimmed = whereQuery.trim();
+    if (!trimmed) {
+      setLocationSuggestions([]);
+      setSuggestionsLoading(false);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const next = await fetchCitySuggestions(trimmed, { signal: controller.signal, limit: 12 });
+        setLocationSuggestions(Array.isArray(next) ? next : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setLocationSuggestions([]);
+        }
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [whereQuery]);
+
+  useEffect(() => {
     setCityDayRanges((prev) => {
       const next = {};
       selectedLocations.forEach((loc) => {
@@ -142,6 +170,20 @@ export default function NewTripPage({ user, onLogout }) {
       return next;
     });
   }, [selectedLocations, defaultCityDayRanges, totalTripDays]);
+
+  useEffect(() => {
+    setCityDayDrafts((prev) => {
+      const validKeys = new Set(selectedLocations.map((loc) => getLocationKey(loc)));
+      const next = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const [locKey] = key.split('::');
+        if (validKeys.has(locKey)) {
+          next[key] = value;
+        }
+      });
+      return next;
+    });
+  }, [selectedLocations]);
 
   const addLocation = (loc) => {
     if (!loc) return;
@@ -154,14 +196,15 @@ export default function NewTripPage({ user, onLogout }) {
     setWhereOpen(false);
   };
 
-  const suggestions = searchLocations(whereQuery).filter(
-    (loc) => !selectedLocations.some((selected) => getLocationKey(selected) === getLocationKey(loc)),
+  const suggestions = locationSuggestions.filter(
+    (loc) => isCityLocation(loc)
+      && !selectedLocations.some((selected) => getLocationKey(selected) === getLocationKey(loc)),
   );
 
   const updateCityRange = (loc, field, value) => {
     const key = getLocationKey(loc);
     const maxDay = Math.max(1, totalTripDays || 1);
-    const n = Number(value);
+    const n = Number.parseInt(String(value), 10);
     const safe = Number.isFinite(n) ? Math.max(1, Math.min(maxDay, Math.round(n))) : 1;
     setCityDayRanges((prev) => {
       const current = prev[key] || defaultCityDayRanges[key] || { startDay: 1, endDay: maxDay };
@@ -171,6 +214,39 @@ export default function NewTripPage({ user, onLogout }) {
         if (field === 'endDay') next.startDay = next.endDay;
       }
       return { ...prev, [key]: next };
+    });
+  };
+
+  const getCityDayDraftKey = (loc, field) => `${getLocationKey(loc)}::${field}`;
+
+  const handleCityRangeInputChange = (loc, field, value) => {
+    const raw = String(value);
+    const sanitized = raw.replace(/[^0-9]/g, '');
+    const draftKey = getCityDayDraftKey(loc, field);
+    setCityDayDrafts((prev) => ({ ...prev, [draftKey]: sanitized }));
+  };
+
+  const commitCityRangeInput = (loc, field) => {
+    const key = getLocationKey(loc);
+    const draftKey = getCityDayDraftKey(loc, field);
+    const raw = cityDayDrafts[draftKey];
+
+    if (raw === undefined) return;
+
+    if (!raw) {
+      setCityDayDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      return;
+    }
+
+    updateCityRange(loc, field, raw);
+    setCityDayDrafts((prev) => {
+      const next = { ...prev };
+      delete next[draftKey];
+      return next;
     });
   };
 
@@ -197,6 +273,7 @@ export default function NewTripPage({ user, onLogout }) {
     const resolved = resolveTypedLocation(whereQuery);
     if (!resolved) return null;
     addLocation(resolved);
+    setSubmitError('');
     return resolved;
   };
 
@@ -238,8 +315,12 @@ export default function NewTripPage({ user, onLogout }) {
       citySegments = allLocations.map((loc) => {
         const key = getLocationKey(loc);
         const selected = cityDayRanges[key] || fallbackRanges[key] || { startDay: 1, endDay: dayCount };
-        const startDay = Math.max(1, Math.min(dayCount, Number(selected.startDay) || 1));
-        const endDay = Math.max(1, Math.min(dayCount, Number(selected.endDay) || dayCount));
+        const startDraft = cityDayDrafts[getCityDayDraftKey(loc, 'startDay')];
+        const endDraft = cityDayDrafts[getCityDayDraftKey(loc, 'endDay')];
+        const startSource = startDraft !== undefined && startDraft !== '' ? startDraft : selected.startDay;
+        const endSource = endDraft !== undefined && endDraft !== '' ? endDraft : selected.endDay;
+        const startDay = Math.max(1, Math.min(dayCount, Number(startSource) || 1));
+        const endDay = Math.max(1, Math.min(dayCount, Number(endSource) || dayCount));
         return {
           city: String(loc.name || '').trim(),
           locationLabel: getLocationLabel(loc),
@@ -374,7 +455,11 @@ export default function NewTripPage({ user, onLogout }) {
                 className="new-trip__suggestions"
                 role="listbox"
               >
-                {suggestions.length === 0 ? (
+                {suggestionsLoading ? (
+                  <li className="new-trip__suggestion new-trip__suggestion--empty" role="option">
+                    Searching cities...
+                  </li>
+                ) : suggestions.length === 0 ? (
                   <li className="new-trip__suggestion new-trip__suggestion--empty" role="option">
                     No results
                   </li>
@@ -433,7 +518,7 @@ export default function NewTripPage({ user, onLogout }) {
               <div className="new-trip__city-plan" aria-label="City day plan">
                 <p className="new-trip__city-plan-title">How many days in each city?</p>
                 <p className="new-trip__city-plan-hint">
-                  Set day ranges so Smart Itinerary can suggest by city (for example, Seoul Day 1-3, Busan Day 4-6).
+                  Set day ranges to allocate days per city (for example, Seoul Day 1-3, Busan Day 4-6).
                 </p>
                 {totalTripDays > 0 ? (
                   <>
@@ -447,22 +532,40 @@ export default function NewTripPage({ user, onLogout }) {
                             <label className="new-trip__city-plan-label">
                               From
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min={1}
                                 max={totalTripDays}
-                                value={range.startDay}
-                                onChange={(e) => updateCityRange(loc, 'startDay', e.target.value)}
+                                value={cityDayDrafts[getCityDayDraftKey(loc, 'startDay')] ?? String(range.startDay)}
+                                onChange={(e) => handleCityRangeInputChange(loc, 'startDay', e.target.value)}
+                                onBlur={() => commitCityRangeInput(loc, 'startDay')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.currentTarget.blur();
+                                  }
+                                }}
                                 className="new-trip__city-plan-input"
                               />
                             </label>
                             <label className="new-trip__city-plan-label">
                               To
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min={1}
                                 max={totalTripDays}
-                                value={range.endDay}
-                                onChange={(e) => updateCityRange(loc, 'endDay', e.target.value)}
+                                value={cityDayDrafts[getCityDayDraftKey(loc, 'endDay')] ?? String(range.endDay)}
+                                onChange={(e) => handleCityRangeInputChange(loc, 'endDay', e.target.value)}
+                                onBlur={() => commitCityRangeInput(loc, 'endDay')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.currentTarget.blur();
+                                  }
+                                }}
                                 className="new-trip__city-plan-input"
                               />
                             </label>

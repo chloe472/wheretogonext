@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
 import { fetchDiscoveryData } from '../../api/discoveryApi';
+import { fetchCitySuggestions } from '../../api/locationsApi';
 import { fetchUsdExchangeRates } from '../../api/currencyApi';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import countriesData from '../../data/countries.json';
@@ -172,6 +173,44 @@ function getDestinationList(destination = '', locations = '') {
   return unique;
 }
 
+function getTripDayCount(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(`${String(startDate).slice(0, 10)}T12:00:00`);
+  const end = new Date(`${String(endDate).slice(0, 10)}T12:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start) return 0;
+  return Math.round((end - start) / 86400000) + 1;
+}
+
+function getWhereLocationLabel(loc) {
+  if (!loc) return '';
+  return loc.country ? `${loc.name}, ${loc.country}` : String(loc.name || '').trim();
+}
+
+function getWhereLocationKey(loc) {
+  return getWhereLocationLabel(loc).toLowerCase();
+}
+
+function buildWhereDefaultCityDayRanges(locations, totalDays) {
+  const days = Math.max(1, Number(totalDays) || 1);
+  const list = Array.isArray(locations) ? locations : [];
+  if (list.length === 0) return {};
+
+  const base = Math.floor(days / list.length);
+  const rem = days % list.length;
+  const ranges = {};
+  let cursor = 1;
+
+  list.forEach((loc, idx) => {
+    const size = base + (idx < rem ? 1 : 0);
+    const startDay = cursor;
+    const endDay = Math.min(days, cursor + Math.max(1, size) - 1);
+    ranges[getWhereLocationKey(loc)] = { startDay, endDay };
+    cursor = endDay + 1;
+  });
+
+  return ranges;
+}
+
 function mergeUniqueBy(items = [], toKey) {
   const seen = new Set();
   const merged = [];
@@ -242,6 +281,22 @@ function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
 }
 
 const WHERE_TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
+
+function isCityWhereLocation(loc) {
+  return String(loc?.type || '').toLowerCase() === 'city';
+}
+
+function findExactWhereLocationMatch(query) {
+  const value = String(query || '').trim();
+  if (!value) return null;
+  return searchLocations(value, 50).find((loc) => {
+    const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
+    return (
+      String(loc.name || '').toLowerCase() === value.toLowerCase()
+      || String(full || '').toLowerCase() === value.toLowerCase()
+    );
+  }) || null;
+}
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND']);
 
@@ -1575,8 +1630,13 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [pendingDeleteItemId, setPendingDeleteItemId] = useState(null);
   const [whereModalOpen, setWhereModalOpen] = useState(false);
   const [whereQuery, setWhereQuery] = useState('');
+  const [whereLocationSuggestions, setWhereLocationSuggestions] = useState([]);
+  const [whereSuggestionsLoading, setWhereSuggestionsLoading] = useState(false);
   const [whereSuggestionsOpen, setWhereSuggestionsOpen] = useState(false);
   const [whereSelectedLocations, setWhereSelectedLocations] = useState([]);
+  const [whereCityDayRanges, setWhereCityDayRanges] = useState({});
+  const [whereCityDayDrafts, setWhereCityDayDrafts] = useState({});
+  const [whereCityRangeError, setWhereCityRangeError] = useState('');
   const [calendarScrollLeft, setCalendarScrollLeft] = useState(0);
   const [calendarDraggingItemId, setCalendarDraggingItemId] = useState(null);
   const [calendarResizingItemId, setCalendarResizingItemId] = useState(null);
@@ -1620,6 +1680,14 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [discoveryError, setDiscoveryError] = useState('');
   const dayResizeSessionRef = useRef(null);
   const skipExpenseSaveToastUntilRef = useRef(0);
+
+  const whereModalDisplayStart = dateRange?.startDate ?? trip?.startDate;
+  const whereModalDisplayEnd = dateRange?.endDate ?? trip?.endDate;
+  const whereTotalTripDays = Math.max(1, getTripDayCount(whereModalDisplayStart, whereModalDisplayEnd) || 1);
+  const whereDefaultCityDayRanges = useMemo(
+    () => buildWhereDefaultCityDayRanges(whereSelectedLocations, whereTotalTripDays),
+    [whereSelectedLocations, whereTotalTripDays],
+  );
 
   const showInAppNotice = (message, type = 'info', durationMs = 3200) => {
     if (!message) return;
@@ -1729,6 +1797,109 @@ export default function TripDetailsPage({ user, onLogout }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [whereModalOpen]);
+
+  useEffect(() => {
+    if (!whereModalOpen) return () => {};
+
+    const trimmed = whereQuery.trim();
+    if (!trimmed) {
+      setWhereLocationSuggestions([]);
+      setWhereSuggestionsLoading(false);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setWhereSuggestionsLoading(true);
+      try {
+        const next = await fetchCitySuggestions(trimmed, { signal: controller.signal, limit: 12 });
+        setWhereLocationSuggestions(Array.isArray(next) ? next : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setWhereLocationSuggestions([]);
+        }
+      } finally {
+        setWhereSuggestionsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [whereModalOpen, whereQuery]);
+
+  useEffect(() => {
+    if (!whereModalOpen) return;
+    setWhereCityDayRanges((prev) => {
+      const next = {};
+      whereSelectedLocations.forEach((loc) => {
+        const key = getWhereLocationKey(loc);
+        next[key] = prev[key] || whereDefaultCityDayRanges[key] || { startDay: 1, endDay: whereTotalTripDays };
+      });
+      return next;
+    });
+  }, [whereModalOpen, whereSelectedLocations, whereDefaultCityDayRanges, whereTotalTripDays]);
+
+  useEffect(() => {
+    if (!whereModalOpen) return;
+    setWhereCityDayDrafts((prev) => {
+      const validKeys = new Set(whereSelectedLocations.map((loc) => getWhereLocationKey(loc)));
+      const next = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const [locKey] = key.split('::');
+        if (validKeys.has(locKey)) next[key] = value;
+      });
+      return next;
+    });
+  }, [whereModalOpen, whereSelectedLocations]);
+
+  const getWhereCityDraftKey = (loc, field) => `${getWhereLocationKey(loc)}::${field}`;
+
+  const updateWhereCityRange = (loc, field, value) => {
+    const key = getWhereLocationKey(loc);
+    const maxDay = Math.max(1, whereTotalTripDays || 1);
+    const n = Number.parseInt(String(value), 10);
+    const safe = Number.isFinite(n) ? Math.max(1, Math.min(maxDay, Math.round(n))) : 1;
+    setWhereCityDayRanges((prev) => {
+      const current = prev[key] || whereDefaultCityDayRanges[key] || { startDay: 1, endDay: maxDay };
+      const next = { ...current, [field]: safe };
+      if (next.startDay > next.endDay) {
+        if (field === 'startDay') next.endDay = next.startDay;
+        if (field === 'endDay') next.startDay = next.endDay;
+      }
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const handleWhereCityRangeInputChange = (loc, field, value) => {
+    const raw = String(value);
+    const sanitized = raw.replace(/[^0-9]/g, '');
+    const draftKey = getWhereCityDraftKey(loc, field);
+    setWhereCityDayDrafts((prev) => ({ ...prev, [draftKey]: sanitized }));
+  };
+
+  const commitWhereCityRangeInput = (loc, field) => {
+    const draftKey = getWhereCityDraftKey(loc, field);
+    const raw = whereCityDayDrafts[draftKey];
+    if (raw === undefined) return;
+
+    if (!raw) {
+      setWhereCityDayDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      return;
+    }
+
+    updateWhereCityRange(loc, field, raw);
+    setWhereCityDayDrafts((prev) => {
+      const next = { ...prev };
+      delete next[draftKey];
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (openDayMenuKey == null) return;
@@ -2033,8 +2204,8 @@ export default function TripDetailsPage({ user, onLogout }) {
     [tripExpenseItems],
   );
 
-  const displayStart = trip ? (dateRange?.startDate ?? trip.startDate) : undefined;
-  const displayEnd = trip ? (dateRange?.endDate ?? trip.endDate) : undefined;
+  const displayStart = trip ? whereModalDisplayStart : undefined;
+  const displayEnd = trip ? whereModalDisplayEnd : undefined;
   const allDayNums = days.map((d) => d.dayNum);
   const activeDayNums = (mapDayFilterSelected.length ? mapDayFilterSelected : allDayNums).filter((n) =>
     allDayNums.includes(n),
@@ -3095,15 +3266,110 @@ export default function TripDetailsPage({ user, onLogout }) {
         originalData: item,
       }));
 
-    const placeMarkers = toDiscoveryMarkers(sourcePlaces, 'place', 24);
+    const toBalancedDiscoveryMarkers = (items, markerType, limit = 36) => {
+      const valid = items.filter((item) => item.lat != null && item.lng != null);
+      if (selectedDestinations.length <= 1) {
+        return toDiscoveryMarkers(valid, markerType, limit);
+      }
+
+      const groups = new Map();
+      valid.forEach((item) => {
+        const source = String(item?._sourceDestination || '').trim().toLowerCase();
+        const key = source || '__unknown__';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      });
+
+      const orderedKeys = selectedDestinations
+        .map((name) => String(name || '').trim().toLowerCase())
+        .filter((key, idx, arr) => key && arr.indexOf(key) === idx)
+        .filter((key) => groups.has(key));
+
+      groups.forEach((_, key) => {
+        if (!orderedKeys.includes(key)) orderedKeys.push(key);
+      });
+
+      const merged = [];
+      let cursor = 0;
+      while (merged.length < limit) {
+        let progressed = false;
+        for (let i = 0; i < orderedKeys.length; i += 1) {
+          const bucket = groups.get(orderedKeys[i]) || [];
+          if (cursor < bucket.length) {
+            merged.push(bucket[cursor]);
+            progressed = true;
+            if (merged.length >= limit) break;
+          }
+        }
+        if (!progressed) break;
+        cursor += 1;
+      }
+
+      return merged.map((item, idx) => ({
+        id: `discovery-${markerType}-${item.id || idx}`,
+        sourceId: item.id,
+        markerType,
+        name: item.name,
+        lat: item.lat,
+        lng: item.lng,
+        dayNum: 1,
+        color: colorForDay(1),
+        address: item.address || cityQuery,
+        rating: item.rating,
+        reviewCount: item.reviewCount,
+        overview: item.overview || item.description || '',
+        image: resolveImageUrl(
+          item.image,
+          item.name,
+          markerType === 'food' ? 'restaurant' : markerType === 'experience' ? 'activity' : 'landmark',
+        ),
+        website: item.website || '',
+        originalData: item,
+      }));
+    };
+
+    const placeMarkers = toBalancedDiscoveryMarkers(sourcePlaces, 'place', 48);
     const foodMarkers = toDiscoveryMarkers(sourceFoods, 'food', 24);
     const experienceMarkers = toDiscoveryMarkers(sourceExperiences, 'experience', 30);
 
+    const destinationMarkers = selectedDestinations
+      .map((label, idx) => {
+        const [lat, lng] = getMapCenterForDestination(label);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return {
+          id: `destination-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${idx}`,
+          markerType: 'trip',
+          name: label,
+          lat,
+          lng,
+          dayNum: 1,
+          color: colorForDay(1),
+          address: label,
+          website: '',
+        };
+      })
+      .filter(Boolean);
+
+    const destinationMarkerByCoord = new Map();
+    destinationMarkers.forEach((marker) => {
+      const key = `${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`;
+      if (!destinationMarkerByCoord.has(key)) destinationMarkerByCoord.set(key, marker);
+    });
+    const dedupedDestinationMarkers = Array.from(destinationMarkerByCoord.values());
+
     if (mapFilter === 'Food & Beverages') return foodMarkers;
     if (mapFilter === 'Experiences') return experienceMarkers;
-    if (mapFilter === 'My Trip') return tripItemMarkers.length > 0 ? tripItemMarkers : [];
-    return placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
-  }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery, dayColors]);
+    if (mapFilter === 'My Trip') return tripItemMarkers.length > 0 ? tripItemMarkers : dedupedDestinationMarkers;
+
+    const baseDefaultMarkers = placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
+    if (dedupedDestinationMarkers.length === 0) return baseDefaultMarkers;
+
+    const seenCoords = new Set(baseDefaultMarkers.map((marker) => `${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`));
+    const missingDestinationMarkers = dedupedDestinationMarkers.filter(
+      (marker) => !seenCoords.has(`${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`),
+    );
+    return [...baseDefaultMarkers, ...missingDestinationMarkers];
+  }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery, dayColors, selectedDestinations]);
 
   const appendItemToTrip = ({ itemType, data, categoryId, category, Icon, values }) => {
     const isStayCategory = String(categoryId || '').toLowerCase() === 'stays';
@@ -3799,7 +4065,34 @@ export default function TripDetailsPage({ user, onLogout }) {
                 if (byName) return byName;
                 return { id: `where-${i}-${locName}`, name: locName, country: locCountry };
               });
+              const totalDays = Math.max(1, getTripDayCount(displayStart, displayEnd) || days.length || 1);
+              const defaults = buildWhereDefaultCityDayRanges(resolved, totalDays);
+              const rangesFromTrip = {};
+              if (Array.isArray(trip.citySegments)) {
+                trip.citySegments.forEach((seg, idx) => {
+                  const label = String(seg?.locationLabel || '').trim();
+                  const city = String(seg?.city || '').trim();
+                  const keySource = label || city;
+                  if (!keySource) return;
+                  const key = keySource.toLowerCase();
+                  const fallback = defaults[key] || { startDay: Math.min(totalDays, idx + 1), endDay: Math.min(totalDays, idx + 1) };
+                  const startDay = Math.max(1, Math.min(totalDays, Number(seg?.startDay) || fallback.startDay));
+                  const endDay = Math.max(1, Math.min(totalDays, Number(seg?.endDay) || fallback.endDay));
+                  rangesFromTrip[key] = {
+                    startDay: Math.min(startDay, endDay),
+                    endDay: Math.max(startDay, endDay),
+                  };
+                });
+              }
+              const nextRanges = {};
+              resolved.forEach((loc) => {
+                const key = getWhereLocationKey(loc);
+                nextRanges[key] = rangesFromTrip[key] || defaults[key] || { startDay: 1, endDay: totalDays };
+              });
               setWhereSelectedLocations(resolved);
+              setWhereCityDayRanges(nextRanges);
+              setWhereCityDayDrafts({});
+              setWhereCityRangeError('');
               setWhereModalOpen(true);
               setWhereSuggestionsOpen(false);
             }}
@@ -4621,61 +4914,67 @@ export default function TripDetailsPage({ user, onLogout }) {
             </div>
             <div className="trip-details__where-modal-body" ref={whereModalRef}>
               <label htmlFor="where-modal-input" className="trip-details__where-label">City</label>
-              <div className="trip-details__where-input-wrap">
-                <Search size={18} className="trip-details__where-input-icon" aria-hidden />
-                <input
-                  id="where-modal-input"
-                  type="text"
-                  className="trip-details__where-input"
-                  placeholder="Where do you want to go?"
-                  value={whereQuery}
-                  onChange={(e) => {
-                    const nextQuery = e.target.value;
-                    setWhereQuery(nextQuery);
-                    setWhereSuggestionsOpen(Boolean(nextQuery.trim()));
-                  }}
-                  onFocus={() => setWhereSuggestionsOpen(Boolean(whereQuery.trim()))}
-                  autoComplete="off"
-                  aria-expanded={whereSuggestionsOpen}
-                  aria-controls="where-modal-listbox"
-                  aria-autocomplete="list"
-                  role="combobox"
-                  aria-label="Destination"
-                />
+              <div className="trip-details__where-autocomplete">
+                <div className="trip-details__where-input-wrap">
+                  <Search size={18} className="trip-details__where-input-icon" aria-hidden />
+                  <input
+                    id="where-modal-input"
+                    type="text"
+                    className="trip-details__where-input"
+                    placeholder="Where do you want to go?"
+                    value={whereQuery}
+                    onChange={(e) => {
+                      const nextQuery = e.target.value;
+                      setWhereQuery(nextQuery);
+                      setWhereCityRangeError('');
+                      setWhereSuggestionsOpen(Boolean(nextQuery.trim()));
+                    }}
+                    onFocus={() => setWhereSuggestionsOpen(Boolean(whereQuery.trim()))}
+                    autoComplete="off"
+                    aria-expanded={whereSuggestionsOpen}
+                    aria-controls="where-modal-listbox"
+                    aria-autocomplete="list"
+                    role="combobox"
+                    aria-label="Destination"
+                  />
+                </div>
+                {whereSuggestionsOpen && whereQuery.trim() && (
+                  <ul id="where-modal-listbox" className="trip-details__where-suggestions" role="listbox">
+                    {whereSuggestionsLoading ? (
+                      <li className="trip-details__where-suggestion trip-details__where-suggestion--empty" role="option">Searching cities...</li>
+                    ) : whereLocationSuggestions.length === 0 ? (
+                      <li className="trip-details__where-suggestion trip-details__where-suggestion--empty" role="option">No results</li>
+                    ) : (
+                      whereLocationSuggestions.filter((loc) => isCityWhereLocation(loc)).map((loc) => (
+                        <li key={loc.id}>
+                          <button
+                            type="button"
+                            className="trip-details__where-suggestion"
+                            role="option"
+                            aria-selected={whereSelectedLocations.some((l) => l.id === loc.id || l.name === loc.name)}
+                            onClick={() => {
+                              setWhereSelectedLocations((prev) =>
+                                prev.some((l) => l.id === loc.id || l.name === loc.name) ? prev : [...prev, loc]
+                              );
+                              setWhereCityRangeError('');
+                              setWhereQuery('');
+                              setWhereSuggestionsOpen(false);
+                            }}
+                          >
+                            <span className="trip-details__where-suggestion-name">{loc.name}</span>
+                            {loc.country && (
+                              <span className="trip-details__where-suggestion-meta">{loc.country}</span>
+                            )}
+                            <span className={`trip-details__where-type-badge trip-details__where-type-badge--${(loc.type || 'city').toLowerCase()}`}>
+                              {WHERE_TYPE_LABELS[loc.type] || loc.type}
+                            </span>
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
               </div>
-              {whereSuggestionsOpen && whereQuery.trim() && (
-                <ul id="where-modal-listbox" className="trip-details__where-suggestions" role="listbox">
-                  {searchLocations(whereQuery).length === 0 ? (
-                    <li className="trip-details__where-suggestion trip-details__where-suggestion--empty" role="option">No results</li>
-                  ) : (
-                    searchLocations(whereQuery).map((loc) => (
-                      <li key={loc.id}>
-                        <button
-                          type="button"
-                          className="trip-details__where-suggestion"
-                          role="option"
-                          aria-selected={whereSelectedLocations.some((l) => l.id === loc.id || l.name === loc.name)}
-                          onClick={() => {
-                            setWhereSelectedLocations((prev) =>
-                              prev.some((l) => l.id === loc.id || l.name === loc.name) ? prev : [...prev, loc]
-                            );
-                            setWhereQuery('');
-                            setWhereSuggestionsOpen(false);
-                          }}
-                        >
-                          <span className="trip-details__where-suggestion-name">{loc.name}</span>
-                          {loc.country && (
-                            <span className="trip-details__where-suggestion-meta">{loc.country}</span>
-                          )}
-                          <span className={`trip-details__where-type-badge trip-details__where-type-badge--${(loc.type || 'city').toLowerCase()}`}>
-                            {WHERE_TYPE_LABELS[loc.type] || loc.type}
-                          </span>
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
               {(whereSelectedLocations.length > 0 || whereQuery.trim()) && (
                 <div className="trip-details__where-chip-wrap">
                   {whereSelectedLocations.map((loc) => {
@@ -4691,7 +4990,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                           type="button"
                           className="trip-details__where-chip-remove"
                           aria-label={`Remove ${loc.name}`}
-                          onClick={() => setWhereSelectedLocations((prev) => prev.filter((l) => l.id !== loc.id))}
+                          onClick={() => {
+                            setWhereSelectedLocations((prev) => prev.filter((l) => l.id !== loc.id));
+                            setWhereCityRangeError('');
+                          }}
                         >
                           <X size={14} aria-hidden />
                         </button>
@@ -4705,12 +5007,73 @@ export default function TripDetailsPage({ user, onLogout }) {
                         type="button"
                         className="trip-details__where-chip-remove"
                         aria-label="Clear"
-                        onClick={() => setWhereQuery('')}
+                        onClick={() => {
+                          setWhereQuery('');
+                          setWhereCityRangeError('');
+                        }}
                       >
                         <X size={14} aria-hidden />
                       </button>
                     </span>
                   )}
+                </div>
+              )}
+
+              {whereSelectedLocations.length > 1 && (
+                <div className="trip-details__where-city-plan" aria-label="City day plan">
+                  <p className="trip-details__where-city-plan-title">How many days in each city?</p>
+                  <p className="trip-details__where-city-plan-hint">
+                    Set day ranges for each city (for example, Seoul Day 1-3, Busan Day 4-6).
+                  </p>
+                  {whereSelectedLocations.map((loc) => {
+                    const key = getWhereLocationKey(loc);
+                    const range = whereCityDayRanges[key] || whereDefaultCityDayRanges[key] || { startDay: 1, endDay: whereTotalTripDays };
+                    return (
+                      <div key={key} className="trip-details__where-city-plan-row">
+                        <span className="trip-details__where-city-plan-city">{getWhereLocationLabel(loc)}</span>
+                        <div className="trip-details__where-city-plan-inputs">
+                          <label className="trip-details__where-city-plan-label">
+                            From
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={whereCityDayDrafts[getWhereCityDraftKey(loc, 'startDay')] ?? String(range.startDay)}
+                              onChange={(e) => handleWhereCityRangeInputChange(loc, 'startDay', e.target.value)}
+                              onBlur={() => commitWhereCityRangeInput(loc, 'startDay')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              className="trip-details__where-city-plan-input"
+                            />
+                          </label>
+                          <label className="trip-details__where-city-plan-label">
+                            To
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={whereCityDayDrafts[getWhereCityDraftKey(loc, 'endDay')] ?? String(range.endDay)}
+                              onChange={(e) => handleWhereCityRangeInputChange(loc, 'endDay', e.target.value)}
+                              onBlur={() => commitWhereCityRangeInput(loc, 'endDay')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              className="trip-details__where-city-plan-input"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="trip-details__where-city-plan-foot">Total trip length: Day 1 to Day {whereTotalTripDays}.</p>
+                  {whereCityRangeError && <p className="trip-details__where-city-plan-error" role="alert">{whereCityRangeError}</p>}
                 </div>
               )}
             </div>
@@ -4720,7 +5083,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                 type="button"
                 className="trip-details__modal-update"
                 onClick={() => {
+                  setWhereCityRangeError('');
                   const pending = whereQuery.trim();
+                  const exactMatch = findExactWhereLocationMatch(pending);
+                  if (exactMatch && !isCityWhereLocation(exactMatch)) {
+                    showInAppNotice('Please select a city, not a country or province.', 'warning');
+                    return;
+                  }
                   const list = pending
                     ? [...whereSelectedLocations, { id: `where-new-${Date.now()}`, name: pending, country: undefined }]
                     : whereSelectedLocations;
@@ -4728,6 +5097,51 @@ export default function TripDetailsPage({ user, onLogout }) {
                     ? list.map((l) => (l.country ? `${l.name}, ${l.country}` : l.name)).join('; ')
                     : '';
                   const newDestination = list.length > 0 ? list[0].name : '';
+                  const newTitle = list.length > 0 ? `Trip to ${locationsStr || newDestination}` : 'Untitled trip';
+                  const totalDays = Math.max(1, getTripDayCount(displayStart, displayEnd) || days.length || 1);
+                  const fallbackRanges = buildWhereDefaultCityDayRanges(list, totalDays);
+                  let citySegments = [];
+
+                  if (list.length > 1) {
+                    citySegments = list.map((loc) => {
+                      const key = getWhereLocationKey(loc);
+                      const selected = whereCityDayRanges[key] || fallbackRanges[key] || { startDay: 1, endDay: totalDays };
+                      const startDraft = whereCityDayDrafts[getWhereCityDraftKey(loc, 'startDay')];
+                      const endDraft = whereCityDayDrafts[getWhereCityDraftKey(loc, 'endDay')];
+                      const startSource = startDraft !== undefined && startDraft !== '' ? startDraft : selected.startDay;
+                      const endSource = endDraft !== undefined && endDraft !== '' ? endDraft : selected.endDay;
+                      const startDay = Math.max(1, Math.min(totalDays, Number(startSource) || 1));
+                      const endDay = Math.max(1, Math.min(totalDays, Number(endSource) || totalDays));
+                      const locationLabel = getWhereLocationLabel(loc);
+                      return {
+                        city: String(loc.name || '').trim(),
+                        locationLabel,
+                        startDay: Math.min(startDay, endDay),
+                        endDay: Math.max(startDay, endDay),
+                      };
+                    }).sort((a, b) => a.startDay - b.startDay);
+
+                    const firstStart = citySegments[0]?.startDay;
+                    const lastEnd = citySegments[citySegments.length - 1]?.endDay;
+                    let contiguous = firstStart === 1 && lastEnd === totalDays;
+                    for (let i = 1; i < citySegments.length; i += 1) {
+                      if (citySegments[i].startDay !== citySegments[i - 1].endDay + 1) {
+                        contiguous = false;
+                        break;
+                      }
+                    }
+                    if (!contiguous) {
+                      setWhereCityRangeError(`City day ranges must cover Day 1 to Day ${totalDays} without gaps or overlaps.`);
+                      return;
+                    }
+                  } else if (list.length === 1) {
+                    citySegments = [{
+                      city: String(list[0]?.name || '').trim(),
+                      locationLabel: getWhereLocationLabel(list[0]),
+                      startDay: 1,
+                      endDay: totalDays,
+                    }];
+                  }
 
                   // Close modal first for immediate feedback
                   setWhereModalOpen(false);
@@ -4735,12 +5149,15 @@ export default function TripDetailsPage({ user, onLogout }) {
                   // Update local state immediately for instant UI update
                   setLocalDestination(newDestination);
                   setLocalLocations(locationsStr);
+                  setTitleDisplay(newTitle);
 
                   (async () => {
                     try {
                       const updated = await updateItinerary(tripId, {
+                        title: newTitle,
                         destination: newDestination,
                         locations: locationsStr,
+                        citySegments,
                       });
                       if (updated) setServerItinerary(updated);
                       setLocationUpdateKey((prev) => prev + 1);

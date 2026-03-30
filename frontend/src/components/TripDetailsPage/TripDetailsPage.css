@@ -2166,12 +2166,14 @@
   z-index: 70;
   width: 100%;
   max-width: 420px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   padding: 1.25rem 1.5rem;
   background: var(--wtg-surface);
   border-radius: 16px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
 }
 
 .trip-details__where-modal-head {
@@ -2199,6 +2201,10 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--wtg-text);
+}
+
+.trip-details__where-autocomplete {
+  position: relative;
 }
 
 .trip-details__where-input-wrap {
@@ -2241,10 +2247,10 @@
 
 .trip-details__where-suggestions {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 6px 0;
   list-style: none;
   background: var(--wtg-surface);
@@ -2361,6 +2367,87 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.trip-details__where-city-plan {
+  margin-top: 0.875rem;
+  padding: 0.875rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  background: var(--wtg-hover);
+}
+
+.trip-details__where-city-plan-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__where-city-plan-hint {
+  margin: 0.375rem 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__where-city-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.trip-details__where-city-plan-row + .trip-details__where-city-plan-row {
+  margin-top: 0.625rem;
+}
+
+.trip-details__where-city-plan-city {
+  font-weight: 600;
+  color: var(--wtg-text);
+  min-width: 0;
+}
+
+.trip-details__where-city-plan-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trip-details__where-city-plan-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__where-city-plan-input {
+  width: 3.5rem;
+  padding: 0.3125rem 0.4375rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+}
+
+.trip-details__where-city-plan-input:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.12);
+}
+
+.trip-details__where-city-plan-foot {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__where-city-plan-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: #b91c1c;
+  font-weight: 600;
 }
 
 /* Notes & Documents modal */

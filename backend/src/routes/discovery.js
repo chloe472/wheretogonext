@@ -23,6 +23,7 @@ console.log('[Discovery] Google Places API Key configured:', Boolean(GOOGLE_PLAC
 const GOOGLE_GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
 const GOOGLE_PLACES_NEARBY_URL = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 const GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
+const GOOGLE_PLACES_AUTOCOMPLETE_URL = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
 const GOOGLE_PLACE_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
 const GOOGLE_PLACE_PHOTO_URL = 'https://maps.googleapis.com/maps/api/place/photo';
 
@@ -71,6 +72,10 @@ function cacheKey(destination, limit) {
   return `${String(destination || '').toLowerCase()}::${Number(limit) || 24}`;
 }
 
+function citySuggestionCacheKey(query, limit) {
+  return `cities::${String(query || '').trim().toLowerCase()}::${Number(limit) || 12}`;
+}
+
 function getCached(key) {
   const hit = DISCOVERY_CACHE.get(key);
   if (!hit) return null;
@@ -79,6 +84,115 @@ function getCached(key) {
     return null;
   }
   return hit.value;
+}
+
+function normalizeCitySuggestion(raw = {}) {
+  const name = String(raw.name || '').trim();
+  const country = String(raw.country || '').trim();
+  if (!name) return null;
+  return {
+    id: String(raw.id || raw.placeId || `city-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`),
+    name,
+    country: country || undefined,
+    type: 'City',
+    placeId: raw.placeId ? String(raw.placeId) : undefined,
+  };
+}
+
+async function fetchGoogleCitySuggestions(query, limit = 12) {
+  const params = new URLSearchParams({
+    input: String(query || '').trim(),
+    types: '(cities)',
+    language: 'en',
+    key: GOOGLE_PLACES_API_KEY,
+  });
+  const res = await fetchWithTimeout(`${GOOGLE_PLACES_AUTOCOMPLETE_URL}?${params.toString()}`, {}, 10000);
+  if (!res.ok) {
+    throw new Error(`Google autocomplete failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  if (!Array.isArray(data?.predictions)) return [];
+
+  const mapped = data.predictions.map((prediction) => {
+    const mainText = String(prediction?.structured_formatting?.main_text || '').trim();
+    const terms = Array.isArray(prediction?.terms) ? prediction.terms : [];
+    const countryTerm = terms.length > 0 ? String(terms[terms.length - 1]?.value || '').trim() : '';
+    const secondary = String(prediction?.structured_formatting?.secondary_text || '').trim();
+    const countryFromSecondary = secondary
+      ? secondary.split(',').map((part) => part.trim()).filter(Boolean).pop()
+      : '';
+    return normalizeCitySuggestion({
+      id: `google-city-${prediction?.place_id || mainText}`,
+      placeId: prediction?.place_id || undefined,
+      name: mainText,
+      country: countryTerm || countryFromSecondary,
+    });
+  }).filter(Boolean);
+
+  const seen = new Set();
+  const deduped = [];
+  for (const item of mapped) {
+    const key = `${item.name.toLowerCase()}::${String(item.country || '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+    if (deduped.length >= limit) break;
+  }
+  return deduped;
+}
+
+async function fetchNominatimCitySuggestions(query, limit = 12) {
+  const params = new URLSearchParams({
+    q: String(query || '').trim(),
+    format: 'jsonv2',
+    addressdetails: '1',
+    limit: String(Math.max(8, Math.min(30, limit * 2))),
+  });
+  const res = await fetchWithTimeout(`${NOMINATIM_URL}?${params.toString()}`, {}, 10000);
+  if (!res.ok) {
+    throw new Error(`Nominatim autocomplete failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  const allowedTypes = new Set(['city', 'town', 'village', 'municipality', 'hamlet']);
+
+  const mapped = data.map((hit) => {
+    const addr = hit?.address || {};
+    const addresstype = String(hit?.addresstype || '').toLowerCase();
+    const type = String(hit?.type || '').toLowerCase();
+    const isCityLike = allowedTypes.has(addresstype) || allowedTypes.has(type);
+    if (!isCityLike) return null;
+
+    const name = String(
+      addr.city
+      || addr.town
+      || addr.village
+      || addr.municipality
+      || addr.hamlet
+      || hit?.name
+      || ''
+    ).trim();
+    const country = String(addr.country || '').trim();
+
+    return normalizeCitySuggestion({
+      id: `osm-city-${hit?.osm_type || 'n'}-${hit?.osm_id || name}`,
+      name,
+      country,
+    });
+  }).filter(Boolean);
+
+  const seen = new Set();
+  const deduped = [];
+  for (const item of mapped) {
+    const key = `${item.name.toLowerCase()}::${String(item.country || '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+    if (deduped.length >= limit) break;
+  }
+  return deduped;
 }
 
 function setCached(key, value) {
@@ -2223,6 +2337,43 @@ router.get('/destination', async (req, res) => {
       });
     }
     return res.status(500).json({ error: 'Failed to fetch destination discovery data', details: error.message });
+  }
+});
+
+router.get('/city-suggestions', async (req, res) => {
+  const rawQuery = String(req.query.query || req.query.q || '').trim();
+  const limit = Math.max(1, Math.min(20, Number(req.query.limit) || 12));
+
+  if (rawQuery.length < 2) {
+    return res.json({ suggestions: [] });
+  }
+
+  const key = citySuggestionCacheKey(rawQuery, limit);
+  const cached = getCached(key);
+  if (cached) {
+    return res.json({ suggestions: cached });
+  }
+
+  try {
+    let suggestions = [];
+
+    if (GOOGLE_PLACES_API_KEY) {
+      suggestions = await fetchGoogleCitySuggestions(rawQuery, limit);
+    }
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      suggestions = await fetchNominatimCitySuggestions(rawQuery, limit);
+    }
+
+    const finalSuggestions = Array.isArray(suggestions) ? suggestions.slice(0, limit) : [];
+    setCached(key, finalSuggestions);
+    return res.json({ suggestions: finalSuggestions });
+  } catch (error) {
+    console.error('City suggestions failed:', error.message);
+    return res.status(502).json({
+      message: 'Failed to fetch city suggestions right now.',
+      suggestions: [],
+    });
   }
 });
 
