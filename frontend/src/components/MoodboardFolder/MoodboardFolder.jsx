@@ -1,11 +1,16 @@
 import './MoodboardFolder.css';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchMoodboardFolder, addMoodboardImage, deleteMoodboardImage } from '../../api/moodboardApi';
+import {
+  fetchMoodboardFolder,
+  addMoodboardImage,
+  deleteMoodboardImage,
+  reactToMoodboardImage
+} from '../../api/moodboardApi';
 import { fetchItineraryById } from '../../api/itinerariesApi';
 import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 
-export default function MoodboardFolder({ user, onLogout }) {
+export default function MoodboardFolder({ user }) {
   const { tripId, folderId } = useParams();
   const navigate = useNavigate();
 
@@ -38,7 +43,7 @@ export default function MoodboardFolder({ user, onLogout }) {
         const initReactions = {};
         (folderData.images || []).forEach((img, idx) => {
           const pinId = folderId + "-" + idx;
-          initReactions[pinId] = img.reactions || {}; // { "❤️": ["user1", "user2"] }
+          initReactions[pinId] = { ...img.reactions };
         });
         setReactions(initReactions);
       } catch (err) {
@@ -52,31 +57,27 @@ export default function MoodboardFolder({ user, onLogout }) {
     if (tripId && folderId) loadFolder();
   }, [tripId, folderId]);
 
-  // Emoji click toggle
-  const handleEmojiClick = (pinId, emoji) => {
+  // Emoji click
+  const handleEmojiClick = async (pinId, emoji, imageId) => {
     if (!user?.name) return;
-    
+
     setReactions(prev => {
       const current = prev[pinId] || {};
-      const reactedUsers = current[emoji] || [];
-
+      const reactedUsers = Array.isArray(current[emoji]) ? current[emoji] : [];
       const alreadyReacted = reactedUsers.includes(user.name);
       const updatedUsers = alreadyReacted
         ? reactedUsers.filter(u => u !== user.name)
         : [...reactedUsers, user.name];
 
-      const updatedCurrent = { ...current };
-      if (updatedUsers.length > 0) {
-        updatedCurrent[emoji] = updatedUsers;
-      } else {
-        delete updatedCurrent[emoji];
-      }
-
-      return {
-        ...prev,
-        [pinId]: updatedCurrent
-      };
+      return { ...prev, [pinId]: { ...current, [emoji]: updatedUsers } };
     });
+
+    try {
+      await reactToMoodboardImage(tripId, folderId, imageId, emoji, user.name);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update reaction on server.");
+    }
   };
 
   // Delete image
@@ -98,8 +99,8 @@ export default function MoodboardFolder({ user, onLogout }) {
   const handleAddUrl = async () => {
     if (!urlInput.trim()) return;
     try {
-      const updatedImages = await addMoodboardImage(tripId, folderId, urlInput.trim());
-      setImages(updatedImages);
+      const newImage = await addMoodboardImage(tripId, folderId, urlInput.trim());
+      setImages(prev => [...prev, newImage]);
       setUrlInput("");
       setShowUrlModal(false);
     } catch (err) {
@@ -115,8 +116,8 @@ export default function MoodboardFolder({ user, onLogout }) {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         try {
-          const updatedImages = await addMoodboardImage(tripId, folderId, ev.target.result);
-          setImages(updatedImages);
+          const newImage = await addMoodboardImage(tripId, folderId, ev.target.result);
+          setImages(prev => [...prev, newImage]);
         } catch (err) {
           console.error(err);
           alert("Failed to upload image.");
@@ -143,36 +144,22 @@ export default function MoodboardFolder({ user, onLogout }) {
       <div className="container">
         <div className="folder-header-row">
           <div className="folder-left">
-            <button className="back-btn" onClick={() => navigate(`/trip/${tripId}/moodboard`)}>
-              &lt;
-            </button>
+            <button className="back-btn" onClick={() => navigate(`/trip/${tripId}/moodboard`)}>&lt;</button>
             <div className="folder-title">
               <h1>{folder?.name}</h1>
               <p>{images.length} images</p>
             </div>
           </div>
 
-          {/* Combined dropdown */}
           <div className="folder-right">
             <div className="dropdown">
               <button className="upload-dropdown-btn">Add Image ▾</button>
               <div className="dropdown-content">
-                <button onClick={() => document.getElementById("file-input").click()}>
-                  Upload from Device
-                </button>
-                <button onClick={() => setShowUrlModal(true)}>
-                  Add from URL
-                </button>
+                <button onClick={() => document.getElementById("file-input").click()}>Upload from Device</button>
+                <button onClick={() => setShowUrlModal(true)}>Add from URL</button>
               </div>
             </div>
-            <input
-              type="file"
-              id="file-input"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={handleFileUpload}
-            />
+            <input type="file" id="file-input" accept="image/*" multiple hidden onChange={handleFileUpload} />
           </div>
         </div>
 
@@ -181,32 +168,32 @@ export default function MoodboardFolder({ user, onLogout }) {
             const pinId = folderId + "-" + idx;
             return (
               <div className="pin" key={pinId}>
-                <img src={img.url || img} alt={`img-${idx}`} />
-
+                <img src={img.url} alt={`img-${idx}`} />
                 <div className="emoji-delete-row">
                   <div className="emoji-popup">
-                    {["❤️", "😍", "🔥"].map((emoji) => (
-                      <span key={emoji} onClick={() => handleEmojiClick(pinId, emoji)}>
-                        {emoji}
-                      </span>
+                    {["❤️","😍","🔥"].map(emoji => (
+                      <span
+                        key={emoji}
+                        onClick={() => handleEmojiClick(pinId, emoji, img.id)}
+                        title={(reactions[pinId]?.[emoji] || []).join(", ")}
+                        style={{
+                          cursor: "pointer",
+                          fontWeight: (reactions[pinId]?.[emoji] || []).includes(user?.name) ? "bold" : "normal"
+                        }}
+                      >{emoji}</span>
                     ))}
                   </div>
-
                   <button
                     className="pin-delete-btn"
                     onClick={() => { setCurrentImageIdx(idx); setShowDeleteModal(true); }}
                     title="Delete image"
-                  >
-                    ✕
-                  </button>
+                  >✕</button>
                 </div>
 
                 <div className="pin-reactions">
-                  {Object.entries(reactions[pinId] || {}).map(([emoji, users]) => (
-                    <span key={emoji} title={users.map(u => u.name || u).join(", ")}>
-                      {emoji} {users.length}
-                    </span>
-                  ))}
+                  {Object.entries(reactions[pinId] || {})
+                    .filter(([emoji, users]) => users.length > 0)
+                    .map(([emoji, users]) => <span key={emoji} title={users.join(", ")}>{emoji} {users.length}</span>)}
                 </div>
               </div>
             );
@@ -217,12 +204,7 @@ export default function MoodboardFolder({ user, onLogout }) {
           <div className="url">
             <div className="create-folder">
               <h2>Add from URL</h2>
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://example.com/image.jpg"
-              />
+              <input type="text" value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://example.com/image.jpg" />
               <div className="folder-actions">
                 <button onClick={() => setShowUrlModal(false)}>Cancel</button>
                 <button onClick={handleAddUrl}>Add URL</button>

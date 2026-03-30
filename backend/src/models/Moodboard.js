@@ -3,10 +3,12 @@ import mongoose from 'mongoose';
 const imageSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
-    reactions: { type: Map, of: Number, default: {} },
-    createdAt: { type: Date, default: Date.now },
+    reactions: { 
+      type: Map,
+      of: [String],
+      default: {}
+    },
   },
-  { _id: true }
 );
 
 const folderSchema = new mongoose.Schema(

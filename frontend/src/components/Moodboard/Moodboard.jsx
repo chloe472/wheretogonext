@@ -184,6 +184,56 @@ export default function Moodboard({ user, onLogout }) {
             ))
           )}
         </div>
+
+        {/* Create Folder Modal */}
+      {showCreate && (
+        <div className="url">
+          <div className="create-folder">
+            <h2>New Folder</h2>
+            <input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Folder Name"
+            />
+            <div className="folder-actions">
+              <button onClick={() => setShowCreate(false)}>Cancel</button>
+              <button onClick={handleCreate}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Folder Modal */}
+      {showEdit && (
+        <div className="url">
+          <div className="create-folder">
+            <h2>Edit Folder</h2>
+            <input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Folder Name"
+            />
+            <div className="folder-actions">
+              <button onClick={() => setShowEdit(false)}>Cancel</button>
+              <button onClick={handleEdit}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Folder Modal */}
+      {showDelete && (
+        <div className="url">
+          <div className="create-folder">
+            <h2>Delete Folder?</h2>
+            <p>Are you sure you want to delete this folder?</p>
+            <div className="folder-actions">
+              <button onClick={() => setShowDelete(false)}>Cancel</button>
+              <button onClick={handleDelete}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
