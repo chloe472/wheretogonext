@@ -1,4 +1,4 @@
-import { X, Plus, Loader2 } from 'lucide-react';
+import { X, Plus, Loader2, MapPin } from 'lucide-react';
 import { placeKeySocialImport } from './socialImportUtils';
 
 /**
@@ -26,6 +26,8 @@ export default function SocialImportModal({
   onAddSelectedToTrip,
   resolveImageUrl,
   onImageError,
+  locationInsight,
+  onAddDetectedDestination,
 }) {
   if (!isOpen) return null;
 
@@ -144,6 +146,26 @@ export default function SocialImportModal({
 
         {step === 'results' && (
           <div className="trip-details__social-import-body">
+            {locationInsight?.mismatch && locationInsight.detectedLabel ? (
+              <div className="trip-details__social-import-location-banner" role="status">
+                <MapPin className="trip-details__social-import-location-banner-icon" size={18} aria-hidden />
+                <div className="trip-details__social-import-location-banner-main">
+                  <p className="trip-details__social-import-location-banner-title">Different area than your trip city</p>
+                  <p className="trip-details__social-import-location-banner-desc">
+                    {locationInsight.message}
+                  </p>
+                  {onAddDetectedDestination ? (
+                    <button
+                      type="button"
+                      className="trip-details__social-import-location-banner-btn"
+                      onClick={() => onAddDetectedDestination(locationInsight.detectedLabel)}
+                    >
+                      Add {locationInsight.detectedLabel} to trip destinations
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <p className="trip-details__social-import-results-intro">
               Select places to add to <strong>Day {day}</strong>. You can remove any before adding.
             </p>

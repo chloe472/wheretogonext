@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
@@ -662,96 +662,70 @@ function getTransportTimesFromDetail(detail = '') {
   return { dep: match[1], arr: match[2] };
 }
 
-/** Helper to wait for Google Maps SDK to load */
-function waitForGoogleMaps() {
-  return new Promise((resolve) => {
-    if (window.google && window.google.maps && window.google.maps.DistanceMatrixService) {
-      resolve(true);
-      return;
-    }
-    
-    let attempts = 0;
-    const maxAttempts = 30; // 6 seconds max wait
-    const checkInterval = setInterval(() => {
-      attempts++;
-      if (window.google && window.google.maps && window.google.maps.DistanceMatrixService) {
-        clearInterval(checkInterval);
-        resolve(true);
-      } else if (attempts >= maxAttempts) {
-        clearInterval(checkInterval);
-        resolve(false);
-      }
-    }, 200);
-  });
-}
+/** Maps our UI mode to Route Matrix travelMode strings (replaces legacy Distance Matrix). */
+const ROUTE_MATRIX_TRAVEL_MODE = {
+  walking: 'WALKING',
+  cycling: 'BICYCLING',
+  driving: 'DRIVING',
+  public: 'TRANSIT',
+};
 
-/** Get travel time and distance using Google Maps JavaScript SDK for accurate routing. */
+/** Get travel time and distance via google.maps.routes.RouteMatrix.computeRouteMatrix (not deprecated DistanceMatrix). */
 async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache) {
   const lat1 = fromItem.lat ?? 0;
   const lng1 = fromItem.lng ?? 0;
   const lat2 = toItem.lat ?? 0;
   const lng2 = toItem.lng ?? 0;
-  
-  // Generate cache key
+
   const cacheKey = `${lat1},${lng1}|${lat2},${lng2}|${mode}`;
-  
-  // Check cache first
+
   if (cache[cacheKey]) {
     return cache[cacheKey];
   }
-  
-  // Wait for Google Maps SDK to load
-  const isLoaded = await waitForGoogleMaps();
-  if (!isLoaded) {
+
+  if (typeof window === 'undefined' || !window.google?.maps?.importLibrary) {
     return getTravelBetweenFallback(fromItem, toItem, mode);
   }
-  
-  return new Promise((resolve) => {
-    try {
-      const service = new google.maps.DistanceMatrixService();
-      const origin = new google.maps.LatLng(lat1, lng1);
-      const destination = new google.maps.LatLng(lat2, lng2);
-      
-      // Map our mode to Google's travel mode
-      const googleMode = {
-        walking: google.maps.TravelMode.WALKING,
-        cycling: google.maps.TravelMode.BICYCLING,
-        driving: google.maps.TravelMode.DRIVING,
-        public: google.maps.TravelMode.TRANSIT
-      }[mode] || google.maps.TravelMode.DRIVING;
-      
-      service.getDistanceMatrix({
-        origins: [origin],
-        destinations: [destination],
-        travelMode: googleMode,
-      }, (response, status) => {
-        if (status === 'OK' && response?.rows?.[0]?.elements?.[0]?.status === 'OK') {
-          const element = response.rows[0].elements[0];
-          const distanceMeters = element.distance.value;
-          const durationSeconds = element.duration.value;
-          
-          const distKm = Math.round((distanceMeters / 1000) * 10) / 10;
-          const totalMins = Math.ceil(durationSeconds / 60);
-          const hrs = Math.floor(totalMins / 60);
-          const mins = totalMins % 60;
-          
-          const durationStr = hrs > 0 ? `${hrs} hr ${mins} min` : `${mins} min`;
-          const result = { duration: durationStr, durationMins: totalMins, distance: `${distKm} km` };
-          
-          // Cache the result
-          setCache(prev => ({ ...prev, [cacheKey]: result }));
-          
-          resolve(result);
-        } else {
-          // Fallback to haversine calculation if API fails
-          resolve(getTravelBetweenFallback(fromItem, toItem, mode));
-        }
-      });
-    } catch (error) {
-      console.error('Distance Matrix SDK error:', error);
-      resolve(getTravelBetweenFallback(fromItem, toItem, mode));
+
+  try {
+    const { RouteMatrix } = await google.maps.importLibrary('routes');
+    const travelMode = ROUTE_MATRIX_TRAVEL_MODE[mode] || 'DRIVING';
+
+    const request = {
+      origins: [{ lat: lat1, lng: lng1 }],
+      destinations: [{ lat: lat2, lng: lng2 }],
+      travelMode,
+      fields: ['durationMillis', 'distanceMeters'],
+    };
+
+    const { matrix } = await RouteMatrix.computeRouteMatrix(request);
+    const item = matrix?.rows?.[0]?.items?.[0];
+
+    if (!item || item.error) {
+      return getTravelBetweenFallback(fromItem, toItem, mode);
     }
-  });
+
+    const distanceMeters = item.distanceMeters;
+    const durationMillis = item.durationMillis ?? item.staticDurationMillis;
+
+    if (distanceMeters == null || durationMillis == null) {
+      return getTravelBetweenFallback(fromItem, toItem, mode);
+    }
+
+    const distKm = Math.round((distanceMeters / 1000) * 10) / 10;
+    const totalMins = Math.max(1, Math.ceil(durationMillis / 60000));
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+
+    const durationStr = hrs > 0 ? `${hrs} hr ${mins} min` : `${mins} min`;
+    const result = { duration: durationStr, durationMins: totalMins, distance: `${distKm} km` };
+
+    setCache((prev) => ({ ...prev, [cacheKey]: result }));
+    return result;
+  } catch (error) {
+    console.warn('Route Matrix error:', error);
+    return getTravelBetweenFallback(fromItem, toItem, mode);
+  }
 }
 
 /** Fallback travel time calculation using straight-line distance (Haversine formula). */
@@ -2670,9 +2644,33 @@ export default function TripDetailsPage({ user, onLogout }) {
     appendItemToTrip,
     days,
     cityQuery,
-    discoveryData,
-    filteredPlaces,
   });
+
+  const handleAddDetectedDestinationFromSocial = useCallback(async (label) => {
+    const raw = String(label || '').trim();
+    if (!raw || !tripId) return;
+    const currentStr = trip?.locations || trip?.destination || '';
+    const parts = currentStr.split(';').map((s) => s.trim()).filter(Boolean);
+    const token = (s) => s.split(',')[0].trim().toLowerCase();
+    if (parts.some((p) => token(p) === token(raw))) {
+      toast('That destination is already on your trip.');
+      return;
+    }
+    const newLocations = [...parts, raw].join('; ');
+    const newDestination = parts.length > 0
+      ? extractPrimaryDestination(trip.destination || parts[0])
+      : raw.split(',')[0].trim();
+    setLocalDestination(newDestination);
+    setLocalLocations(newLocations);
+    try {
+      const updated = await updateItinerary(tripId, { destination: newDestination, locations: newLocations });
+      if (updated) setServerItinerary(updated);
+      setLocationUpdateKey((k) => k + 1);
+      toast.success(`Added ${raw.split(',')[0].trim()} to your destinations`);
+    } catch (e) {
+      toast.error(e?.message || 'Could not update trip');
+    }
+  }, [tripId, trip]);
 
   const openAddToTripFromMapMarker = (marker) => {
     if (!marker) return;
@@ -8003,6 +8001,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         {...socialImportModalProps}
         resolveImageUrl={resolveImageUrl}
         onImageError={handleImageError}
+        onAddDetectedDestination={handleAddDetectedDestinationFromSocial}
       />
 
 
