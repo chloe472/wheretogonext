@@ -1659,25 +1659,21 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
   const accommodationTypes = ['lodging', 'hotel', 'motel', 'resort_hotel', 'extended_stay_hotel'];
 
   for (const type of accommodationTypes) {
-    if (staysResults.length >= 100) break;
+    if (staysResults.length >= 220) break;
 
     try {
-      const params = new URLSearchParams({
-        location: `${lat},${lon}`,
-        radius: '15000',
+      const typeResults = await fetchGoogleNearbyPages({
+        lat,
+        lon,
+        radius: 18000,
         type,
-        key: GOOGLE_PLACES_API_KEY,
+        maxPages: 2,
       });
-
-      const res = await fetchWithTimeout(`${GOOGLE_PLACES_NEARBY_URL}?${params.toString()}`, {}, 15000);
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      if (data.status === 'OK' && Array.isArray(data.results)) {
-        staysResults.push(...data.results);
+      if (Array.isArray(typeResults) && typeResults.length > 0) {
+        staysResults.push(...typeResults);
       }
 
-      await sleep(100);
+      await sleep(120);
     } catch (error) {
       console.warn(`Google Places Nearby error for stay type ${type}:`, error.message);
     }
@@ -1713,7 +1709,7 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
         address: place.vicinity || place.formatted_address || destination,
         rating: Number(place.rating || 0),
         reviewCount: Number(place.user_ratings_total || 0),
-        priceLevel: place.price_level || 2,
+        priceLevel: Number.isFinite(Number(place.price_level)) ? Number(place.price_level) : 0,
         types,
         photoReference,
         photoReferences,
@@ -1731,7 +1727,7 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
       const scoreB = b.rating * 100 + Math.log10(b.reviewCount + 1) * 50;
       return scoreB - scoreA;
     })
-    .slice(0, 60);
+    .slice(0, 40);
 
   const buildStayMapsUrl = (stay) => {
     if (stay.googlePlaceId) {
@@ -1765,31 +1761,41 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
                 : 'Accommodation';
 
     const defaultPriceByType = {
-      Guesthouse: 70,
-      Motel: 95,
-      Accommodation: 130,
-      Hotel: 165,
-      'Extended Stay': 185,
-      Resort: 260,
+      Guesthouse: 60,
+      Motel: 80,
+      Accommodation: 105,
+      Hotel: 145,
+      'Extended Stay': 165,
+      Resort: 220,
     };
 
     const levelBase = {
-      1: 85,
-      2: 135,
-      3: 210,
-      4: 320,
-      5: 480,
+      1: 65,
+      2: 110,
+      3: 170,
+      4: 255,
+      5: 380,
+    };
+
+    const typeMultiplier = {
+      Guesthouse: 0.85,
+      Motel: 0.95,
+      Accommodation: 1.0,
+      Hotel: 1.08,
+      'Extended Stay': 1.18,
+      Resort: 1.32,
     };
 
     const level = Number.isFinite(stay.priceLevel) ? Number(stay.priceLevel) : 0;
     const hash = stableHash(`${stay.id}|${destination}`);
-    const jitter = (hash % 35) - 17;
-    const qualityLift = Math.round(clamp((Number(stay.rating || 0) - 3.5) / 1.5, 0, 1) * 70);
-    const demandLift = Math.round(clamp(Math.log10(Number(stay.reviewCount || 0) + 1) / 5, 0, 1) * 45);
+    const jitterMultiplier = 0.94 + ((hash % 13) / 100); // 0.94 - 1.06
+    const ratingMultiplier = 1 + clamp((Number(stay.rating || 0) - 4.0) * 0.08, -0.08, 0.12);
+    const demandMultiplier = 1 + clamp(Math.log10(Number(stay.reviewCount || 0) + 1) / 25, 0, 0.1);
 
-    const seededBase = levelBase[level] || defaultPriceByType[hotelType] || 130;
-    const computedPrice = Math.max(45, Math.round((seededBase + qualityLift + demandLift + jitter) / 5) * 5);
-    const basePrice = computedPrice;
+    const seededBase = levelBase[level] || defaultPriceByType[hotelType] || 110;
+    const weightedBase = seededBase * (typeMultiplier[hotelType] || 1);
+    const computedPrice = weightedBase * ratingMultiplier * demandMultiplier * jitterMultiplier;
+    const basePrice = Math.max(45, Math.min(950, Math.round(computedPrice / 5) * 5));
 
     const roomTypes = [
       {
@@ -1798,7 +1804,7 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
         type: 'Standard',
         beds: 'Full Double Bed',
         price: basePrice,
-        originalPrice: basePrice * 1.15,
+        originalPrice: Math.round((basePrice * 1.12) / 5) * 5,
         available: true,
         mealsIncluded: false,
         refundable: true,
@@ -1808,8 +1814,8 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
         name: 'Deluxe Room',
         type: 'Deluxe',
         beds: 'Full Double Bed or Twin Beds',
-        price: basePrice * 1.3,
-        originalPrice: basePrice * 1.5,
+        price: Math.round((basePrice * 1.28) / 5) * 5,
+        originalPrice: Math.round((basePrice * 1.46) / 5) * 5,
         available: true,
         mealsIncluded: true,
         refundable: true,
@@ -1819,13 +1825,18 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
         name: 'Suite',
         type: 'Suite',
         beds: 'King Size Bed',
-        price: basePrice * 1.8,
-        originalPrice: basePrice * 2.1,
+        price: Math.round((basePrice * 1.85) / 5) * 5,
+        originalPrice: Math.round((basePrice * 2.12) / 5) * 5,
         available: true,
         mealsIncluded: true,
         refundable: false,
       },
     ];
+    const startingPricePerNight = roomTypes.reduce((min, room) => {
+      const p = Number(room?.price || 0);
+      if (!Number.isFinite(p) || p <= 0) return min;
+      return p < min ? p : min;
+    }, Number.POSITIVE_INFINITY);
 
     const amenities = [
       'Free WiFi',
@@ -1858,6 +1869,7 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
       ...stay,
       type: hotelType,
       pricePerNight: basePrice,
+      startingPricePerNight: Number.isFinite(startingPricePerNight) ? startingPricePerNight : basePrice,
       currency: 'USD',
       website: '',
       mapsUrl: buildStayMapsUrl(stay),

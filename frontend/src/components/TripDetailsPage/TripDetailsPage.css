@@ -3908,6 +3908,22 @@
 .trip-details__place-detail-add-btn:hover {
   background: var(--place-text, #3d3428);
 }
+
+.trip-details__place-detail-book-btn {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.trip-details__place-detail-book-btn:hover {
+  background: #1d4ed8;
+}
 .trip-details__place-detail-section {
   margin-bottom: 1rem;
 }

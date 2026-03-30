@@ -56,23 +56,8 @@ import {
   Image
 } from 'lucide-react';
 import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
-import {
-  searchAddressSuggestions,
-  getMapCenterForDestination,
-  PLACE_FILTER_TAGS,
-  PLACE_SORT_OPTIONS,
-} from '../../data/mockPlaces';
-import {
-  searchFoodAddressSuggestions,
-  FOOD_SORT_OPTIONS,
-} from '../../data/mockFoodAndBeverages';
-import {
-  EXPERIENCE_TYPES,
-  EXPERIENCE_PRICE_RANGES,
-  EXPERIENCE_DURATIONS,
-  EXPERIENCE_SORT_OPTIONS,
-} from '../../data/mockExperiences';
-import { searchLocations } from '../../data/mockLocations';
+import { getCoordinatesForLocation } from '../../data/cityCoordinates';
+import { CITIES } from '../../data/cities';
 import { fetchDiscoveryData } from '../../api/discoveryApi';
 import { fetchUsdExchangeRates } from '../../api/currencyApi';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
@@ -129,6 +114,13 @@ const FOOD_FILTER_OPTIONS = [
   'Muslim-Friendly',
 ];
 
+const PLACE_SORT_OPTIONS = ['Recommended', 'Rating: Low to High', 'Rating: High to Low'];
+const FOOD_SORT_OPTIONS = ['Recommended', 'Rating', 'Most reviewed', 'Name'];
+const EXPERIENCE_TYPES = ['All', 'Day Trips', 'Guided Tours', 'Attraction', 'Outdoor Activities', 'Cultural Tours', 'Food Tours'];
+const EXPERIENCE_PRICE_RANGES = ['All', 'US$0 - 50', 'US$50 - 100', 'US$100 - 200', 'US$200+'];
+const EXPERIENCE_DURATIONS = ['All', 'Less than 4 hours', '4-8 hours', '8-12 hours', 'Full day (12+ hours)'];
+const EXPERIENCE_SORT_OPTIONS = ['Most reviewed', 'Recently added', 'Price: Low to High', 'Price: High to Low', 'Rating', 'Duration'];
+
 function formatDayDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'Z');
@@ -148,12 +140,42 @@ function extractPrimaryDestination(destinationOrLocations) {
   return parts[0]?.trim() || String(destinationOrLocations).trim();
 }
 
-function buildStayFallbackLink(stay = {}, city = '') {
-  if (stay.bookingUrl) return stay.bookingUrl;
-  if (stay.website) return stay.website;
-  if (stay.mapsUrl) return stay.mapsUrl;
-  const query = `${stay.name || ''} ${stay.address || city || ''}`.trim();
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+function getMapCenterForDestination(destinationOrLocations) {
+  return getCoordinatesForLocation(destinationOrLocations);
+}
+
+function searchAddressSuggestions(destinationOrLocations, query, idPrefix = 'custom-location') {
+  const q = (query || '').trim();
+  if (!q) return [];
+  const [lat, lng] = getMapCenterForDestination(destinationOrLocations);
+  return [
+    {
+      id: `${idPrefix}-${q.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      name: q,
+      address: 'Custom location',
+      lat,
+      lng,
+      source: 'Custom location',
+    },
+  ];
+}
+
+const WHERE_LOCATIONS = [
+  ...countriesData.map((country) => ({ ...country, country: undefined })),
+  ...CITIES,
+];
+
+function searchLocations(query, limit = 12) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return [];
+  const matches = WHERE_LOCATIONS.filter((loc) => {
+    const nameMatch = String(loc?.name || '').toLowerCase().includes(q);
+    const countryMatch = String(loc?.country || '').toLowerCase().includes(q);
+    return nameMatch || countryMatch;
+  });
+  const countriesFirst = matches.filter((entry) => entry.type === 'Country');
+  const others = matches.filter((entry) => entry.type !== 'Country');
+  return [...countriesFirst, ...others].slice(0, limit);
 }
 
 function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
@@ -538,6 +560,101 @@ function getItemViewDetailsUrl(item, city = '') {
   const query = `${item?.name || ''} ${item?.detail || item?.address || city || ''}`.trim();
   if (!query) return '';
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function formatDurationLabelFromMinutes(totalMinutes) {
+  const mins = Math.max(30, Math.round(Number(totalMinutes) || 120));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (m === 0) return `${h} hr`;
+  return `${h} hr ${String(m).padStart(2, '0')} min`;
+}
+
+function estimateSmartStopDurationMinutes(place) {
+  const itemType = String(place?._itemType || place?.itemType || place?.category || '').toLowerCase();
+  if (itemType.includes('food')) return 90;
+
+  const durationHours = Number(place?.durationHours || 0);
+  if (Number.isFinite(durationHours) && durationHours > 0) {
+    return Math.max(60, Math.min(360, Math.round(durationHours * 60)));
+  }
+
+  const text = [
+    place?.tourismType,
+    place?.type,
+    place?.name,
+    ...(Array.isArray(place?.types) ? place.types : []),
+    ...(Array.isArray(place?.tags) ? place.tags : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (/(theme[_\s-]?park|amusement|water[_\s-]?park|zoo|aquarium|safari)/.test(text)) return 300;
+  if (/(museum|gallery|science center|heritage)/.test(text)) return 180;
+  if (/(shopping|mall|outlet|market|bazaar)/.test(text)) return 180;
+  if (/(beach|island|national park|botanic|garden|nature reserve|hiking)/.test(text)) return 210;
+  if (/(temple|church|shrine|monument|landmark|historic|palace|castle)/.test(text)) return 120;
+  if (/(viewpoint|observation|skydeck|tower)/.test(text)) return 90;
+
+  return 120;
+}
+
+function parseDurationTextToMinutes(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return 0;
+
+  if (text.includes('half day')) return 300;
+  if (text.includes('full day')) return 480;
+
+  const hrMinMatch = text.match(/(\d+)\s*hr[^\d]*(\d+)\s*min/);
+  if (hrMinMatch) {
+    const h = Number(hrMinMatch[1] || 0);
+    const m = Number(hrMinMatch[2] || 0);
+    return (h * 60) + m;
+  }
+
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\b/);
+  if (hourMatch) {
+    return Math.round(Number(hourMatch[1] || 0) * 60);
+  }
+
+  const minuteMatch = text.match(/(\d+)\s*(m|min|mins|minute|minutes)\b/);
+  if (minuteMatch) {
+    return Number(minuteMatch[1] || 0);
+  }
+
+  return 0;
+}
+
+function resolveSmartDurationMinutes(place) {
+  const directMinutes = Number(place?.durationMinutes || place?.durationMinsTotal || 0);
+  if (Number.isFinite(directMinutes) && directMinutes > 0) {
+    return Math.max(30, Math.round(directMinutes));
+  }
+
+  const parsedFromLabel = parseDurationTextToMinutes(
+    place?.estimatedDuration || place?.durationLabel || place?.duration,
+  );
+  if (parsedFromLabel > 0) return Math.max(30, parsedFromLabel);
+
+  return estimateSmartStopDurationMinutes(place);
+}
+
+function getStayStarLevel(stay) {
+  const explicit = Number(stay?.starRating || 0);
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return Math.max(1, Math.min(5, Math.round(explicit)));
+  }
+  const fromRating = Number(stay?.rating || 0);
+  if (Number.isFinite(fromRating) && fromRating > 0) {
+    return Math.max(3, Math.min(5, Math.round(fromRating)));
+  }
+  return 3;
+}
+
+function getStayStarText(stay) {
+  return `${getStayStarLevel(stay)}-star`;
 }
 
 function itemSpillsIntoNextDay(item) {
@@ -1506,7 +1623,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [foodSortBy, setFoodSortBy] = useState('Recommended');
   const [staySearchQuery, setStaySearchQuery] = useState('');
   const [stayTypeFilter, setStayTypeFilter] = useState('All');
-  const [stayPriceRange, setStayPriceRange] = useState('All');
+  const [stayStarFilter, setStayStarFilter] = useState('All');
   const [staySortBy, setStaySortBy] = useState('Recommended');
   const [experienceSearchQuery, setExperienceSearchQuery] = useState('');
   const [experienceTypeFilter, setExperienceTypeFilter] = useState('All');
@@ -1632,6 +1749,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const calendarTimelineRef = useRef(null);
   const calendarResizeSessionRef = useRef(null);
   const hydratedTripItemsForIdRef = useRef(null);
+  const tripDatePersistKeyRef = useRef('');
   /** Counts expense-item persists per trip; first persist is hydration — skip toast. */
   const expensePersistCountByTripRef = useRef({ tripId: null, count: 0 });
   const titleDropdownRef = useRef(null);
@@ -2319,6 +2437,43 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
   };
 
+  const openBudgetDetails = useCallback(() => {
+    setBudgetModalOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const startDate = dateRange?.startDate;
+    const endDate = dateRange?.endDate;
+    if (!tripId || !tripData || !startDate || !endDate || startDate > endDate) return;
+
+    const persistKey = `${tripId}:${startDate}:${endDate}`;
+    if (tripDatePersistKeyRef.current === persistKey) return;
+    tripDatePersistKeyRef.current = persistKey;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const computedDays = Math.max(1, getTripDaysFromTrip({ startDate, endDate }).length);
+        const updated = await updateItinerary(tripId, {
+          startDate,
+          endDate,
+          days: computedDays,
+        });
+        if (cancelled) return;
+        if (updated) setServerItinerary(updated);
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Failed to save trip date range', e);
+        tripDatePersistKeyRef.current = '';
+        showInAppNotice(e?.message || 'Could not save trip dates. Please try again.', 'warning');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId, tripData, dateRange?.startDate, dateRange?.endDate]);
+
   const setDayTitle = (dayNum, value) => {
     setDayTitles((prev) => ({ ...prev, [dayNum]: value }));
   };
@@ -2641,21 +2796,17 @@ export default function TripDetailsPage({ user, onLogout }) {
       });
     }
     
-    if (stayPriceRange !== 'All') {
+    if (stayStarFilter !== 'All') {
       results = results.filter((s) => {
-        const price = Number(s.pricePerNight || 0);
-        if (stayPriceRange === '400+') return price >= 400;
-        const [minRaw, maxRaw] = stayPriceRange.split('-').map(Number);
-        const min = Number.isFinite(minRaw) ? minRaw : 0;
-        const max = Number.isFinite(maxRaw) ? maxRaw : Number.POSITIVE_INFINITY;
-        return price >= min && price <= max;
+        const stars = getStayStarLevel(s);
+        return String(stars) === String(stayStarFilter);
       });
     }
     
-    if (staySortBy === 'Price: Low to High') {
-      results = [...results].sort((a, b) => (a.pricePerNight || 0) - (b.pricePerNight || 0));
-    } else if (staySortBy === 'Price: High to Low') {
-      results = [...results].sort((a, b) => (b.pricePerNight || 0) - (a.pricePerNight || 0));
+    if (staySortBy === 'Stars: High to Low') {
+      results = [...results].sort((a, b) => getStayStarLevel(b) - getStayStarLevel(a));
+    } else if (staySortBy === 'Stars: Low to High') {
+      results = [...results].sort((a, b) => getStayStarLevel(a) - getStayStarLevel(b));
     } else if (staySortBy === 'Rating: High to Low') {
       results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else {
@@ -2668,7 +2819,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
     
     return results;
-  }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayPriceRange, staySortBy]);
+  }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayStarFilter, staySortBy]);
 
   const stayTypeOptions = useMemo(() => {
     const source = Array.isArray(discoveryData?.stays) ? discoveryData.stays : [];
@@ -2889,7 +3040,9 @@ export default function TripDetailsPage({ user, onLogout }) {
     });
 
     const itineraryPlaces = orderedDayPlaces
-      .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => ({
+      .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => {
+        const resolvedDurationMinutes = resolveSmartDurationMinutes(source);
+        return {
         id: `smart-itinerary-${bucket.dayNum}-${index}-${source.id || source._idx || 'place'}`,
         name: source.name || `Stop ${index + 1}`,
         lat: source.lat,
@@ -2905,8 +3058,10 @@ export default function TripDetailsPage({ user, onLogout }) {
         category: source._itemType === 'food' ? 'Food & Beverage' : 'Place',
         dayNum: bucket.dayNum,
         dayTitle: `Day ${bucket.dayNum}`,
-        durationLabel: source.estimatedDuration || `${Math.max(1, Math.min(4, Number(source.durationHours || 2)))} hr`,
-      })))
+        durationMinutes: resolvedDurationMinutes,
+        durationLabel: source.estimatedDuration || formatDurationLabelFromMinutes(resolvedDurationMinutes),
+      };
+      }))
       .slice(0, targetStops);
 
     if (itineraryPlaces.length === 0) return [];
@@ -3185,7 +3340,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     if (!stay) return;
 
     const day = days.find((d) => d.dayNum === 1);
-    const bookingLink = buildStayFallbackLink(stay, cityQuery);
+    const bookingLink = buildStayBookingDeepLink(stay, cityQuery, { currency });
     const defaultCostUsd = Number(room?.price ?? stay.pricePerNight ?? 0);
     const defaultCost = convertUsdToCurrency(defaultCostUsd, currency, exchangeRates);
     const roomLabel = room?.name ? ` • ${room.name}` : '';
@@ -3493,6 +3648,13 @@ export default function TripDetailsPage({ user, onLogout }) {
       const categoryId = itemType === 'food' ? 'food' : 'places';
       const category = itemType === 'food' ? 'Food & Beverage' : 'Places';
       const icon = itemType === 'food' ? UtensilsCrossed : Camera;
+      const estimatedDurationMinutes = Math.max(
+        30,
+        Number(place?.durationMinutes)
+        || Number(place?.durationMinsTotal)
+        || resolveSmartDurationMinutes(place),
+      );
+      const estimatedDurationParts = durationMinutesToParts(estimatedDurationMinutes);
       toAppend.push({
         id: `place-${place?.id || idx}-${Date.now()}-${idx}`,
         sourcePlaceId: place?.id || null,
@@ -3508,8 +3670,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         notes: '',
         attachments: [],
         startTime: startTimeValue,
-        durationHrs: isFoodStop ? 1 : 2,
-        durationMins: isFoodStop ? 30 : 0,
+        durationHrs: estimatedDurationParts.durationHrs,
+        durationMins: estimatedDurationParts.durationMins,
         externalLink: place?.website || '',
         placeImageUrl: resolveImageUrl(place?.image, place?.name, itemType === 'food' ? 'restaurant' : 'landmark'),
         rating: place?.rating,
@@ -3659,7 +3821,13 @@ export default function TripDetailsPage({ user, onLogout }) {
             )}
             <p className="trip-details__spent">
               Spent: {formatUsdAsCurrency(spent, currency, exchangeRates)}{' '}
-              <button type="button" className="trip-details__details-link" onClick={() => setBudgetModalOpen(true)}>Details</button>
+              <button
+                type="button"
+                className="trip-details__details-link"
+                onClick={openBudgetDetails}
+              >
+                Details
+              </button>
             </p>
           </div>
         </div>
@@ -7344,7 +7512,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             </button>
                             <button
                               type="button"
-                              className="trip-details__place-detail-add-btn"
+                              className="trip-details__place-detail-book-btn"
                               onClick={() => openStayBookingModal(stayDetailsView)}
                             >
                               Book now
@@ -7453,7 +7621,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                       ))}
                                     </span>
                                     <span className="trip-details__place-detail-nearby-rating">
-                                      {formatUsdAsCurrency(Number(nearStay.pricePerNight || 0), currency, exchangeRates)}/night
+                                      Hotel class: {getStayStarText(nearStay)}
                                     </span>
                                   </div>
                                 </button>
@@ -7496,9 +7664,6 @@ export default function TripDetailsPage({ user, onLogout }) {
 
                       <div className="trip-details__add-food-toolbar">
                         <p className="trip-details__add-places-results">{filteredStays.length} results found</p>
-                        <p className="trip-details__add-places-results" style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wtg-text-muted)' }}>
-                          Prices are estimated nightly rates. Final price is confirmed on Booking.com.
-                        </p>
                         <div className="trip-details__add-food-toolbar-actions">
                         <select
                           className="trip-details__add-places-sort-select"
@@ -7512,15 +7677,14 @@ export default function TripDetailsPage({ user, onLogout }) {
                         </select>
                         <select
                           className="trip-details__add-places-sort-select"
-                          value={stayPriceRange}
-                          onChange={(e) => setStayPriceRange(e.target.value)}
-                          aria-label="Filter by price range"
+                          value={stayStarFilter}
+                          onChange={(e) => setStayStarFilter(e.target.value)}
+                          aria-label="Filter by hotel star rating"
                         >
-                          <option value="All">All Prices</option>
-                          <option value="0-100">Under $100</option>
-                          <option value="100-200">$100 - $200</option>
-                          <option value="200-400">$200 - $400</option>
-                          <option value="400+">$400+</option>
+                          <option value="All">All Stars</option>
+                          <option value="3">3-star</option>
+                          <option value="4">4-star</option>
+                          <option value="5">5-star</option>
                         </select>
                         <select
                           className="trip-details__add-places-sort-select"
@@ -7529,8 +7693,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                           aria-label="Sort accommodations"
                         >
                           <option value="Recommended">Recommended</option>
-                          <option value="Price: Low to High">Price: Low to High</option>
-                          <option value="Price: High to Low">Price: High to Low</option>
+                          <option value="Stars: High to Low">Stars: High to Low</option>
+                          <option value="Stars: Low to High">Stars: Low to High</option>
                           <option value="Rating: High to Low">Rating: High to Low</option>
                         </select>
                       </div>
@@ -7568,7 +7732,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             </span>
                             <span className="trip-details__add-places-card-address">{stay.type}</span>
                             <span className="trip-details__add-places-card-price" style={{ fontWeight: '600', color: '#2563eb' }}>
-                              {formatUsdAsCurrency(Number(stay.pricePerNight || 0), currency, exchangeRates)}/night
+                              Hotel class: {getStayStarText(stay)}
                             </span>
                           </div>
                         </button>
@@ -8359,7 +8523,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const costNum = parseFloat(customFoodCost) || 0;
                 const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
                 const resolvedAddress = customFoodAddressSelection
-                  ?? searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress)[0];
+                  ?? searchAddressSuggestions(trip.destination || trip.locations, customFoodAddress, 'custom-food')[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
                 const overlapping = findTimeOverlapItem(tripExpenseItems, {
                   date: customFoodDateKey,
@@ -8456,7 +8620,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                     />
                     {customFoodAddressSuggestionsOpen && customFoodAddress.trim() && (
                       <ul className="trip-details__custom-transport-suggestions">
-                        {searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress).map((suggestion) => (
+                        {searchAddressSuggestions(trip.destination || trip.locations, customFoodAddress, 'custom-food').map((suggestion) => (
                           <li key={suggestion.id}>
                             <button
                               type="button"
@@ -8668,7 +8832,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       } else if (id === 'stays') {
                         setStaySearchQuery('');
                         setStayTypeFilter('All');
-                        setStayPriceRange('All');
+                        setStayStarFilter('All');
                         setStaySortBy('Recommended');
                         setAddStaysOpen(true);
                       } else if (id === 'experience') {
