@@ -857,13 +857,6 @@ const ADD_TO_TRIP_OPTIONS = [
     color: '#0ea5e9',
   },
   {
-    id: 'wishlists',
-    label: 'Wishlists',
-    description: 'Add from your saved collection',
-    Icon: Heart,
-    color: '#db2777',
-  },
-  {
     id: 'social',
     label: 'Import from social media',
     description: 'Import places and posts from Instagram, Pinterest, TikTok...',
