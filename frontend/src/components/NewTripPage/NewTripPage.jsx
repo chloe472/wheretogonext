@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { searchLocations } from '../../data/mockLocations';
-import { createItinerary, fetchMyItineraries } from '../../api/itinerariesApi';
+import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../api/itinerariesApi';
 import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
@@ -89,6 +89,26 @@ function extractItineraryId(itinerary) {
     }
   }
   return '';
+}
+
+async function waitForItineraryReadable(itineraryId, attempts = 12, delayMs = 400) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const doc = await fetchItineraryById(itineraryId);
+      if (doc) return doc;
+    } catch (error) {
+      const message = String(error?.message || '').toLowerCase();
+      const isTransient = message.includes('404') || message.includes('not found');
+      if (!isTransient && attempt >= 2) {
+        break;
+      }
+    }
+
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+    }
+  }
+  return null;
 }
 
 export default function NewTripPage({ user, onLogout }) {
@@ -291,13 +311,21 @@ export default function NewTripPage({ user, onLogout }) {
       if (!id) {
         throw new Error('Trip was created but could not open it automatically. Please refresh and open your latest trip.');
       }
+
+      const hydrated = await waitForItineraryReadable(id);
       const nextPath = `/trip/${id}`;
-      navigate(nextPath);
+      navigate(nextPath, { state: { preloadedItinerary: hydrated || newItinerary || null, fromCreateFlow: true } });
+
+      // Rarely, route state updates the URL but the view remains on NewTripPage until a manual refresh.
+      // If the NewTrip UI is still mounted shortly after navigation, force a same-path reload.
       setTimeout(() => {
-        if (typeof window !== 'undefined' && window.location.pathname !== nextPath) {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (window.location.pathname !== nextPath) return;
+        const stillOnNewTripView = Boolean(document.querySelector('.new-trip__main'));
+        if (stillOnNewTripView) {
           window.location.assign(nextPath);
         }
-      }, 120);
+      }, 220);
     } catch (err) {
       setSubmitError(err?.message || 'Could not create trip. Please try again.');
     } finally {

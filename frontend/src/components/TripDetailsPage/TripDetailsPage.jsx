@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   ChevronDown,
   Share2,
@@ -1227,6 +1227,7 @@ async function fetchPlacesPredictions(input, callback) {
 export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [locationUpdateKey, setLocationUpdateKey] = useState(0);
   const [serverItinerary, setServerItinerary] = useState(null);
   const [tripLoading, setTripLoading] = useState(true);
@@ -1234,32 +1235,73 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   useEffect(() => {
     let cancelled = false;
-    setTripLoading(true);
     setTripLoadError(null);
-    setServerItinerary(null);
+
+    const preloaded = location?.state?.preloadedItinerary || null;
+    const preloadedId = preloaded?._id ?? preloaded?.id;
+    const hasMatchingPreloaded = preloaded && String(preloadedId || '') === String(tripId || '');
+
+    if (hasMatchingPreloaded) {
+      setServerItinerary(preloaded);
+      setTripLoading(false);
+    } else {
+      setTripLoading(true);
+      setServerItinerary(null);
+    }
+
     (async () => {
-      try {
-        const doc = await fetchItineraryById(tripId);
-        if (cancelled) return;
-        if (!doc) {
-          setTripLoadError('Trip not found.');
-          setServerItinerary(null);
-        } else {
-          setServerItinerary(doc);
+      const maxAttempts = hasMatchingPreloaded ? 3 : 6;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const shouldRetry = (error) => {
+          const msg = String(error?.message || '').toLowerCase();
+          return msg.includes('404') || msg.includes('not found');
+        };
+
+        if (attempt > 1) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+          if (cancelled) return;
         }
-      } catch (e) {
-        if (!cancelled) {
-          setTripLoadError(e?.message || 'Failed to load trip');
-          setServerItinerary(null);
+
+        try {
+          const doc = await fetchItineraryById(tripId);
+          if (cancelled) return;
+          if (!doc) {
+            lastError = new Error('Trip not found.');
+            if (attempt < maxAttempts) continue;
+            setTripLoadError('Trip not found.');
+            setServerItinerary(null);
+            setTripLoading(false);
+          } else {
+            setServerItinerary(doc);
+            setTripLoadError(null);
+            setTripLoading(false);
+          }
+          return;
+        } catch (e) {
+          lastError = e;
+          if (attempt < maxAttempts && shouldRetry(e)) {
+            continue;
+          }
+          if (!cancelled) {
+            setTripLoadError(e?.message || 'Failed to load trip');
+            setServerItinerary(null);
+            setTripLoading(false);
+          }
+          return;
         }
-      } finally {
-        if (!cancelled) setTripLoading(false);
       }
+
+      if (!cancelled && lastError) {
+        setTripLoadError(lastError?.message || 'Failed to load trip');
+      }
+      if (!cancelled) setTripLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [tripId]);
+  }, [tripId, location?.state]);
 
   const tripData = useMemo(() => itineraryDocToTrip(serverItinerary), [serverItinerary]);
 
