@@ -277,6 +277,21 @@ export default function NewTripPage({ user, onLogout }) {
     return resolved;
   };
 
+  const handleBackToTrips = (e) => {
+    e.preventDefault();
+    navigate('/', { replace: true, flushSync: true });
+
+    // Guard against rare cases where URL updates but NewTrip view stays mounted.
+    setTimeout(() => {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      if (window.location.pathname !== '/') return;
+      const stillOnNewTripView = Boolean(document.querySelector('.new-trip__main'));
+      if (stillOnNewTripView) {
+        window.location.assign('/');
+      }
+    }, 220);
+  };
+
   const handleStartPlanning = async (e) => {
     e.preventDefault();
     setDatesError('');
@@ -328,20 +343,6 @@ export default function NewTripPage({ user, onLogout }) {
           endDay: Math.max(startDay, endDay),
         };
       }).sort((a, b) => a.startDay - b.startDay);
-
-      const firstStart = citySegments[0]?.startDay;
-      const lastEnd = citySegments[citySegments.length - 1]?.endDay;
-      let contiguous = firstStart === 1 && lastEnd === dayCount;
-      for (let i = 1; i < citySegments.length; i += 1) {
-        if (citySegments[i].startDay !== citySegments[i - 1].endDay + 1) {
-          contiguous = false;
-          break;
-        }
-      }
-      if (!contiguous) {
-        setSubmitError(`City day ranges must cover Day 1 to Day ${dayCount} without gaps or overlaps.`);
-        return;
-      }
     } else {
       citySegments = [{
         city: String(allLocations[0]?.name || '').trim(),
@@ -395,7 +396,10 @@ export default function NewTripPage({ user, onLogout }) {
 
       const hydrated = await waitForItineraryReadable(id);
       const nextPath = `/trip/${id}`;
-      navigate(nextPath, { state: { preloadedItinerary: hydrated || newItinerary || null, fromCreateFlow: true } });
+      navigate(nextPath, {
+        state: { preloadedItinerary: hydrated || newItinerary || null, fromCreateFlow: true },
+        flushSync: true,
+      });
 
       // Rarely, route state updates the URL but the view remains on NewTripPage until a manual refresh.
       // If the NewTrip UI is still mounted shortly after navigation, force a same-path reload.
@@ -417,7 +421,7 @@ export default function NewTripPage({ user, onLogout }) {
   return (
     <div className="new-trip">
       <header className="new-trip__header">
-        <Link to="/" className="new-trip__back" aria-label="Back to My Trips">
+        <Link to="/" className="new-trip__back" aria-label="Back to My Trips" onClick={handleBackToTrips}>
           ← My Trips
         </Link>
       </header>

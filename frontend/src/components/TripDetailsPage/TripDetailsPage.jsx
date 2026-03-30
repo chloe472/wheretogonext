@@ -2928,6 +2928,15 @@ export default function TripDetailsPage({ user, onLogout }) {
       return address.includes(hint);
     };
 
+    const candidateUniqueKey = (item) => {
+      const stableId = String(item?.googlePlaceId || item?.id || '').trim().toLowerCase();
+      if (stableId) return stableId;
+      const name = String(item?.name || '').trim().toLowerCase();
+      const lat = Number(item?.lat || 0).toFixed(5);
+      const lng = Number(item?.lng || 0).toFixed(5);
+      return `${name}|${lat}|${lng}`;
+    };
+
     const normalizedPlaces = candidatePool
       .filter((place) => place && place.lat != null && place.lng != null)
       .map((place, index) => {
@@ -2940,6 +2949,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         return {
           ...place,
           _idx: index,
+          _uniqueKey: candidateUniqueKey(place),
           _score: popularityScore + foodBias,
           _rating: rating,
           _confidenceRating: confidenceRating,
@@ -2967,6 +2977,15 @@ export default function TripDetailsPage({ user, onLogout }) {
       return (b._rating || 0) - (a._rating || 0);
     });
 
+    const uniqueRankedPlaces = [];
+    const seenRankedKeys = new Set();
+    rankedPlaces.forEach((item) => {
+      const key = String(item?._uniqueKey || '');
+      if (!key || seenRankedKeys.has(key)) return;
+      seenRankedKeys.add(key);
+      uniqueRankedPlaces.push(item);
+    });
+
     // Plan across the full trip duration (no 7-day cap / feasibility cap).
     const dayCount = tripDayCount;
 
@@ -2986,7 +3005,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     // Keep only top popular candidates so recommendations match user expectation.
     const topCandidateWindow = Math.max(targetStops * 3, targetStops);
-    const workingPool = rankedPlaces.slice(0, Math.min(rankedPlaces.length, topCandidateWindow));
+    const workingPool = uniqueRankedPlaces.slice(0, Math.min(uniqueRankedPlaces.length, topCandidateWindow));
 
     const remaining = [...workingPool];
     const orderedDayPlaces = Array.from({ length: dayCount }, (_, idx) => ({
@@ -3029,7 +3048,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
 
     // If place pool is smaller than trip days, reuse top ranked places so every day still has suggestions.
-    const reusablePool = rankedPlaces.length > 0 ? rankedPlaces : workingPool;
+    const reusablePool = uniqueRankedPlaces.length > 0 ? uniqueRankedPlaces : workingPool;
     let reuseIdx = 0;
     for (let dayIdx = 0; dayIdx < orderedDayPlaces.length; dayIdx += 1) {
       if (orderedDayPlaces[dayIdx].ordered.length > 0) continue;
@@ -3081,11 +3100,11 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
 
     // Guarantee at least one Food & Beverage recommendation per day when available.
-    const toCandidateKey = (item) => `${String(item?.id || item?._idx || item?.name || '')}|${Number(item?.lat || 0).toFixed(5)}|${Number(item?.lng || 0).toFixed(5)}|${String(item?._itemType || '')}`;
+    const toCandidateKey = (item) => String(item?._uniqueKey || candidateUniqueKey(item));
     const usedCandidateKeys = new Set(
       orderedDayPlaces.flatMap((bucket) => (Array.isArray(bucket.ordered) ? bucket.ordered : []).map(toCandidateKey)),
     );
-    const rankedFoodCandidates = rankedPlaces.filter((item) => item?._itemType === 'food');
+    const rankedFoodCandidates = uniqueRankedPlaces.filter((item) => item?._itemType === 'food');
 
     const pickBestFoodForDay = (bucket) => {
       if (!Array.isArray(rankedFoodCandidates) || rankedFoodCandidates.length === 0) return null;
@@ -3135,30 +3154,35 @@ export default function TripDetailsPage({ user, onLogout }) {
       usedCandidateKeys.add(toCandidateKey(selectedFood));
     });
 
-    // Backfill so each day has up to 5 stops even when unique candidates are limited.
+    // Backfill with only unique places; never duplicate recommendations.
     orderedDayPlaces.forEach((bucket, bucketIdx) => {
       if (bucket.ordered.length >= 5) return;
       const cityPool = bucket.cityHint
-        ? rankedPlaces.filter((candidate) => matchesCityHint(candidate, bucket.cityHint))
-        : rankedPlaces;
-      const pool = cityPool.length > 0 ? cityPool : rankedPlaces;
+        ? uniqueRankedPlaces.filter((candidate) => matchesCityHint(candidate, bucket.cityHint))
+        : uniqueRankedPlaces;
+      const pool = cityPool.length > 0 ? cityPool : uniqueRankedPlaces;
       if (pool.length === 0) return;
 
       let cursor = bucketIdx;
       while (bucket.ordered.length < 5) {
         const base = pool[cursor % pool.length];
         if (!base) break;
-        bucket.ordered.push({
-          ...base,
-          _reused: true,
-          _reuseNonce: `${bucket.dayNum}-${bucket.ordered.length}-${cursor}`,
-        });
+        const baseKey = toCandidateKey(base);
+        if (!usedCandidateKeys.has(baseKey)) {
+          bucket.ordered.push(base);
+          usedCandidateKeys.add(baseKey);
+        }
+        if (usedCandidateKeys.size >= uniqueRankedPlaces.length) break;
         cursor += 1;
       }
     });
 
+    const emittedKeys = new Set();
     const itineraryPlaces = orderedDayPlaces
       .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => {
+        const emitKey = toCandidateKey(source);
+        if (!emitKey || emittedKeys.has(emitKey)) return null;
+        emittedKeys.add(emitKey);
         const resolvedDurationMinutes = resolveSmartDurationMinutes(source);
         const cityHint = bucket.cityHint || '';
         return {
@@ -3181,6 +3205,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         durationLabel: source.estimatedDuration || formatDurationLabelFromMinutes(resolvedDurationMinutes),
       };
       }))
+      .filter(Boolean)
       .slice(0, targetStops);
 
     if (itineraryPlaces.length === 0) return [];
@@ -5023,7 +5048,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <div className="trip-details__where-city-plan" aria-label="City day plan">
                   <p className="trip-details__where-city-plan-title">How many days in each city?</p>
                   <p className="trip-details__where-city-plan-hint">
-                    Set day ranges for each city (for example, Seoul Day 1-3, Busan Day 4-6).
+                    Set day ranges for each city.
                   </p>
                   {whereSelectedLocations.map((loc) => {
                     const key = getWhereLocationKey(loc);
@@ -5120,20 +5145,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                         endDay: Math.max(startDay, endDay),
                       };
                     }).sort((a, b) => a.startDay - b.startDay);
-
-                    const firstStart = citySegments[0]?.startDay;
-                    const lastEnd = citySegments[citySegments.length - 1]?.endDay;
-                    let contiguous = firstStart === 1 && lastEnd === totalDays;
-                    for (let i = 1; i < citySegments.length; i += 1) {
-                      if (citySegments[i].startDay !== citySegments[i - 1].endDay + 1) {
-                        contiguous = false;
-                        break;
-                      }
-                    }
-                    if (!contiguous) {
-                      setWhereCityRangeError(`City day ranges must cover Day 1 to Day ${totalDays} without gaps or overlaps.`);
-                      return;
-                    }
                   } else if (list.length === 1) {
                     citySegments = [{
                       city: String(list[0]?.name || '').trim(),
