@@ -29,8 +29,10 @@ export function loadGoogleMapsScript() {
       return;
     }
 
+    // Enable Maps JavaScript API + Places for this key in Google Cloud Console.
+    // If you see ApiNotActivatedMapError, enable "Maps JavaScript API" for the key.
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&v=weekly&loading=async`;
     script.async = true;
     script.defer = true;
     
