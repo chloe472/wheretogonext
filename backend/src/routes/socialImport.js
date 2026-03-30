@@ -1,27 +1,389 @@
 import express from 'express';
 import multer from 'multer';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { randomUUID } from 'crypto';
+import {
+  analyzeScreenshot,
+  extractPlaceNamesFromSocialCaption,
+  inferLandmarkNameFromImage,
+} from '../services/gemini.js';
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
+
+const PLACES_SEARCH_TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
+const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 
 const router = express.Router();
+
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'my', 'our', 'your',
+  'this', 'that', 'these', 'those', 'video', 'reel', 'tiktok', 'instagram', 'youtube', 'pinterest', 'watch',
+  'full', 'part', 'day', 'trip', 'travel', 'best', 'top',
+]);
+
+function capitalizeWords(str) {
+  return String(str || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
+ * Extract up to ~8 place-name candidates from oEmbed text: hashtags, quotes, title-case phrases.
+ */
+function extractPlaceCandidatesFromLinkText(text) {
+  const raw = String(text || '');
+  const out = [];
+  const seen = new Set();
+
+  const add = (s) => {
+    const t = String(s || '').trim();
+    if (t.length < 2 || t.length > 120) return;
+    const key = t.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(t);
+  };
+
+  const hashtagMatches = raw.match(/#[\p{L}\d_]+/gu) || [];
+  for (const h of hashtagMatches) {
+    const inner = h.slice(1).replace(/_/g, ' ').trim();
+    if (inner.length >= 2) add(capitalizeWords(inner));
+  }
+
+  const doubleQuoted = [...raw.matchAll(/"([^"]{2,120})"/g)];
+  for (const m of doubleQuoted) add(capitalizeWords(m[1].trim()));
+
+  const singleQuoted = [...raw.matchAll(/'([^']{2,120})'/g)];
+  for (const m of singleQuoted) add(capitalizeWords(m[1].trim()));
+
+  const tokens = raw.split(/[\s\n|•·,;]+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const cleaned = tokens[i].replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, '');
+    if (cleaned.length < 2) continue;
+    const lower = cleaned.toLowerCase();
+    if (STOP_WORDS.has(lower)) continue;
+
+    const looksTitleCase = /^[\p{Lu}][\p{Ll}]{1,}$/u.test(cleaned) || /^[\p{Lu}]{2,}$/u.test(cleaned);
+    if (looksTitleCase && cleaned.length >= 2) {
+      add(cleaned);
+      const next = tokens[i + 1]?.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, '') || '';
+      if (next.length >= 2 && /^[\p{Lu}]/.test(next) && !STOP_WORDS.has(next.toLowerCase())) {
+        add(`${cleaned} ${next}`);
+        i += 1;
+      }
+    }
+  }
+
+  return out.slice(0, 8);
+}
+
+function normalizeNameForDedupe(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function arePlaceNamesSimilar(a, b) {
+  const x = normalizeNameForDedupe(a);
+  const y = normalizeNameForDedupe(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x))) return true;
+  return false;
+}
+
+function photoMediaUrl(photoResourceName, apiKey) {
+  if (!photoResourceName || !apiKey) return '';
+  const base = `https://places.googleapis.com/v1/${photoResourceName}/media`;
+  const q = new URLSearchParams({ maxHeightPx: '400', key: apiKey });
+  return `${base}?${q.toString()}`;
+}
+
+function extractLocalityFromAddressComponents(place) {
+  const comps = Array.isArray(place?.addressComponents) ? place.addressComponents : [];
+  for (const c of comps) {
+    const types = c.types || [];
+    if (types.includes('locality')) {
+      return String(c.longText || c.shortText || '').trim();
+    }
+  }
+  return '';
+}
+
+/**
+ * Fallback when addressComponents missing: guess city segment from Google's formatted address.
+ */
+function inferCityFromFormattedAddress(formattedAddress) {
+  const raw = String(formattedAddress || '').trim();
+  if (!raw) return '';
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return '';
+  const first = parts[0];
+  if (/^\d/.test(first)) return parts[1] || '';
+  return parts[1] || '';
+}
+
+function primaryCityFromTripDestination(destination) {
+  return String(destination || '').split(',')[0].trim();
+}
+
+function normalizeCityKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function citiesRoughlyMatch(tripCity, placeCity) {
+  const a = normalizeCityKey(tripCity);
+  const b = normalizeCityKey(placeCity);
+  if (!a || !b) return true;
+  if (a === b) return true;
+  if (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a))) return true;
+  return false;
+}
+
+/**
+ * When resolved places are in a different city than the trip destination, surface a banner + CTA.
+ */
+function computeLocationInsight(places, tripDestination) {
+  const tripCity = primaryCityFromTripDestination(tripDestination);
+  if (!tripCity || !Array.isArray(places) || places.length === 0) return null;
+
+  const mismatchLabels = [];
+  for (const p of places) {
+    const placeCity =
+      String(p.locality || '').trim()
+      || inferCityFromFormattedAddress(p.address || '');
+    if (!placeCity) continue;
+    if (citiesRoughlyMatch(tripCity, placeCity)) continue;
+    mismatchLabels.push(placeCity);
+  }
+
+  if (mismatchLabels.length === 0) return null;
+
+  const detectedLabel = mismatchLabels[0];
+  const tripDisplay = tripCity;
+  const plural = mismatchLabels.length > 1;
+
+  return {
+    mismatch: true,
+    tripDestination: tripDestination,
+    detectedLabel,
+    message: plural
+      ? `These places look like they're in ${detectedLabel}, not ${tripDisplay}. You can still add them to your itinerary below, or add ${detectedLabel} to your trip destinations if you're visiting both.`
+      : `This place looks like it's in ${detectedLabel}, not ${tripDisplay}. You can still add it to your itinerary below, or add ${detectedLabel} to your trip destinations if you're visiting both.`,
+  };
+}
+
+/**
+ * One Text Search call; returns first place or null.
+ */
+async function searchTextTopPlace(textQuery, apiKey) {
+  const res = await fetch(PLACES_SEARCH_TEXT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask':
+        'places.displayName,places.formattedAddress,places.addressComponents,places.location,places.rating,places.userRatingCount,places.photos',
+    },
+    body: JSON.stringify({
+      textQuery,
+      languageCode: 'en',
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.warn('[social-import] places:searchText failed', res.status, errText.slice(0, 200));
+    return null;
+  }
+
+  const data = await res.json();
+  if (data.error) {
+    console.warn('[social-import] Places API error:', data.error?.message || data.error);
+    return null;
+  }
+  const places = Array.isArray(data.places) ? data.places : [];
+  return places[0] || null;
+}
+
+/**
+ * Free geocoding fallback when Google Places Text Search returns nothing (wrong key, API not enabled, or no match).
+ */
+async function nominatimSearchTop(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) return null;
+  const params = new URLSearchParams({ q, format: 'json', limit: '1' });
+  try {
+    const res = await fetch(`${NOMINATIM_SEARCH_URL}?${params}`, {
+      headers: {
+        'User-Agent': 'WhereToGoNext/1.0 (travel-planner; social-import)',
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) {
+      console.warn('[social-import] Nominatim HTTP', res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const hit = data[0];
+    const lat = parseFloat(hit.lat);
+    const lng = parseFloat(hit.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      lat,
+      lng,
+      displayName: hit.display_name || q,
+      address: String(hit.display_name || '').trim(),
+    };
+  } catch (e) {
+    console.warn('[social-import] Nominatim error:', e?.message || e);
+    return null;
+  }
+}
+
+function mapNominatimToPlaceRow(hit, idx) {
+  const addr = String(hit.address || '').trim();
+  const name = String(hit.displayName || '').split(',')[0].trim().slice(0, 120) || 'Place';
+  const locality = inferCityFromFormattedAddress(addr);
+  return {
+    id: `nominatim-${idx}-${hit.lat}-${hit.lng}`,
+    name,
+    address: addr,
+    locality,
+    lat: hit.lat,
+    lng: hit.lng,
+    rating: 0,
+    reviewCount: 0,
+    image: '',
+  };
+}
+
+/**
+ * Prefer unbiased search (place name / signal only). If no result, optionally
+ * disambiguate with trip destination — avoids forcing e.g. "Moraine Lake" into Vancouver.
+ */
+async function searchTextTopPlaceWithDestinationFallback(textSignal, apiKey, destination) {
+  const trimmed = String(textSignal || '').trim();
+  if (!trimmed || !apiKey) return null;
+  let place = await searchTextTopPlace(trimmed, apiKey);
+  if (place?.name) return { place, usedDestinationBias: false };
+  const dest = String(destination || '').trim();
+  if (!dest) return null;
+  place = await searchTextTopPlace(`${trimmed} ${dest}`.trim(), apiKey);
+  if (place?.name) return { place, usedDestinationBias: true };
+  return null;
+}
+
+function mapGooglePlaceToRow(place, apiKey, idx) {
+  const resourceName = place.name || '';
+  const display = place.displayName?.text || place.displayName || '';
+  const lat = place.location?.latitude ?? place.location?.lat;
+  const lng = place.location?.longitude ?? place.location?.lng;
+  const photoName = Array.isArray(place.photos) && place.photos[0]?.name ? place.photos[0].name : '';
+  const image = photoMediaUrl(photoName, apiKey);
+  const reviewCount = place.userRatingCount ?? place.user_rating_count;
+  const formatted = String(place.formattedAddress || place.formatted_address || '').trim();
+  const locality =
+    extractLocalityFromAddressComponents(place) || inferCityFromFormattedAddress(formatted);
+
+  return {
+    id: resourceName || `places-text-${idx}`,
+    name: String(display || 'Unknown place').trim(),
+    address: formatted,
+    locality,
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+    rating: Number(place.rating || 0),
+    reviewCount: Number(reviewCount ?? 0),
+    image,
+    _source: 'link',
+  };
+}
+
+/**
+ * For each candidate: Google Places Text Search, then Nominatim if Places misses or key missing.
+ */
+async function placesFromLinkText(linkText, destination, apiKey) {
+  let candidates = extractPlaceCandidatesFromLinkText(linkText);
+  if (!candidates.length && linkText.trim()) {
+    const geminiPlaces = await extractPlaceNamesFromSocialCaption(linkText);
+    candidates = geminiPlaces.slice(0, 8);
+  }
+  if (!candidates.length) return [];
+
+  const seenIds = new Set();
+  const rows = [];
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const c = candidates[i];
+    let row = null;
+
+    if (apiKey) {
+      const resolved = await searchTextTopPlaceWithDestinationFallback(c, apiKey, destination);
+      if (resolved?.place?.name && !seenIds.has(resolved.place.name)) {
+        seenIds.add(resolved.place.name);
+        row = mapGooglePlaceToRow(resolved.place, apiKey, rows.length);
+      }
+    }
+
+    if (!row) {
+      const nom = await nominatimSearchTop(c);
+      if (nom) {
+        const dedupeKey = `nom-${nom.lat}-${nom.lng}`;
+        if (!seenIds.has(dedupeKey)) {
+          seenIds.add(dedupeKey);
+          row = mapNominatimToPlaceRow(nom, rows.length);
+        }
+      }
+    }
+
+    if (row) rows.push(row);
+  }
+
+  return rows;
+}
+
+/**
+ * Prefer link rows first (richer metadata), then screenshots; drop screenshot row if name similar to an existing row.
+ */
+function mergeLinkAndScreenshotPlaces(linkRows, screenshotRows) {
+  const merged = [...linkRows.map((p) => {
+    const { _source, ...rest } = p;
+    void _source;
+    return rest;
+  })];
+
+  for (const sp of screenshotRows) {
+    if (merged.some((m) => arePlaceNamesSimilar(m.name, sp.name))) continue;
+    merged.push(sp);
+  }
+
+  return merged;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024, files: 8 },
 });
 
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-/** Google AI Studio / Gemini API key — used first for social import when set; OpenAI is fallback. */
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
-
 const headers = {
   'User-Agent': 'WhereToGoNext/1.0 (travel-planner; social-import)',
   Accept: 'application/json',
 };
 
-/** TikTok's oEmbed often returns 400 for share/short URLs until resolved to /@handle/video/{id}. */
 const BROWSER_FETCH_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -45,9 +407,6 @@ function needsTikTokRedirectResolution(urlStr) {
   }
 }
 
-/**
- * Follow HTTP redirects (HEAD) so vm.tiktok.com / tiktok.com/t/... become canonical video URLs.
- */
 async function resolveTikTokUrlForOembed(urlStr) {
   const trimmed = String(urlStr || '').trim().split('#')[0];
   if (!trimmed) return trimmed;
@@ -84,7 +443,7 @@ async function resolveTikTokUrlForOembed(urlStr) {
   return trimmed;
 }
 
-function oembedHtmlToPlainText(html) {
+function stripHtml(html) {
   if (!html) return '';
   return String(html)
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -93,540 +452,83 @@ function oembedHtmlToPlainText(html) {
     .trim();
 }
 
-function apiOrigin() {
-  return process.env.API_PUBLIC_ORIGIN || `http://localhost:${process.env.PORT || 5000}`;
+function oembedHtmlToPlainText(html) {
+  return stripHtml(html);
 }
 
-function photoUrlFromReference(ref) {
-  if (!ref) return '';
-  return `${apiOrigin()}/api/discovery/photo?reference=${encodeURIComponent(ref)}&maxwidth=800`;
-}
-
-async function geocodeDestination(destination) {
-  const query = new URLSearchParams({
-    q: destination,
-    format: 'jsonv2',
-    limit: '1',
+async function fetchTiktokOembed(url) {
+  const resolved = await resolveTikTokUrlForOembed(url);
+  const u = `https://www.tiktok.com/oembed?url=${encodeURIComponent(resolved)}`;
+  const res = await fetch(u, {
+    headers: { ...headers, ...BROWSER_FETCH_HEADERS, Accept: 'application/json' },
+    signal: AbortSignal.timeout(12000),
   });
-  const res = await fetch(`${NOMINATIM_URL}?${query}`, { headers });
-  if (!res.ok) throw new Error(`Geocoding failed: ${res.status}`);
-  const data = await res.json();
-  if (!Array.isArray(data) || data.length === 0) {
-    throw new Error(`No location found for ${destination}`);
-  }
-  return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+  if (!res.ok) return null;
+  return res.json();
 }
 
-async function fetchDiscoveryPayload(destination, limit = 80) {
-  const port = process.env.PORT || 5000;
-  const host = process.env.INTERNAL_API_HOST || '127.0.0.1';
-  const url = `http://${host}:${port}/api/discovery/destination?${new URLSearchParams({
-    destination,
-    limit: String(limit),
-  })}`;
-  const res = await fetch(url, { headers: { 'User-Agent': headers['User-Agent'] } });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || `Discovery failed: ${res.status}`);
-  }
+async function fetchYoutubeOembed(url) {
+  const u = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) return null;
   return res.json();
 }
 
 async function fetchNoembed(url) {
-  try {
-    const u = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
-    const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
+  const u = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
+  const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) return null;
+  return res.json();
 }
 
-async function fetchTiktokOembed(url) {
-  const tryOnce = async (embedUrl) => {
-    const u = `https://www.tiktok.com/oembed?url=${encodeURIComponent(embedUrl)}`;
-    const res = await fetch(u, {
-      headers: { ...headers, ...BROWSER_FETCH_HEADERS, Accept: 'application/json' },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) return null;
-    return res.json();
-  };
-  try {
-    const resolved = await resolveTikTokUrlForOembed(url);
-    let raw = await tryOnce(resolved);
-    if (!raw && resolved !== url) {
-      raw = await tryOnce(url);
-    }
-    return raw;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchYoutubeOembed(url) {
-  try {
-    const u = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
-    const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function fetchPinterestOembed(url) {
-  try {
-    const u = `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(url)}`;
-    const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function fetchInstagramOembed(url) {
-  try {
-    const u = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`;
-    const res = await fetch(u, { headers, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function collectLinkMetadata(url) {
-  if (!url || !/^https?:\/\//i.test(url)) return { text: '', provider: '' };
+/**
+ * Step A — oEmbed / noembed plain text for social URLs.
+ */
+async function collectLinkText(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
   const lower = url.toLowerCase();
   let raw = null;
-  if (lower.includes('tiktok.com')) raw = await fetchTiktokOembed(url);
-  else if (lower.includes('youtube.com') || lower.includes('youtu.be')) raw = await fetchYoutubeOembed(url);
-  else if (lower.includes('pinterest.')) raw = await fetchPinterestOembed(url);
-  else if (lower.includes('instagram.com')) raw = await fetchInstagramOembed(url);
 
-  if (!raw) raw = await fetchNoembed(url);
+  if (lower.includes('tiktok.com')) {
+    raw = await fetchTiktokOembed(url);
+  } else if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
+    raw = await fetchYoutubeOembed(url);
+  } else if (lower.includes('instagram.com') || lower.includes('pinterest.')) {
+    raw = await fetchNoembed(url);
+  } else {
+    raw = await fetchNoembed(url);
+  }
 
-  const title = String(raw?.title || raw?.html_title || '').trim();
-  const author = String(raw?.author_name || '').trim();
-  const provider = String(raw?.provider_name || '').trim();
-  const desc = String(raw?.description || '').replace(/<[^>]+>/g, ' ').trim();
-  const htmlFromEmbed = oembedHtmlToPlainText(raw?.html);
+  if (!raw) return '';
+
+  const title = String(raw.title || raw.html_title || '').trim();
+  const author = String(raw.author_name || '').trim();
+  const desc = stripHtml(String(raw.description || ''));
+  const htmlFromEmbed = oembedHtmlToPlainText(raw.html);
 
   const parts = [title, author, desc, htmlFromEmbed].filter(Boolean);
+  return parts.join(' \n ');
+}
+
+function locationToPlaceRow(loc, idx) {
+  const name = loc.location_name || `Place ${idx + 1}`;
+  const lat = loc.latitude;
+  const lng = loc.longitude;
+  const idSuffix = Number.isFinite(lat) && Number.isFinite(lng) ? `${lat}-${lng}` : `nocoord-${idx}`;
+  const addr = loc.address || '';
+  const locality =
+    String(loc.city || '').trim() || inferCityFromFormattedAddress(addr);
   return {
-    text: parts.join(' \n '),
-    provider,
+    id: `social-import-${idx}-${idSuffix}`,
+    name,
+    address: addr,
+    locality,
+    lat,
+    lng,
+    rating: 0,
+    reviewCount: 0,
+    image: '',
   };
-}
-
-const STOP = new Set([
-  'the', 'a', 'an', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'my', 'our', 'your',
-  'day', 'trip', 'travel', 'visit', 'vlog', 'video', 'reel', 'tiktok', 'instagram', 'youtube', 'pinterest',
-  'best', 'top', 'things', 'must', 'see', 'food', 'eat', 'guide', 'part', 'ep', 'full',
-]);
-
-function extractKeywordCandidates(rawText) {
-  const text = String(rawText || '');
-  const out = new Set();
-
-  const hashtagMatches = text.match(/#[\p{L}\d_]+/gu) || [];
-  hashtagMatches.forEach((h) => {
-    const w = h.slice(1).replace(/_/g, ' ').trim();
-    if (w.length >= 2) out.add(w);
-  });
-
-  const segments = text.split(/[\n|•·–—\-/]+/).map((s) => s.trim()).filter(Boolean);
-  segments.forEach((seg) => out.add(seg));
-
-  const words = text
-    .replace(/[#@]/g, ' ')
-    .split(/[\s,;]+/)
-    .map((w) => w.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, ''))
-    .filter((w) => w.length >= 3 && !STOP.has(w.toLowerCase()));
-
-  for (let i = 0; i < words.length - 1; i += 1) {
-    const bigram = `${words[i]} ${words[i + 1]}`;
-    if (bigram.length <= 60) out.add(bigram);
-  }
-
-  words.forEach((w) => {
-    if (w.length >= 4) out.add(w);
-  });
-
-  return [...out].filter((s) => s.length >= 2 && s.length <= 120);
-}
-
-function normalizeForCompare(s) {
-  return String(s || '').split(',')[0].trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function isDifferentLocation(tripDest, candidate) {
-  const a = normalizeForCompare(tripDest);
-  const b = normalizeForCompare(candidate);
-  if (!b) return false;
-  if (a === b) return false;
-  if (a.includes(b) || b.includes(a)) return false;
-  return true;
-}
-
-function parseSocialSignalsJson(rawText) {
-  const raw = String(rawText || '');
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { places: [], inferredLocations: [] };
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    const places = Array.isArray(parsed.places)
-      ? parsed.places.map((s) => String(s).trim()).filter((s) => s.length >= 2 && s.length <= 120)
-      : [];
-    const inferredLocations = Array.isArray(parsed.inferredLocations)
-      ? parsed.inferredLocations.map((s) => String(s).trim()).filter((s) => s.length >= 2 && s.length <= 120)
-      : [];
-    return { places, inferredLocations };
-  } catch {
-    return { places: [], inferredLocations: [] };
-  }
-}
-
-/**
- * Gemini (multimodal). Throws on HTTP/network errors so caller can fall back to OpenAI.
- */
-async function geminiExtractSocialSignals({ buffers, mimeTypes, linkText, tripDestination }) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY not configured');
-  }
-  const hasImages = Array.isArray(buffers) && buffers.length > 0;
-  const caption = String(linkText || '').trim();
-  if (!hasImages && caption.length < 3) {
-    return { places: [], inferredLocations: [] };
-  }
-
-  const instruction = `The traveler's trip is currently set to: "${tripDestination}".
-
-Analyze this social post (caption/metadata${hasImages ? ' and screenshot image(s)' : ''}).
-
-1) "places": specific venues — landmarks, museums, restaurants, cafés, parks, hotels, neighborhoods, or readable signage.
-2) "inferredLocations": city or region names where this content was filmed, photographed, or is clearly about. If it is about a different place than the trip city (e.g. trip is Vancouver but the content shows Calgary), include that city (e.g. "Calgary" or "Calgary, Canada"). If content only matches the trip destination, use an empty array or only that city.
-
-Return ONLY valid JSON: {"places":["..."],"inferredLocations":["..."]}`;
-
-  const parts = [{ text: instruction }];
-  if (caption) {
-    parts.push({ text: `Caption / metadata:\n${caption.slice(0, 8000)}` });
-  }
-
-  const maxImages = Math.min(4, buffers?.length || 0);
-  for (let i = 0; i < maxImages; i += 1) {
-    const mime = mimeTypes[i] && /^image\//i.test(mimeTypes[i]) ? mimeTypes[i] : 'image/jpeg';
-    const b64 = buffers[i].toString('base64');
-    parts.push({
-      inline_data: {
-        mime_type: mime,
-        data: b64,
-      },
-    });
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        maxOutputTokens: 1024,
-        temperature: 0.2,
-      },
-    }),
-    signal: AbortSignal.timeout(90000),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    const errMsg = `Gemini ${res.status}: ${err.slice(0, 400)}`;
-    console.warn('[social-import]', errMsg);
-    throw new Error(errMsg);
-  }
-
-  const data = await res.json();
-  const candidate = data?.candidates?.[0];
-  const blockReason = candidate?.blockReason || data?.promptFeedback?.blockReason;
-  if (blockReason) {
-    console.warn('[social-import] Gemini blocked:', blockReason);
-    throw new Error(`Gemini blocked: ${blockReason}`);
-  }
-
-  const textOut = Array.isArray(candidate?.content?.parts)
-    ? candidate.content.parts.map((p) => p.text || '').join('')
-    : '';
-  return parseSocialSignalsJson(textOut);
-}
-
-async function extractSocialSignalsWithFallback({ buffers, mimeTypes, linkText, tripDestination }) {
-  const hasGemini = Boolean(GEMINI_API_KEY);
-  const hasOpenAI = Boolean(OPENAI_API_KEY);
-
-  if (hasGemini) {
-    try {
-      const result = await geminiExtractSocialSignals({
-        buffers,
-        mimeTypes,
-        linkText,
-        tripDestination,
-      });
-      return { ...result, llmProvider: 'gemini' };
-    } catch (e) {
-      console.warn('[social-import] Gemini failed:', e?.message || e);
-      if (hasOpenAI) {
-        const result = await openaiExtractSocialSignals({
-          buffers,
-          mimeTypes,
-          linkText,
-          tripDestination,
-        });
-        return { ...result, llmProvider: 'openai-fallback' };
-      }
-      return { places: [], inferredLocations: [], llmProvider: 'gemini-error' };
-    }
-  }
-
-  if (hasOpenAI) {
-    const result = await openaiExtractSocialSignals({
-      buffers,
-      mimeTypes,
-      linkText,
-      tripDestination,
-    });
-    return { ...result, llmProvider: 'openai' };
-  }
-
-  return { places: [], inferredLocations: [], llmProvider: 'none' };
-}
-
-/** Pick first inferred city/region that differs from the trip and geocodes successfully. */
-async function pickAlternateDestinationLabel(inferredLocations, tripDestination) {
-  const seen = new Set();
-  for (const raw of inferredLocations || []) {
-    const loc = String(raw).trim();
-    if (!loc || seen.has(loc.toLowerCase())) continue;
-    seen.add(loc.toLowerCase());
-    if (!isDifferentLocation(tripDestination, loc)) continue;
-    const primary = loc.split(',')[0].trim();
-    try {
-      await geocodeDestination(primary);
-      return primary;
-    } catch {
-      try {
-        await geocodeDestination(loc);
-        return primary;
-      } catch {
-        /* try next */
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Vision + caption: venue names and geographic focus (e.g. Calgary vs Vancouver trip).
- */
-async function openaiExtractSocialSignals({ buffers, mimeTypes, linkText, tripDestination }) {
-  if (!OPENAI_API_KEY) return { places: [], inferredLocations: [] };
-  const hasImages = Array.isArray(buffers) && buffers.length > 0;
-  const caption = String(linkText || '').trim();
-  if (!hasImages && caption.length < 3) return { places: [], inferredLocations: [] };
-
-  const content = [
-    {
-      type: 'text',
-      text: `The traveler's trip is currently set to: "${tripDestination}".
-
-Analyze this social post (caption/metadata${hasImages ? ' and screenshot image(s)' : ''}).
-
-1) "places": specific venues — landmarks, museums, restaurants, cafés, parks, hotels, neighborhoods, or readable signage.
-2) "inferredLocations": city or region names where this content was filmed, photographed, or is clearly about. If it is about a different place than the trip city (e.g. trip is Vancouver but the content shows Calgary), include that city (e.g. "Calgary" or "Calgary, Canada"). If content only matches the trip destination, use an empty array or only that city.
-
-Return ONLY valid JSON: {"places":["..."],"inferredLocations":["..."]}`,
-    },
-  ];
-
-  if (caption) {
-    content.push({ type: 'text', text: `Caption / metadata:\n${caption.slice(0, 8000)}` });
-  }
-
-  const maxImages = Math.min(4, buffers?.length || 0);
-  for (let i = 0; i < maxImages; i += 1) {
-    const mime = mimeTypes[i] && /^image\//i.test(mimeTypes[i]) ? mimeTypes[i] : 'image/jpeg';
-    const b64 = buffers[i].toString('base64');
-    content.push({
-      type: 'image_url',
-      image_url: { url: `data:${mime};base64,${b64}` },
-    });
-  }
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content }],
-    }),
-    signal: AbortSignal.timeout(90000),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.warn('[social-import] OpenAI error:', res.status, err);
-    return { places: [], inferredLocations: [] };
-  }
-
-  const data = await res.json();
-  const raw = data?.choices?.[0]?.message?.content || '';
-  return parseSocialSignalsJson(raw);
-}
-
-function dedupePlaceRows(list) {
-  const seen = new Set();
-  const out = [];
-  for (const p of list) {
-    const key = p.googlePlaceId || p.id
-      || `${String(p.name || '').toLowerCase()}|${Math.round((p.lat || 0) * 500)}|${Math.round((p.lng || 0) * 500)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(p);
-  }
-  return out;
-}
-
-async function buildRankedPlacesForLabel(destLabel, searchQueries) {
-  const center = await geocodeDestination(destLabel);
-  const discoveryPayload = await fetchDiscoveryPayload(destLabel, 80);
-  const pool = Array.isArray(discoveryPayload.places) ? discoveryPayload.places : [];
-  const textSearchPlaces = await googleTextSearchQueries(
-    searchQueries,
-    destLabel,
-    center.lat,
-    center.lng,
-  );
-  return mergeAndRankPlaces({
-    discoveryPlaces: pool,
-    textSearchPlaces,
-    keywords: searchQueries,
-    destination: destLabel,
-  });
-}
-
-function scorePlaceAgainstKeywords(place, keywords) {
-  const hay = `${place.name || ''} ${place.address || ''} ${place.description || ''} ${place.overview || ''}`.toLowerCase();
-  let score = 0;
-  for (const kw of keywords) {
-    const k = kw.toLowerCase().trim();
-    if (k.length < 2) continue;
-    if (hay.includes(k)) score += Math.min(80, 5 + k.length * 2);
-    const parts = k.split(/\s+/).filter((p) => p.length >= 3);
-    for (const p of parts) {
-      if (hay.includes(p)) score += 4;
-    }
-  }
-  return score;
-}
-
-function normalizeGoogleTextSearchResult(place, destination) {
-  const loc = place.geometry?.location;
-  if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
-  const photos = Array.isArray(place.photos) ? place.photos : [];
-  const ref = photos[0]?.photo_reference || '';
-  return {
-    id: `google-ts-${place.place_id}`,
-    googlePlaceId: place.place_id,
-    name: place.name || '',
-    lat: loc.lat,
-    lng: loc.lng,
-    address: place.formatted_address || place.vicinity || destination,
-    rating: Number(place.rating || 0),
-    reviewCount: Number(place.user_ratings_total || 0),
-    image: photoUrlFromReference(ref),
-    description: place.editorial_summary?.overview || `${place.name} near ${destination}`,
-    overview: place.editorial_summary?.overview || `${place.name} in ${destination}`,
-    recommendedScore: Number(place.rating || 0) * 10 + Math.log10(Number(place.user_ratings_total || 0) + 1) * 4,
-  };
-}
-
-async function googleTextSearchQueries(queries, destination, centerLat, centerLng) {
-  if (!GOOGLE_PLACES_API_KEY || !queries.length) return [];
-  const collected = [];
-  const seen = new Set();
-
-  for (const q of queries.slice(0, 6)) {
-    const query = `${q} ${destination}`.trim();
-    const params = new URLSearchParams({
-      query,
-      key: GOOGLE_PLACES_API_KEY,
-    });
-    if (Number.isFinite(centerLat) && Number.isFinite(centerLng)) {
-      params.set('location', `${centerLat},${centerLng}`);
-      params.set('radius', '50000');
-    }
-
-    try {
-      const res = await fetch(`${GOOGLE_PLACES_TEXT_SEARCH_URL}?${params}`, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.status !== 'OK' || !Array.isArray(data.results)) continue;
-      for (const r of data.results) {
-        const id = r.place_id;
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        const norm = normalizeGoogleTextSearchResult(r, destination);
-        if (norm) collected.push(norm);
-      }
-    } catch (e) {
-      console.warn('[social-import] text search failed for', query, e?.message);
-    }
-  }
-
-  return collected;
-}
-
-function mergeAndRankPlaces({ discoveryPlaces, textSearchPlaces, keywords, destination }) {
-  const merged = [];
-  const seen = new Set();
-
-  for (const p of textSearchPlaces) {
-    const key = p.googlePlaceId || `${p.name}|${p.lat}|${p.lng}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({
-      ...p,
-      _socialScore: 200 + scorePlaceAgainstKeywords(p, keywords),
-    });
-  }
-
-  for (const p of discoveryPlaces) {
-    const key = p.id || p.googlePlaceId || `${p.name}|${p.lat}|${p.lng}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const base = Number(p.recommendedScore || 0) + Number(p.rating || 0) * 3;
-    const kw = scorePlaceAgainstKeywords(p, keywords);
-    merged.push({
-      ...p,
-      _socialScore: base + kw,
-    });
-  }
-
-  merged.sort((a, b) => (b._socialScore || 0) - (a._socialScore || 0));
-
-  return merged.slice(0, 18).map(({ _socialScore, ...rest }) => rest);
 }
 
 router.post('/analyze', upload.array('images', 8), async (req, res) => {
@@ -635,121 +537,246 @@ router.post('/analyze', upload.array('images', 8), async (req, res) => {
     const url = String(req.body.url || '').trim();
     const files = Array.isArray(req.files) ? req.files : [];
 
-    if (!destination) {
-      return res.status(400).json({ error: 'destination is required' });
-    }
-
     if (!url && files.length === 0) {
       return res.status(400).json({ error: 'Provide a link or at least one image' });
     }
 
+    if (files.length > 0 && !GEMINI_API_KEY) {
+      return res.status(422).json({
+        error: 'Image analysis requires GEMINI_API_KEY on the server.',
+        code: 'LLM_REQUIRED',
+      });
+    }
+
     let linkText = '';
-    let provider = '';
     if (url) {
-      const meta = await collectLinkMetadata(url);
-      linkText = meta.text;
-      provider = meta.provider;
+      linkText = await collectLinkText(url);
     }
 
-    const mimeTypes = files.map((f) => f.mimetype || 'image/jpeg');
-    const buffers = files.map((f) => f.buffer);
+    const locations = [];
+    let skippedImages = 0;
+    const tmpDir = os.tmpdir();
 
-    let visionPlaces = [];
-    let inferredLocations = [];
-    let skippedImageAnalysis = false;
-    let llmProvider = 'none';
+    const screenshotPlaces = [];
 
-    const hasLlm = Boolean(GEMINI_API_KEY || OPENAI_API_KEY);
-    if (hasLlm && (buffers.length > 0 || linkText.trim().length > 5)) {
-      const sig = await extractSocialSignalsWithFallback({
-        buffers,
-        mimeTypes,
-        linkText,
-        tripDestination: destination,
-      });
-      visionPlaces = sig.places;
-      inferredLocations = sig.inferredLocations;
-      llmProvider = sig.llmProvider || 'none';
-    } else if (buffers.length > 0) {
-      if (!url) {
-        return res.status(422).json({
-          error: 'Image analysis requires GEMINI_API_KEY or OPENAI_API_KEY on the server. Add one to your backend .env, or paste a social link together with screenshots.',
-          code: 'LLM_REQUIRED',
-        });
-      }
-      skippedImageAnalysis = true;
-    }
+    for (let i = 0; i < files.length; i += 1) {
+      const f = files[i];
+      const ext = path.extname(f.originalname || '') || '.jpg';
+      const safeExt = /^\.(jpe?g|png|gif|webp)$/i.test(ext) ? ext : '.jpg';
+      const tempPath = path.join(tmpDir, `social-import-${randomUUID()}${safeExt}`);
 
-    const combinedText = [linkText, visionPlaces.join(' ')].filter(Boolean).join(' \n ');
-    const keywordList = extractKeywordCandidates(combinedText);
-    const searchQueries = [...new Set([...visionPlaces, ...keywordList])].slice(0, 12);
-
-    try {
-      await geocodeDestination(destination);
-    } catch (e) {
-      return res.status(400).json({ error: e.message || 'Invalid destination' });
-    }
-
-    const alternateLabel = await pickAlternateDestinationLabel(inferredLocations, destination);
-
-    let places = [];
-    let locationInsight = { mismatch: false };
-
-    if (alternateLabel) {
       try {
-        const rankedDetected = await buildRankedPlacesForLabel(alternateLabel, searchQueries);
-        const rankedTrip = await buildRankedPlacesForLabel(destination, searchQueries);
-        places = dedupePlaceRows([...rankedDetected, ...rankedTrip]).slice(0, 20);
-        locationInsight = {
-          mismatch: true,
-          tripDestination: destination,
-          detectedLabel: alternateLabel,
-          inferredLocations,
-          message:
-            `This post looks like it’s about ${alternateLabel}, not ${destination}. `
-            + `Suggestions below lead with places in ${alternateLabel}, then your trip city. `
-            + `You can add ${alternateLabel} to your trip destinations if you’re visiting both.`,
-        };
-      } catch (e) {
-        console.warn('[social-import] dual-region merge failed, falling back to trip only:', e?.message);
-        places = await buildRankedPlacesForLabel(destination, searchQueries);
+        await fs.writeFile(tempPath, f.buffer);
+        let result = await analyzeScreenshot(tempPath);
+
+        let hasCoords =
+          !result.has_error
+          && result.latitude != null
+          && result.longitude != null
+          && Number.isFinite(Number(result.latitude))
+          && Number.isFinite(Number(result.longitude));
+
+        let primaryName = String(result.location_name || '').trim();
+        let primaryAddr = String(result.address || '').trim();
+        let textSignal = primaryName.length >= 2 ? primaryName : primaryAddr.length >= 3 ? primaryAddr : '';
+
+        let landmarkSupplement = false;
+        if (result.has_error || (!hasCoords && !textSignal)) {
+          const guess = await inferLandmarkNameFromImage(tempPath);
+          if (guess) {
+            result = {
+              ...result,
+              has_error: false,
+              location_name: guess,
+              confidence: result.confidence || 'medium',
+            };
+            landmarkSupplement = true;
+          }
+        }
+
+        if (result.has_error) {
+          skippedImages += 1;
+          continue;
+        }
+
+        hasCoords =
+          result.latitude != null
+          && result.longitude != null
+          && Number.isFinite(Number(result.latitude))
+          && Number.isFinite(Number(result.longitude));
+        primaryName = String(result.location_name || '').trim();
+        primaryAddr = String(result.address || '').trim();
+        textSignal = primaryName.length >= 2 ? primaryName : primaryAddr.length >= 3 ? primaryAddr : '';
+
+        if (hasCoords) {
+          locations.push({
+            location_name: result.location_name,
+            address: result.address,
+            latitude: result.latitude,
+            longitude: result.longitude,
+            confidence: result.confidence,
+            imageIndex: i,
+            google_maps_url: result.google_maps_url,
+            street_view_url: result.street_view_url,
+            city: result.city,
+            country: result.country,
+            resolvedViaPlaces: false,
+            landmarkSupplement,
+          });
+
+          let uiRow = locationToPlaceRow(
+            {
+              location_name: result.location_name,
+              address: result.address,
+              latitude: result.latitude,
+              longitude: result.longitude,
+              city: result.city,
+            },
+            screenshotPlaces.length,
+          );
+
+          // Gemini coords path used to skip Places entirely → no photo URL. Enrich with Text Search for thumbnail.
+          if (GOOGLE_PLACES_API_KEY && textSignal) {
+            try {
+              const resolved = await searchTextTopPlaceWithDestinationFallback(
+                textSignal,
+                GOOGLE_PLACES_API_KEY,
+                destination,
+              );
+              if (resolved?.place?.name) {
+                const enriched = mapGooglePlaceToRow(
+                  resolved.place,
+                  GOOGLE_PLACES_API_KEY,
+                  screenshotPlaces.length,
+                );
+                const gLat = Number(result.latitude);
+                const gLng = Number(result.longitude);
+                uiRow = {
+                  ...enriched,
+                  lat: Number.isFinite(gLat) ? gLat : enriched.lat,
+                  lng: Number.isFinite(gLng) ? gLng : enriched.lng,
+                };
+              }
+            } catch (e) {
+              console.warn('[social-import] hasCoords Places photo enrich failed:', e?.message || e);
+            }
+          }
+
+          screenshotPlaces.push(uiRow);
+          continue;
+        }
+
+        if (textSignal) {
+          let row = null;
+          let usedDestinationBias = false;
+          let resolvedViaPlaces = false;
+          let resolvedViaNominatim = false;
+
+          if (GOOGLE_PLACES_API_KEY) {
+            const resolved = await searchTextTopPlaceWithDestinationFallback(
+              textSignal,
+              GOOGLE_PLACES_API_KEY,
+              destination,
+            );
+            if (resolved?.place?.name) {
+              const { place, usedDestinationBias: bias } = resolved;
+              row = mapGooglePlaceToRow(place, GOOGLE_PLACES_API_KEY, screenshotPlaces.length);
+              usedDestinationBias = bias;
+              resolvedViaPlaces = true;
+            }
+          }
+
+          if (!row) {
+            const nom = await nominatimSearchTop(textSignal);
+            if (nom) {
+              row = mapNominatimToPlaceRow(nom, screenshotPlaces.length);
+              resolvedViaNominatim = true;
+            }
+          }
+
+          if (row) {
+            const lat = row.lat;
+            const lng = row.lng;
+            locations.push({
+              location_name: primaryName || row.name,
+              address: row.address || result.address,
+              latitude: Number.isFinite(lat) ? lat : null,
+              longitude: Number.isFinite(lng) ? lng : null,
+              confidence: result.confidence,
+              imageIndex: i,
+              google_maps_url: result.google_maps_url,
+              street_view_url: result.street_view_url,
+              city: result.city,
+              country: result.country,
+              resolvedViaPlaces,
+              resolvedViaPlacesDestinationBias: usedDestinationBias,
+              resolvedViaNominatim,
+              landmarkSupplement,
+            });
+            screenshotPlaces.push({ ...row, _source: 'screenshot-places' });
+          } else {
+            skippedImages += 1;
+          }
+        } else {
+          skippedImages += 1;
+        }
+      } finally {
+        try {
+          await fs.unlink(tempPath);
+        } catch {
+          /* ignore */
+        }
       }
-    } else {
-      places = await buildRankedPlacesForLabel(destination, searchQueries);
     }
 
-    if (places.length === 0) {
-      let emptyWarning = 'No matching places found. Try a different link or clearer screenshots.';
-      if (url && /tiktok\.com/i.test(url) && !linkText.trim()) {
-        emptyWarning =
-          'TikTok did not return a caption for this link. Open the video in a browser and copy the full URL from the address bar (Share → Copy link). Short links must open the real video; TikTok photo posts usually need screenshots plus an LLM key on the server.';
+    const screenshotPlacesClean = screenshotPlaces.map((p) => {
+      const { _source, ...rest } = p;
+      void _source;
+      return rest;
+    });
+
+    let linkPlaces = [];
+    const warningParts = [];
+
+    if (url && linkText.trim()) {
+      try {
+        linkPlaces = await placesFromLinkText(linkText, destination, GOOGLE_PLACES_API_KEY || '');
+      } catch (e) {
+        console.warn('[social-import] link place search failed:', e?.message || e);
       }
-      return res.json({
-        places: [],
-        hints: searchQueries,
-        linkPreviewText: linkText.slice(0, 500),
-        visionPlaces,
-        inferredLocations,
-        locationInsight,
-        llmProvider,
-        warning: emptyWarning,
-      });
+      if (!GOOGLE_PLACES_API_KEY && linkPlaces.length === 0) {
+        warningParts.push('Add GOOGLE_PLACES_API_KEY to .env for Google place suggestions from links.');
+      }
     }
+
+    const places = mergeLinkAndScreenshotPlaces(linkPlaces, screenshotPlacesClean);
+
+    if (files.length > 0 && locations.length === 0) {
+      warningParts.push(
+        'No locations could be detected from screenshots. Check GEMINI_API_KEY and Generative Language API in Google Cloud; verify GOOGLE_PLACES_API_KEY and Places API (New) if using Google search; the server must be able to reach Google APIs and nominatim.openstreetmap.org.',
+      );
+    }
+    if (url && files.length === 0 && places.length === 0 && linkText.trim() && destination && GOOGLE_PLACES_API_KEY) {
+      warningParts.push('No locations matched from this link. Try hashtags or a clearer title in the post, or add screenshots.');
+    }
+    if (url && files.length === 0 && places.length === 0 && !linkText.trim()) {
+      warningParts.push(
+        'This link did not return caption text. Open the post in a browser and copy the full URL from the address bar (Share → Copy link).',
+      );
+    }
+
+    const warning = warningParts.length ? warningParts.join(' ') : undefined;
+
+    const locationInsight = computeLocationInsight(places, destination);
 
     return res.json({
+      locations,
+      linkText,
+      skippedImages,
+      destination: destination || undefined,
       places,
-      hints: searchQueries.slice(0, 20),
-      linkPreviewText: linkText.slice(0, 500),
-      visionPlaces,
-      inferredLocations,
-      provider,
       locationInsight,
-      llmProvider,
-      usedGoogleTextSearch: Boolean(GOOGLE_PLACES_API_KEY && searchQueries.length),
-      skippedImageAnalysis,
-      warning: skippedImageAnalysis
-        ? 'Screenshots were not analyzed (set GEMINI_API_KEY or OPENAI_API_KEY for vision). Recommendations use your link and destination only.'
-        : undefined,
+      warning,
     });
   } catch (error) {
     console.error('[social-import] analyze error:', error);

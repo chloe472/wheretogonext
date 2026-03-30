@@ -92,15 +92,15 @@ export function useSocialImport({
         url: socialImportUrl,
         imageFiles: socialImportFiles,
       });
-      if (data.warning) {
-        toast(data.warning, { icon: 'ℹ️' });
-      }
       setSocialImportLocationInsight(data.locationInsight || null);
       const places = Array.isArray(data.places) ? data.places : [];
       if (places.length === 0) {
         toast.error(data.warning || 'No matching places found. Try another link or clearer screenshots.');
         setSocialImportStep('input');
         return;
+      }
+      if (data.warning) {
+        toast(data.warning, { icon: 'ℹ️' });
       }
       setSocialImportResults(places);
       const defaultSel = new Set(places.slice(0, 5).map((p, i) => placeKeySocialImport(p, i)));
@@ -109,7 +109,7 @@ export function useSocialImport({
     } catch (e) {
       if (e?.status === 422 && (e?.code === 'LLM_REQUIRED' || e?.code === 'OPENAI_REQUIRED')) {
         toast.error(
-          'Screenshot analysis needs GEMINI_API_KEY or OPENAI_API_KEY in the server .env (backend), not only the frontend. Or add a post link together with your images.',
+          'Screenshot analysis needs GEMINI_API_KEY in the backend .env. You can still paste a link without screenshots.',
           { duration: 6000 },
         );
       } else {
