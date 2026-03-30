@@ -49,6 +49,6 @@ export const ADD_TO_TRIP_OPTIONS = [
     label: 'Import from social media',
     description: 'Import places and posts from Instagram, Pinterest, TikTok...',
     Icon: Share2,
-    color: '#8b5cf6',
+    color: '#0f766e',
   },
 ];

@@ -156,6 +156,62 @@ function buildStayFallbackLink(stay = {}, city = '') {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
+  const fallbackQuery = `${stay.name || ''} ${stay.address || city || ''}`.trim();
+  const rawBookingUrl = String(stay?.bookingUrl || '').trim();
+  const checkInDate = String(options?.checkInDate || '').trim();
+  const checkOutDate = String(options?.checkOutDate || '').trim();
+  const adults = Math.max(1, Number(options?.adults || 2));
+  const children = Math.max(0, Number(options?.children || 0));
+  const rooms = Math.max(1, Number(options?.rooms || 1));
+  const currencyCode = String(options?.currency || 'USD').toUpperCase();
+
+  let target;
+  try {
+    target = rawBookingUrl ? new URL(rawBookingUrl) : new URL('https://www.booking.com/searchresults.html');
+  } catch (_) {
+    target = new URL('https://www.booking.com/searchresults.html');
+  }
+
+  if (!String(target.hostname || '').toLowerCase().includes('booking.com')) {
+    target = new URL('https://www.booking.com/searchresults.html');
+  }
+
+  const params = target.searchParams;
+  const queryValue = fallbackQuery || city || '';
+  if (queryValue) {
+    params.set('ss', queryValue);
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(checkInDate)) {
+    const [y, m, d] = checkInDate.split('-');
+    params.set('checkin_year', y);
+    params.set('checkin_month', String(Number(m)));
+    params.set('checkin_monthday', String(Number(d)));
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(checkOutDate)) {
+    const [y, m, d] = checkOutDate.split('-');
+    params.set('checkout_year', y);
+    params.set('checkout_month', String(Number(m)));
+    params.set('checkout_monthday', String(Number(d)));
+  }
+
+  params.set('group_adults', String(adults));
+  params.set('group_children', String(children));
+  params.set('no_rooms', String(rooms));
+  params.set('selected_currency', currencyCode);
+
+  // Reset child ages so generated URLs stay consistent with selected child count.
+  Array.from(params.keys())
+    .filter((k) => /^age$|^age\d+$/i.test(k))
+    .forEach((k) => params.delete(k));
+  for (let idx = 1; idx <= children; idx += 1) {
+    params.set(`age${idx}`, '8');
+  }
+
+  return target.toString();
+}
+
 const WHERE_TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND']);
@@ -1005,7 +1061,7 @@ const ADD_TO_TRIP_OPTIONS = [
     label: 'Import from social media',
     description: 'Import places and posts from Instagram, Pinterest, TikTok...',
     Icon: Share2,
-    color: '#8b5cf6',
+    color: '#0f766e',
   },
 ];
 
@@ -1464,6 +1520,13 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [bookingStartTime, setBookingStartTime] = useState('07:00');
   const [bookingTravellers, setBookingTravellers] = useState(2);
   const [bookingNotes, setBookingNotes] = useState('');
+  const [stayBookingModalOpen, setStayBookingModalOpen] = useState(false);
+  const [stayBookingTarget, setStayBookingTarget] = useState(null);
+  const [stayBookingCheckInDate, setStayBookingCheckInDate] = useState('');
+  const [stayBookingCheckOutDate, setStayBookingCheckOutDate] = useState('');
+  const [stayBookingAdults, setStayBookingAdults] = useState(2);
+  const [stayBookingChildren, setStayBookingChildren] = useState(0);
+  const [stayBookingRooms, setStayBookingRooms] = useState(1);
   const [tripExpenseItems, setTripExpenseItems] = useState([]);
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [customPlaceAddress, setCustomPlaceAddress] = useState('');
@@ -2625,24 +2688,32 @@ export default function TripDetailsPage({ user, onLogout }) {
     const MIN_FALLBACK_REVIEWS = 60;
     const MIN_FALLBACK_CONFIDENCE = 3.95;
 
-    // Use the same "Recommended" sorted list users see in Add Places first.
+    // Blend place + food candidates so smart itineraries include meal stops as well.
     const placePool = Array.isArray(filteredPlaces) && filteredPlaces.length > 0
       ? filteredPlaces
       : (Array.isArray(discoveryData?.places) ? discoveryData.places : []);
-    if (!Array.isArray(placePool) || placePool.length === 0) return [];
+    const foodPool = Array.isArray(filteredFoods) && filteredFoods.length > 0
+      ? filteredFoods
+      : (Array.isArray(discoveryData?.foods) ? discoveryData.foods : []);
+    const candidatePool = [
+      ...placePool.map((item) => ({ ...item, _itemType: 'place' })),
+      ...foodPool.map((item) => ({ ...item, _itemType: 'food' })),
+    ];
+    if (!Array.isArray(candidatePool) || candidatePool.length === 0) return [];
 
-    const normalizedPlaces = placePool
+    const normalizedPlaces = candidatePool
       .filter((place) => place && place.lat != null && place.lng != null)
       .map((place, index) => {
         const rating = Number(place.rating || 0);
         const reviewCount = Math.max(0, Number(place.reviewCount || 0));
         const confidenceRating = ((reviewCount * rating) + (PRIOR_WEIGHT * PRIOR_MEAN)) / (reviewCount + PRIOR_WEIGHT);
         const recommended = Number(place.recommendedScore || 0);
+        const foodBias = place._itemType === 'food' ? 10 : 0;
         const popularityScore = (recommended * 12) + (confidenceRating * 120) + (Math.log10(reviewCount + 1) * 70);
         return {
           ...place,
           _idx: index,
-          _score: popularityScore,
+          _score: popularityScore + foodBias,
           _rating: rating,
           _confidenceRating: confidenceRating,
           _reviewCount: reviewCount,
@@ -2762,6 +2833,61 @@ export default function TripDetailsPage({ user, onLogout }) {
       day.ordered.push(remaining.splice(bestIdx, 1)[0]);
     }
 
+    // Guarantee at least one Food & Beverage recommendation per day when available.
+    const toCandidateKey = (item) => `${String(item?.id || item?._idx || item?.name || '')}|${Number(item?.lat || 0).toFixed(5)}|${Number(item?.lng || 0).toFixed(5)}|${String(item?._itemType || '')}`;
+    const usedCandidateKeys = new Set(
+      orderedDayPlaces.flatMap((bucket) => (Array.isArray(bucket.ordered) ? bucket.ordered : []).map(toCandidateKey)),
+    );
+    const rankedFoodCandidates = rankedPlaces.filter((item) => item?._itemType === 'food');
+
+    const pickBestFoodForDay = (bucket) => {
+      if (!Array.isArray(rankedFoodCandidates) || rankedFoodCandidates.length === 0) return null;
+      const anchor = bucket?.ordered?.[Math.min(1, Math.max(0, (bucket?.ordered?.length || 1) - 1))] || bucket?.ordered?.[0] || null;
+      let best = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      rankedFoodCandidates.forEach((candidate) => {
+        const key = toCandidateKey(candidate);
+        if (usedCandidateKeys.has(key)) return;
+        const distPenalty = anchor ? distanceBetween(anchor, candidate) * 14 : 0;
+        const objective = Number(candidate?._score || 0) - distPenalty;
+        if (objective > bestScore) {
+          bestScore = objective;
+          best = candidate;
+        }
+      });
+
+      return best;
+    };
+
+    orderedDayPlaces.forEach((bucket) => {
+      const hasFood = (Array.isArray(bucket?.ordered) ? bucket.ordered : []).some((item) => item?._itemType === 'food');
+      if (hasFood) return;
+
+      const selectedFood = pickBestFoodForDay(bucket);
+      if (!selectedFood) return;
+
+      if (bucket.ordered.length < 5) {
+        bucket.ordered.push(selectedFood);
+      } else {
+        let replaceIdx = -1;
+        let weakestScore = Number.POSITIVE_INFINITY;
+        bucket.ordered.forEach((item, idx) => {
+          if (item?._itemType === 'food') return;
+          const score = Number(item?._score || 0);
+          if (score < weakestScore) {
+            weakestScore = score;
+            replaceIdx = idx;
+          }
+        });
+        if (replaceIdx >= 0) {
+          bucket.ordered[replaceIdx] = selectedFood;
+        }
+      }
+
+      usedCandidateKeys.add(toCandidateKey(selectedFood));
+    });
+
     const itineraryPlaces = orderedDayPlaces
       .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => ({
         id: `smart-itinerary-${bucket.dayNum}-${index}-${source.id || source._idx || 'place'}`,
@@ -2775,6 +2901,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         overview: source.overview || source.description || `${source.name || 'This stop'} is selected from high-popularity places and ordered for smoother routing.`,
         website: source.website || '',
         tags: Array.isArray(source.tags) && source.tags.length > 0 ? source.tags : ['Smart-picked'],
+        itemType: source._itemType === 'food' ? 'food' : 'place',
+        category: source._itemType === 'food' ? 'Food & Beverage' : 'Place',
         dayNum: bucket.dayNum,
         dayTitle: `Day ${bucket.dayNum}`,
         durationLabel: source.estimatedDuration || `${Math.max(1, Math.min(4, Number(source.durationHours || 2)))} hr`,
@@ -2797,13 +2925,13 @@ export default function TripDetailsPage({ user, onLogout }) {
         avatar: '',
       },
       image: itineraryPlaces[0]?.image || '',
-      tags: ['Popularity-ranked', 'Clustered by 2km', 'Nearest-neighbor ordered'],
+      tags: ['Popularity-ranked', 'Clustered by 2km', 'Includes food & places'],
       views: 0,
       countriesCount: 1,
       dayCount,
       places: itineraryPlaces,
     }];
-  }, [discoveryData?.places, filteredPlaces, cityQuery, days?.length]);
+  }, [discoveryData?.places, discoveryData?.foods, filteredPlaces, filteredFoods, cityQuery, days?.length]);
 
   const mapCenter = useMemo(() => {
     if (Array.isArray(discoveryData?.center) && discoveryData.center.length === 2) {
@@ -3058,7 +3186,8 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     const day = days.find((d) => d.dayNum === 1);
     const bookingLink = buildStayFallbackLink(stay, cityQuery);
-    const defaultCost = Number(room?.price ?? stay.pricePerNight ?? 0);
+    const defaultCostUsd = Number(room?.price ?? stay.pricePerNight ?? 0);
+    const defaultCost = convertUsdToCurrency(defaultCostUsd, currency, exchangeRates);
     const roomLabel = room?.name ? ` • ${room.name}` : '';
 
     setAddToTripItem({
@@ -3084,6 +3213,25 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripExternalLink(bookingLink);
     setAddToTripTravelDocs([]);
     setAddToTripModalOpen(true);
+  };
+
+  const openStayBookingModal = (stay) => {
+    if (!stay) return;
+
+    const fromTripWindow = getStayWindow(stay);
+    const fallbackCheckIn = days[0]?.date || toIsoDateLocal(new Date());
+    const fallbackCheckOut = days[1]?.date || addDays(fallbackCheckIn, 1);
+    const defaultCheckIn = fromTripWindow.checkInDate || fallbackCheckIn;
+    const proposedCheckOut = fromTripWindow.checkOutDate || fallbackCheckOut;
+    const defaultCheckOut = proposedCheckOut > defaultCheckIn ? proposedCheckOut : addDays(defaultCheckIn, 1);
+
+    setStayBookingTarget(stay);
+    setStayBookingCheckInDate(defaultCheckIn);
+    setStayBookingCheckOutDate(defaultCheckOut);
+    setStayBookingAdults(2);
+    setStayBookingChildren(0);
+    setStayBookingRooms(1);
+    setStayBookingModalOpen(true);
   };
 
   const canOpenInternalItemOverview = (item) => {
@@ -3271,7 +3419,28 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     const normalize = (value) => String(value || '').trim().toLowerCase();
     const dayDateByNum = new Map((days || []).map((d) => [Number(d.dayNum), d.date]));
-    const dayCounts = new Map();
+    const nonFoodCountsByDay = new Map();
+    const foodCountsByDay = new Map();
+    const mealCycleByDay = ['breakfast', 'lunch', 'dinner'];
+    const mealStartMinutes = {
+      breakfast: 8 * 60,
+      lunch: (12 * 60) + 30,
+      dinner: 19 * 60,
+    };
+    const defaultNonFoodStartMinutes = [
+      (9 * 60) + 30,
+      11 * 60,
+      14 * 60,
+      16 * 60,
+      (17 * 60) + 30,
+    ];
+
+    const minutesToTime = (mins) => {
+      const safe = Math.max(0, Math.min(23 * 60 + 59, Math.round(Number(mins) || 0)));
+      const h = String(Math.floor(safe / 60)).padStart(2, '0');
+      const m = String(safe % 60).padStart(2, '0');
+      return `${h}:${m}`;
+    };
 
     const existingKeys = new Set(
       (tripExpenseItems || []).map((item) => {
@@ -3288,37 +3457,61 @@ export default function TripDetailsPage({ user, onLogout }) {
       const dayNum = Math.max(1, Number(place?.dayNum || 1));
       const fallbackDay = days[idx % Math.max(days.length, 1)]?.date || days[0]?.date || '';
       const itemDate = dayDateByNum.get(dayNum) || fallbackDay;
-      const daySlot = dayCounts.get(dayNum) || 0;
-      dayCounts.set(dayNum, daySlot + 1);
+      const isFoodStop = String(place?.itemType || place?.category || '')
+        .trim()
+        .toLowerCase()
+        .includes('food');
 
-      const startMinutes = Math.min(20 * 60, 9 * 60 + (daySlot * 120));
-      const startH = String(Math.floor(startMinutes / 60)).padStart(2, '0');
-      const startM = String(startMinutes % 60).padStart(2, '0');
+      let startTimeValue = '09:30';
+      if (isFoodStop) {
+        const foodSlot = foodCountsByDay.get(dayNum) || 0;
+        foodCountsByDay.set(dayNum, foodSlot + 1);
+
+        const anchorMeal = mealCycleByDay[(dayNum - 1) % mealCycleByDay.length];
+        const mealOrder = anchorMeal === 'breakfast'
+          ? ['breakfast', 'lunch', 'dinner']
+          : anchorMeal === 'lunch'
+            ? ['lunch', 'dinner', 'breakfast']
+            : ['dinner', 'breakfast', 'lunch'];
+        const selectedMeal = mealOrder[foodSlot % mealOrder.length];
+        startTimeValue = minutesToTime(mealStartMinutes[selectedMeal]);
+      } else {
+        const nonFoodSlot = nonFoodCountsByDay.get(dayNum) || 0;
+        nonFoodCountsByDay.set(dayNum, nonFoodSlot + 1);
+
+        const base = defaultNonFoodStartMinutes[nonFoodSlot % defaultNonFoodStartMinutes.length];
+        const overflow = Math.floor(nonFoodSlot / defaultNonFoodStartMinutes.length) * 90;
+        startTimeValue = minutesToTime(base + overflow);
+      }
       const latKey = Number(place?.lat || 0).toFixed(4);
       const lngKey = Number(place?.lng || 0).toFixed(4);
       const dedupeKey = `${normalize(place?.name)}|${String(itemDate || '')}|${latKey}|${lngKey}`;
       if (existingKeys.has(dedupeKey)) return;
 
       existingKeys.add(dedupeKey);
+      const itemType = String(place?.itemType || '').toLowerCase() === 'food' ? 'food' : 'place';
+      const categoryId = itemType === 'food' ? 'food' : 'places';
+      const category = itemType === 'food' ? 'Food & Beverage' : 'Places';
+      const icon = itemType === 'food' ? UtensilsCrossed : Camera;
       toAppend.push({
         id: `place-${place?.id || idx}-${Date.now()}-${idx}`,
         sourcePlaceId: place?.id || null,
         name: place?.name || `Place ${idx + 1}`,
         total: 0,
-        categoryId: 'places',
-        category: 'Places',
+        categoryId,
+        category,
         date: itemDate,
         detail: place?.address || place?.name || cityQuery,
-        Icon: Camera,
+        Icon: icon,
         lat: place?.lat,
         lng: place?.lng,
         notes: '',
         attachments: [],
-        startTime: `${startH}:${startM}`,
-        durationHrs: 2,
-        durationMins: 0,
+        startTime: startTimeValue,
+        durationHrs: isFoodStop ? 1 : 2,
+        durationMins: isFoodStop ? 30 : 0,
         externalLink: place?.website || '',
-        placeImageUrl: resolveImageUrl(place?.image, place?.name, 'landmark'),
+        placeImageUrl: resolveImageUrl(place?.image, place?.name, itemType === 'food' ? 'restaurant' : 'landmark'),
         rating: place?.rating,
         reviewCount: place?.reviewCount,
       });
@@ -3330,7 +3523,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
 
     setTripExpenseItems((prev) => [...prev, ...toAppend]);
-    showInAppNotice(`Added ${toAppend.length} place${toAppend.length === 1 ? '' : 's'} to your itinerary page.`, 'success');
+    showInAppNotice(`Added ${toAppend.length} stop${toAppend.length === 1 ? '' : 's'} to your itinerary page.`, 'success');
   };
 
   if (tripLoading) {
@@ -5060,12 +5253,9 @@ export default function TripDetailsPage({ user, onLogout }) {
             
             {!publicTransportLoading && !publicTransportDirections && (
               <div className="trip-details__public-transport-error">
-                <p>No public transport routes available for this journey.</p>
+                <p>No public transport route found.</p>
                 <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--wtg-text-muted)' }}>
-                  This could happen if the locations are too far apart, in different transit systems, or don't have direct public transport connections. Try using driving, walking, or cycling instead.
-                </p>
-                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--wtg-text-muted)' }}>
-                  <em>Note: Check your browser console (F12) for technical details.</em>
+                  Switch to driving or walking.
                 </p>
               </div>
             )}
@@ -6198,7 +6388,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           .map((p, i) => ({
             id: p.id,
             sourceId: p.id,
-            markerType: 'place',
+            markerType: String(p.itemType || '').toLowerCase() === 'food' ? 'food' : 'place',
             name: p.name,
             lat: p.lat,
             lng: p.lng,
@@ -6289,7 +6479,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                 <div className="trip-details__itinerary-detail-place-content">
                                   <h3 className="trip-details__itinerary-detail-place-name">{place.name}</h3>
                                   <div className="trip-details__itinerary-detail-place-rating">
-                                    <Star size={14} fill="currentColor" aria-hidden /> {place.rating} ({(place.reviewCount || 0).toLocaleString()}) · Place
+                                    <Star size={14} fill="currentColor" aria-hidden /> {place.rating} ({(place.reviewCount || 0).toLocaleString()}) · {place.category || 'Place'}
                                   </div>
                                   <div className="trip-details__itinerary-detail-place-address">
                                     <MapPin size={14} aria-hidden /> {place.address || cityQuery}
@@ -6538,12 +6728,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                               onClick={() => {
                                 const day = days.find((d) => d.dayNum === addPlacesDay);
                                 const selectedDate = day?.date || days[0]?.date || '';
+                                const smartItemType = String(detailPlace.itemType || '').toLowerCase() === 'food' ? 'food' : 'place';
                                 setAddToTripItem({
-                                  type: 'place',
+                                  type: smartItemType,
                                   data: detailPlace,
-                                  categoryId: 'places',
-                                  category: 'Places',
-                                  Icon: Camera,
+                                  categoryId: smartItemType === 'food' ? 'food' : 'places',
+                                  category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
+                                  Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
                                 });
                                 setAddToTripDate(selectedDate);
                                 setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00'));
@@ -7076,7 +7267,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'booking' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('booking')}>Your booking</button>
                       )}
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'overview' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('overview')}>Overview</button>
-                      <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'rooms' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('rooms')}>Rooms</button>
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'policies' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('policies')}>Policies</button>
                       <button type="button" className={`trip-details__place-detail-tab ${stayDetailsTab === 'nearby' ? 'trip-details__place-detail-tab--active' : ''}`} onClick={() => setStayDetailsTab('nearby')}>Stays Nearby</button>
                     </div>
@@ -7152,6 +7342,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                             >
                               Add to trip
                             </button>
+                            <button
+                              type="button"
+                              className="trip-details__place-detail-add-btn"
+                              onClick={() => openStayBookingModal(stayDetailsView)}
+                            >
+                              Book now
+                            </button>
                           </div>
                           <div className="trip-details__place-detail-section">
                             <h3 className="trip-details__place-detail-section-title">Overview</h3>
@@ -7190,61 +7387,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                             </div>
                           )}
                         </>
-                      ) : stayDetailsTab === 'rooms' ? (
-                        <div className="trip-details__place-detail-section">
-                          <h3 className="trip-details__place-detail-section-title">Choose your room</h3>
-                          {Array.isArray(stayDetailsView.roomTypes) && stayDetailsView.roomTypes.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                              {stayDetailsView.roomTypes.map((room) => (
-                                <div key={room.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
-                                  <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>{room.name}</h4>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '14px', color: '#6b7280' }}>
-                                    <Bed size={16} aria-hidden /> {room.beds}
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
-                                    <div>
-                                      <div style={{ fontSize: '20px', fontWeight: '700' }}>
-                                        {stayDetailsView.currency === 'USD' ? '$' : stayDetailsView.currency}
-                                        {room.price.toFixed(2)}
-                                      </div>
-                                      {room.originalPrice && (
-                                        <div style={{ fontSize: '14px', color: '#9ca3af', textDecoration: 'line-through' }}>
-                                          {stayDetailsView.currency === 'USD' ? '$' : stayDetailsView.currency}
-                                          {room.originalPrice.toFixed(2)}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      style={{
-                                        marginLeft: 'auto',
-                                        padding: '8px 16px',
-                                        backgroundColor: '#2563eb',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        fontWeight: '500',
-                                      }}
-                                      onClick={() => {
-                                        const bookingLink = buildStayFallbackLink(stayDetailsView, cityQuery);
-                                        window.open(bookingLink, '_blank', 'noopener,noreferrer');
-                                      }}
-                                    >
-                                      Book now
-                                    </button>
-                                  </div>
-                                  <div style={{ marginTop: '12px', display: 'flex', gap: '12px', fontSize: '12px', color: '#6b7280' }}>
-                                    {room.mealsIncluded && <span>✓ Meals included</span>}
-                                    {room.refundable && <span>✓ Refundable</span>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="trip-details__place-detail-section-text">No room information available.</p>
-                          )}
-                        </div>
                       ) : stayDetailsTab === 'policies' ? (
                         <>
                           <div className="trip-details__place-detail-section">
@@ -7311,7 +7453,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                                       ))}
                                     </span>
                                     <span className="trip-details__place-detail-nearby-rating">
-                                      {nearStay.currency === 'USD' ? '$' : nearStay.currency}{nearStay.pricePerNight}/night
+                                      {formatUsdAsCurrency(Number(nearStay.pricePerNight || 0), currency, exchangeRates)}/night
                                     </span>
                                   </div>
                                 </button>
@@ -7354,6 +7496,9 @@ export default function TripDetailsPage({ user, onLogout }) {
 
                       <div className="trip-details__add-food-toolbar">
                         <p className="trip-details__add-places-results">{filteredStays.length} results found</p>
+                        <p className="trip-details__add-places-results" style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wtg-text-muted)' }}>
+                          Prices are estimated nightly rates. Final price is confirmed on Booking.com.
+                        </p>
                         <div className="trip-details__add-food-toolbar-actions">
                         <select
                           className="trip-details__add-places-sort-select"
@@ -7423,7 +7568,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                             </span>
                             <span className="trip-details__add-places-card-address">{stay.type}</span>
                             <span className="trip-details__add-places-card-price" style={{ fontWeight: '600', color: '#2563eb' }}>
-                              {stay.currency === 'USD' ? '$' : stay.currency}{stay.pricePerNight}/night
+                              {formatUsdAsCurrency(Number(stay.pricePerNight || 0), currency, exchangeRates)}/night
                             </span>
                           </div>
                         </button>
@@ -9040,6 +9185,135 @@ export default function TripDetailsPage({ user, onLogout }) {
                 </button>
                 <button type="submit" className="trip-details__custom-place-submit">
                   Add to trip
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {stayBookingModalOpen && stayBookingTarget && (
+        <>
+          <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={() => setStayBookingModalOpen(false)} />
+          <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="stay-booking-title" aria-modal="true">
+            <div className="trip-details__custom-place-head">
+              <h2 id="stay-booking-title" className="trip-details__custom-place-title">Book Stay on Booking.com</h2>
+              <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={() => setStayBookingModalOpen(false)}>
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+            <form
+              className="trip-details__custom-place-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const resolvedCheckOut = stayBookingCheckOutDate > stayBookingCheckInDate
+                  ? stayBookingCheckOutDate
+                  : addDays(stayBookingCheckInDate, 1);
+
+                const bookingLink = buildStayBookingDeepLink(stayBookingTarget, cityQuery, {
+                  checkInDate: stayBookingCheckInDate,
+                  checkOutDate: resolvedCheckOut,
+                  adults: stayBookingAdults,
+                  children: stayBookingChildren,
+                  rooms: stayBookingRooms,
+                  currency,
+                });
+
+                window.open(bookingLink, '_blank', 'noopener,noreferrer');
+                setStayBookingModalOpen(false);
+              }}
+            >
+              <div className="trip-details__custom-place-preview">
+                <img src={resolveImageUrl(stayBookingTarget.image, stayBookingTarget.name, 'hotel')} alt={stayBookingTarget.name} className="trip-details__custom-place-preview-img" onError={handleImageError} />
+                <div className="trip-details__custom-place-preview-content">
+                  <span className="trip-details__custom-place-preview-badge">Stay</span>
+                  <h3 className="trip-details__custom-place-preview-name">{stayBookingTarget.name}</h3>
+                  <p className="trip-details__custom-place-preview-address">{stayBookingTarget.address || cityQuery}</p>
+                </div>
+              </div>
+
+              <div className="trip-details__custom-place-grid">
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="stay-booking-checkin" className="trip-details__custom-place-label">Check-in</label>
+                  <input
+                    id="stay-booking-checkin"
+                    type="date"
+                    className="trip-details__custom-place-input"
+                    value={stayBookingCheckInDate}
+                    onChange={(e) => {
+                      const nextCheckIn = e.target.value;
+                      setStayBookingCheckInDate(nextCheckIn);
+                      if (stayBookingCheckOutDate <= nextCheckIn) {
+                        setStayBookingCheckOutDate(addDays(nextCheckIn, 1));
+                      }
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="stay-booking-checkout" className="trip-details__custom-place-label">Check-out</label>
+                  <input
+                    id="stay-booking-checkout"
+                    type="date"
+                    className="trip-details__custom-place-input"
+                    min={addDays(stayBookingCheckInDate, 1)}
+                    value={stayBookingCheckOutDate}
+                    onChange={(e) => setStayBookingCheckOutDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="stay-booking-adults" className="trip-details__custom-place-label">Adults</label>
+                  <input
+                    id="stay-booking-adults"
+                    type="number"
+                    className="trip-details__custom-place-input"
+                    min={1}
+                    max={16}
+                    value={stayBookingAdults}
+                    onChange={(e) => setStayBookingAdults(Math.max(1, Number(e.target.value || 1)))}
+                    required
+                  />
+                </div>
+
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="stay-booking-children" className="trip-details__custom-place-label">Children</label>
+                  <input
+                    id="stay-booking-children"
+                    type="number"
+                    className="trip-details__custom-place-input"
+                    min={0}
+                    max={10}
+                    value={stayBookingChildren}
+                    onChange={(e) => setStayBookingChildren(Math.max(0, Number(e.target.value || 0)))}
+                  />
+                </div>
+
+                <div className="trip-details__custom-place-field">
+                  <label htmlFor="stay-booking-rooms" className="trip-details__custom-place-label">Rooms</label>
+                  <input
+                    id="stay-booking-rooms"
+                    type="number"
+                    className="trip-details__custom-place-input"
+                    min={1}
+                    max={8}
+                    value={stayBookingRooms}
+                    onChange={(e) => setStayBookingRooms(Math.max(1, Number(e.target.value || 1)))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <p className="trip-details__custom-place-hint">We will open Booking.com with this hotel and your booking details prefilled.</p>
+
+              <div className="trip-details__custom-place-actions">
+                <button type="button" className="trip-details__custom-place-cancel" onClick={() => setStayBookingModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="trip-details__custom-place-submit">
+                  Continue to Booking.com
                 </button>
               </div>
             </form>
