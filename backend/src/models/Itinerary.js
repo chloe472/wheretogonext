@@ -42,7 +42,7 @@ const itinerarySchema = new mongoose.Schema(
       ],
       default: [],
     },
-    /** UI status e.g. Planning, Upcoming — mirrors legacy trip cards. */
+    /** UI status e.g. Planning, Upcoming ï¿½ mirrors legacy trip cards. */
     status: { type: String, default: 'Planning' },
     statusClass: { type: String, default: '' },
     /** Single hero image for trip cards (often same as coverImages[0]). */
@@ -53,8 +53,12 @@ const itinerarySchema = new mongoose.Schema(
     days: { type: Number, default: 1, min: 1 },
     categories: { type: [String], default: [] },
     coverImages: { type: [String], default: [] },
-    /** Kanban/calendar line items (places, transport, etc.) — rich objects from TripDetailsPage. */
+    /** Kanban/calendar line items (places, transport, etc.) ï¿½ rich objects from TripDetailsPage. */
     tripExpenseItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    /** Notes & Documents modal: general trip-level notes. */
+    generalNotes: { type: String, default: '' },
+    /** Notes & Documents modal: general attachments metadata. */
+    generalAttachments: { type: [mongoose.Schema.Types.Mixed], default: [] },
     places: { type: [placeSchema], default: [] },
     viewCount: { type: Number, default: 0, min: 0 },
     published: { type: Boolean, default: false },

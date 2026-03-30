@@ -817,6 +817,8 @@ router.post('/', requireAuth, async (req, res) => {
       categories: normalizeCategories(req.body?.categories),
       coverImages: coverImagesFinal,
       tripExpenseItems: tripExpenseItemsIn,
+      generalNotes: req.body?.generalNotes != null ? String(req.body.generalNotes) : '',
+      generalAttachments: Array.isArray(req.body?.generalAttachments) ? req.body.generalAttachments : [],
       places: placesFinal,
       viewCount: 0,
       published,
@@ -894,6 +896,10 @@ router.put('/:id', requireAuth, async (req, res) => {
       existing.places = placesFromTripExpenseItems(body.tripExpenseItems, existing.startDate);
       existing.placesSaved = Array.isArray(existing.places) ? existing.places.length : 0;
       placesDerivedFromTripExpense = true;
+    }
+    if (body.generalNotes != null) existing.generalNotes = String(body.generalNotes);
+    if (body.generalAttachments != null && Array.isArray(body.generalAttachments)) {
+      existing.generalAttachments = body.generalAttachments;
     }
     if (body.categories != null) existing.categories = normalizeCategories(body.categories);
     if (body.coverImages != null) existing.coverImages = normalizeCoverImages(body.coverImages);

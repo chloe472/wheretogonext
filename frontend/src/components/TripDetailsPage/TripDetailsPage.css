@@ -1218,6 +1218,7 @@
 }
 
 .trip-details__calendar-time-row {
+  box-sizing: border-box;
   height: 48px;
   display: flex;
   align-items: flex-start;
@@ -1259,12 +1260,14 @@
 }
 
 .trip-details__calendar-all-day-cell {
+  box-sizing: border-box;
   height: 28px;
   border-bottom: 1px solid var(--wtg-hover);
   background: var(--wtg-surface);
 }
 
 .trip-details__calendar-cell {
+  box-sizing: border-box;
   height: 48px;
   border-bottom: 1px solid var(--wtg-hover);
 }
@@ -1281,12 +1284,13 @@
 
 .trip-details__calendar-event {
   position: absolute;
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   align-content: flex-start;
   gap: 2px 6px;
-  padding: 4px 6px 10px;
+  padding: 6px 6px 5px;
   border: none;
   border-left: 3px solid;
   border-radius: 6px;
@@ -1339,6 +1343,8 @@
   bottom: 0;
   height: 8px;
   cursor: ns-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 
 .trip-details__calendar-event-resize::after {
@@ -1351,6 +1357,12 @@
   transform: translateX(-50%);
   background: rgba(17, 24, 39, 0.35);
   border-radius: 999px;
+}
+
+.trip-details__calendar-event:hover .trip-details__calendar-event-resize,
+.trip-details__calendar-event:focus-visible .trip-details__calendar-event-resize,
+.trip-details__calendar-event--resizing .trip-details__calendar-event-resize {
+  opacity: 1;
 }
 
 .trip-details__calendar-fab {
@@ -2474,6 +2486,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.trip-details__notes-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.trip-details__notes-actions .trip-details__modal-update {
+  min-width: 190px;
 }
 
 .trip-details__notes-textarea {
