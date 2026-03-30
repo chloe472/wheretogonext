@@ -55,12 +55,12 @@ function inferMarkerVariant(marker) {
 function getMarkerIcon(marker) {
   const variantKey = inferMarkerVariant(marker);
   const variant = MARKER_VARIANTS[variantKey] || MARKER_VARIANTS.sight;
-  const dayColor = DAY_COLORS[((Number(marker?.dayNum) || 1) % 5) || 0];
-  const styleAttr = variantKey === 'trip' ? ` style=\"background:${dayColor}\"` : '';
+  const dayColor = marker?.color || DAY_COLORS[((Number(marker?.dayNum) || 1) % DAY_COLORS.length) || 0];
+  const styleAttr = ` style="background:${dayColor}"`;
 
   return L.divIcon({
     className: 'trip-map__marker',
-    html: `<span class=\"trip-map__marker-pin ${variant.className}\"${styleAttr}><span class=\"trip-map__marker-glyph\">${variant.glyph}</span></span>`,
+    html: `<span class="trip-map__marker-pin ${variant.className}"${styleAttr}><span class="trip-map__marker-glyph">${variant.glyph}</span></span>`,
     iconSize: [28, 36],
     iconAnchor: [14, 34],
     popupAnchor: [0, -30],

@@ -2685,17 +2685,21 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [discoveryData?.center, tripExpenseItems, locationUpdateKey, trip?.destination, trip?.locations]);
 
   const mapMarkers = useMemo(() => {
+    const colorForDay = (dNum) => (dayColors[dNum] || DAY_COLOR_OPTIONS[((Number(dNum) - 1) % DAY_COLOR_OPTIONS.length + DAY_COLOR_OPTIONS.length) % DAY_COLOR_OPTIONS.length]);
+
     const tripItemMarkers = tripExpenseItems
       .filter((i) => i.lat != null && i.lng != null)
       .map((i) => {
         const day = days.find((d) => d.date === i.date);
+        const dayNum = day?.dayNum ?? 1;
         return {
           id: i.id,
           name: i.name,
           lat: i.lat,
           lng: i.lng,
-          dayNum: day?.dayNum ?? 1,
+          dayNum,
           address: i.detail || '',
+          color: colorForDay(dayNum),
           markerType: 'trip',
           website: i.externalLink || '',
         };
@@ -2716,6 +2720,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         lat: item.lat,
         lng: item.lng,
         dayNum: 1,
+        color: colorForDay(1),
         address: item.address || cityQuery,
         rating: item.rating,
         reviewCount: item.reviewCount,
@@ -2737,7 +2742,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     if (mapFilter === 'Experiences') return experienceMarkers;
     if (mapFilter === 'My Trip') return tripItemMarkers.length > 0 ? tripItemMarkers : [];
     return placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
-  }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery]);
+  }, [tripExpenseItems, days, discoveryData?.places, discoveryData?.foods, discoveryData?.experiences, mapFilter, cityQuery, dayColors]);
 
   const appendItemToTrip = ({ itemType, data, categoryId, category, Icon, values }) => {
     const isStayCategory = String(categoryId || '').toLowerCase() === 'stays';
@@ -3452,7 +3457,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const totalMins = getDayTotalDurationMinutes(tripExpenseItems, day.date);
                 const durationStr = formatDurationMinutes(totalMins || 60);
                 const isDayMenuOpen = openDayMenuKey === day.dayNum;
-                const dayColor = dayColors[day.dayNum] ?? DAY_COLOR_OPTIONS[0];
+                const dayColor = dayColors[day.dayNum] ?? DAY_COLOR_OPTIONS[((Number(day.dayNum) - 1) % DAY_COLOR_OPTIONS.length + DAY_COLOR_OPTIONS.length) % DAY_COLOR_OPTIONS.length];
                 return (
                   <section
                     key={day.dayNum}
@@ -3502,7 +3507,9 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__day-dropdown-item"
                               role="menuitem"
                               onClick={() => {
+                                // Open the map-day filter modal and pre-select this day
                                 setMapDayFilterSelected([day.dayNum]);
+                                setMapDayFilterOpen(true);
                                 setOpenDayMenuKey(null);
                               }}
                             >
