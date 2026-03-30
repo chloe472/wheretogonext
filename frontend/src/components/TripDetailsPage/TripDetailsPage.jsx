@@ -850,13 +850,6 @@ const ADD_TO_TRIP_OPTIONS = [
     color: '#7c3aed',
   },
   {
-    id: 'routeIdeas',
-    label: 'Smart Itinerary Generator',
-    description: 'Builds day-by-day routes using popularity ranking and nearby-place clustering',
-    Icon: Route,
-    color: '#0ea5e9',
-  },
-  {
     id: 'social',
     label: 'Import from social media',
     description: 'Import places and posts from Instagram, Pinterest, TikTok...',
@@ -3256,6 +3249,16 @@ export default function TripDetailsPage({ user, onLogout }) {
             title="Moodboard"
           >
             <Image size={18} />
+          </button>
+
+          <button
+            type="button"
+            className="trip-details__icon-btn"
+            onClick={openRouteIdeasBrowseAll}
+            aria-label="Smart Itinerary Generator"
+            title="Smart Itinerary Generator"
+          >
+            <Route size={18} aria-hidden />
           </button>
 
           <div className="trip-details__view-toggle" role="group" aria-label="View mode">
@@ -8029,8 +8032,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                       } else if (id === 'transportation') {
                         setAddTransportDay(addSheetDay ?? 1);
                         setAddTransportOpen(true);
-                      } else if (id === 'routeIdeas') {
-                        openRouteIdeasBrowseAll();
                       } else if (id === 'social') {
                         openSocialImportForDay(addSheetDay ?? 1);
                       }

@@ -5,7 +5,6 @@ import {
   Car,
   Ticket,
   Share2,
-  Route,
 } from 'lucide-react';
 
 /** Options for the "Add to trip" action sheet (Itinerary kanban / calendar). */
@@ -44,13 +43,6 @@ export const ADD_TO_TRIP_OPTIONS = [
     description: 'Tours, Cruises, Indoor & Outdoor Activities...',
     Icon: Ticket,
     color: '#7c3aed',
-  },
-  {
-    id: 'routeIdeas',
-    label: 'Smart Itinerary Generator',
-    description: 'Builds day-by-day routes using popularity ranking and nearby-place clustering',
-    Icon: Route,
-    color: '#0ea5e9',
   },
   {
     id: 'social',
