@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage/LandingPage';
 import AuthModal from './components/AuthModal/AuthModal';
@@ -25,26 +27,32 @@ function App() {
   const openAuthModal = () => setAuthModalOpen(true);
   const closeAuthModal = () => setAuthModalOpen(false);
 
-  const handleLoginSuccess = (userData, token) => {
+  const handleLoginSuccess = (userData, token, meta) => {
     localStorage.setItem('wheretogonext_token', token);
     localStorage.setItem('wheretogonext_user', JSON.stringify(userData));
     setUser(userData);
     closeAuthModal();
+    if (meta?.action === 'login') {
+      toast.success('Logged in successfully!');
+    }
+  };
+
+  const handleUserUpdate = (nextUser) => {
+    if (!nextUser) return;
+    localStorage.setItem('wheretogonext_user', JSON.stringify(nextUser));
+    setUser(nextUser);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('wheretogonext_token');
     localStorage.removeItem('wheretogonext_user');
     setUser(null);
-  };
-
-  const handleUserUpdate = (updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem('wheretogonext_user', JSON.stringify(updatedUser));
+    toast.success('Logged out successfully!');
   };
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Toaster position="top-center" toastOptions={{ duration: 3500 }} />
       <Routes>
         <Route
           path="/"
@@ -76,7 +84,7 @@ function App() {
             )
           }
         />
-        <Route
+                <Route
           path="/trip/:tripId/moodboard"
           element={
             user ? (
@@ -97,7 +105,7 @@ function App() {
           }
         />
         <Route
-          path="/profile/:id"
+          path="/profile"
           element={
             user ? (
               <ProfilePage user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
@@ -107,7 +115,7 @@ function App() {
           }
         />
         <Route
-          path="/profile"
+          path="/profile/:id"
           element={
             user ? (
               <ProfilePage user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
@@ -129,11 +137,7 @@ function App() {
         <Route
           path="/itineraries/:id"
           element={
-            user ? (
-              <ItineraryDetailPage user={user} onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/" replace />
-            )
+            <ItineraryDetailPage user={user} onLogout={handleLogout} onRequireLogin={openAuthModal} />
           }
         />
       </Routes>

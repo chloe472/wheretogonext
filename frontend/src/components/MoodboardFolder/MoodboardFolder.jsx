@@ -1,10 +1,9 @@
 import './MoodboardFolder.css';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import DashboardHeader from '../DashboardHeader/DashboardHeader';
-import TripHeader from '../TripHeader/TripHeader';
 import { fetchMoodboardFolder, addMoodboardImage, deleteMoodboardImage } from '../../api/moodboardApi';
 import { fetchItineraryById } from '../../api/itinerariesApi';
+import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 
 export default function MoodboardFolder({ user, onLogout }) {
   const { tripId, folderId } = useParams();
@@ -21,7 +20,7 @@ export default function MoodboardFolder({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Load folder and trip from DB
+  // Load folder and trip
   useEffect(() => {
     const loadFolder = async () => {
       setLoading(true);
@@ -39,7 +38,7 @@ export default function MoodboardFolder({ user, onLogout }) {
         const initReactions = {};
         (folderData.images || []).forEach((img, idx) => {
           const pinId = folderId + "-" + idx;
-          initReactions[pinId] = img.reactions || {};
+          initReactions[pinId] = img.reactions || {}; // { "❤️": ["user1", "user2"] }
         });
         setReactions(initReactions);
       } catch (err) {
@@ -53,18 +52,34 @@ export default function MoodboardFolder({ user, onLogout }) {
     if (tripId && folderId) loadFolder();
   }, [tripId, folderId]);
 
-  const handleEmojiClick = async (pinId, emoji) => {
-    try {
-      const updated = {
-        ...reactions,
-        [pinId]: { ...reactions[pinId], [emoji]: (reactions[pinId]?.[emoji] || 0) + 1 }
+  // Emoji click toggle
+  const handleEmojiClick = (pinId, emoji) => {
+    if (!user?.name) return;
+    
+    setReactions(prev => {
+      const current = prev[pinId] || {};
+      const reactedUsers = current[emoji] || [];
+
+      const alreadyReacted = reactedUsers.includes(user.name);
+      const updatedUsers = alreadyReacted
+        ? reactedUsers.filter(u => u !== user.name)
+        : [...reactedUsers, user.name];
+
+      const updatedCurrent = { ...current };
+      if (updatedUsers.length > 0) {
+        updatedCurrent[emoji] = updatedUsers;
+      } else {
+        delete updatedCurrent[emoji];
+      }
+
+      return {
+        ...prev,
+        [pinId]: updatedCurrent
       };
-      setReactions(updated);
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
+  // Delete image
   const handleDeleteImage = async () => {
     if (currentImageIdx === null) return;
     const imageToDelete = images[currentImageIdx];
@@ -79,6 +94,7 @@ export default function MoodboardFolder({ user, onLogout }) {
     }
   };
 
+  // Add from URL
   const handleAddUrl = async () => {
     if (!urlInput.trim()) return;
     try {
@@ -92,6 +108,7 @@ export default function MoodboardFolder({ user, onLogout }) {
     }
   };
 
+  // Upload files
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     for (let file of files) {
@@ -114,8 +131,14 @@ export default function MoodboardFolder({ user, onLogout }) {
 
   return (
     <div className="moodboard-page">
-      <DashboardHeader user={user} onLogout={onLogout} />
-      <TripHeader trip={trip} />
+      {trip && (
+        <TripHeader
+          trip={trip}
+          spent={trip.budgetSpent || 0}
+          currency="SGD"
+          onNotesOpen={() => console.log('Open Notes modal')}
+        />
+      )}
 
       <div className="container">
         <div className="folder-header-row">
@@ -129,13 +152,19 @@ export default function MoodboardFolder({ user, onLogout }) {
             </div>
           </div>
 
+          {/* Combined dropdown */}
           <div className="folder-right">
-            <button className="upload" onClick={() => document.getElementById("file-input").click()}>
-              Upload
-            </button>
-            <button className="add-url" onClick={() => setShowUrlModal(true)}>
-              Add from URL
-            </button>
+            <div className="dropdown">
+              <button className="upload-dropdown-btn">Add Image ▾</button>
+              <div className="dropdown-content">
+                <button onClick={() => document.getElementById("file-input").click()}>
+                  Upload from Device
+                </button>
+                <button onClick={() => setShowUrlModal(true)}>
+                  Add from URL
+                </button>
+              </div>
+            </div>
             <input
               type="file"
               id="file-input"
@@ -153,7 +182,7 @@ export default function MoodboardFolder({ user, onLogout }) {
             return (
               <div className="pin" key={pinId}>
                 <img src={img.url || img} alt={`img-${idx}`} />
-                
+
                 <div className="emoji-delete-row">
                   <div className="emoji-popup">
                     {["❤️", "😍", "🔥"].map((emoji) => (
@@ -173,8 +202,10 @@ export default function MoodboardFolder({ user, onLogout }) {
                 </div>
 
                 <div className="pin-reactions">
-                  {Object.entries(reactions[pinId] || {}).map(([emoji, count]) => (
-                    <span key={emoji}>{emoji} {count}</span>
+                  {Object.entries(reactions[pinId] || {}).map(([emoji, users]) => (
+                    <span key={emoji} title={users.map(u => u.name || u).join(", ")}>
+                      {emoji} {users.length}
+                    </span>
                   ))}
                 </div>
               </div>

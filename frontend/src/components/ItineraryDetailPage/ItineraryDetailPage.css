@@ -4,6 +4,14 @@
   color: var(--wtg-text, #1c1917);
 }
 
+/* Shared app header (DashboardHeader) — match sticky behavior of old topbar */
+.itinerary-detail .dashboard__header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--wtg-surface, #faf8f5);
+}
+
 .itinerary-detail--center {
   display: flex;
   flex-direction: column;

@@ -53,6 +53,7 @@ import {
   Star,
   ArrowLeft,
   ExternalLink,
+  Image
 } from 'lucide-react';
 import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
 import {
@@ -78,13 +79,11 @@ import countriesData from '../../data/countries.json';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import TripMap from '../TripMap/TripMap';
 import TripDetailsMapPanel from '../TripDetailsMapPanel/TripDetailsMapPanel';
-import TripHeader from '../TripHeader/TripHeader';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
-import './TripDetailsPage.css';
-import './TripDetailsPage.map.css';
-import { ADD_TO_TRIP_OPTIONS } from './tripDetailsConstants';
 import SocialImportModal from '../SocialImportModal/SocialImportModal';
 import { useSocialImport } from '../SocialImportModal/useSocialImport';
+import './TripDetailsPage.css';
+import './TripDetailsPage.map.css';
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -394,9 +393,9 @@ const CALENDAR_ROW_HEIGHT = 48;
 const CALENDAR_ALL_DAY_HEIGHT = 28;
 const CALENDAR_GUTTER_WIDTH = 52;
 const CALENDAR_DRAG_SNAP_MINS = 30;
-const DAY_COLUMN_DEFAULT_WIDTH = 320;
-const CALENDAR_DAY_COLUMN_DEFAULT_WIDTH = 320;
-const DAY_COLUMN_MIN_WIDTH = 260;
+const DAY_COLUMN_DEFAULT_WIDTH = 280;
+const CALENDAR_DAY_COLUMN_DEFAULT_WIDTH = 240;
+const DAY_COLUMN_MIN_WIDTH = 220;
 const DAY_COLUMN_MAX_WIDTH = 720;
 
 function createAttachmentFromFile(file) {
@@ -813,6 +812,65 @@ function formatExpenseDate(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\//g, ' ');
 }
+
+const ADD_TO_TRIP_OPTIONS = [
+  {
+    id: 'place',
+    label: 'Place',
+    description: 'Attractions, Events, Restaurants,...',
+    Icon: Camera,
+    color: '#16a34a',
+  },
+  {
+    id: 'food',
+    label: 'Food & Beverage',
+    description: 'Local Food, Restaurant, Drinks,...',
+    Icon: UtensilsCrossed,
+    color: '#dc2626',
+  },
+  {
+    id: 'stays',
+    label: 'Stays',
+    description: 'Hotel, Apartments, Villas,...',
+    Icon: Building2,
+    color: '#2563eb',
+  },
+  {
+    id: 'transportation',
+    label: 'Transportation',
+    description: 'Flight, Train, Bus, Ferry, Boat & Private Transfer',
+    Icon: Car,
+    color: '#ea580c',
+  },
+  {
+    id: 'experience',
+    label: 'Experience',
+    description: 'Tours, Cruises, Indoor & Outdoor Activities...',
+    Icon: Ticket,
+    color: '#7c3aed',
+  },
+  {
+    id: 'routeIdeas',
+    label: 'Smart Itinerary Generator',
+    description: 'Builds day-by-day routes using popularity ranking and nearby-place clustering',
+    Icon: Route,
+    color: '#0ea5e9',
+  },
+  {
+    id: 'wishlists',
+    label: 'Wishlists',
+    description: 'Add from your saved collection',
+    Icon: Heart,
+    color: '#db2777',
+  },
+  {
+    id: 'social',
+    label: 'Import from social media',
+    description: 'Import places and posts from Instagram, Pinterest, TikTok...',
+    Icon: Share2,
+    color: '#8b5cf6',
+  },
+];
 
 /** Mock airports and cities for transport autofill (in production use an API). */
 const AIRPORTS_AND_CITIES = [
@@ -3198,6 +3256,15 @@ export default function TripDetailsPage({ user, onLogout }) {
         </div>
 
         <div className="trip-details__actions">
+          <button
+            type="button"
+            className="trip-details__icon-btn"
+            onClick={() => navigate(`/trip/${tripId}/moodboard`)}
+            title="Moodboard"
+          >
+            <Image size={18} />
+          </button>
+
           <div className="trip-details__view-toggle" role="group" aria-label="View mode">
             <button
               type="button"
@@ -3225,7 +3292,6 @@ export default function TripDetailsPage({ user, onLogout }) {
           </button>
         </div>
       </header>
-      <TripHeader trip={trip} />
 
       {inAppNotice ? (
         <div className={`trip-details__inline-notice trip-details__inline-notice--${inAppNotice.type}`} role="status" aria-live="polite">
@@ -7974,8 +8040,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                         openRouteIdeasBrowseAll();
                       } else if (id === 'social') {
                         openSocialImportForDay(addSheetDay ?? 1);
-                      } else if (id === 'wishlists') {
-                        toast('Wishlists are coming soon.', { icon: '✨' });
                       }
                       setAddSheetDay(null);
                       setAddSheetFromCalendar(false);
@@ -8003,7 +8067,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         onImageError={handleImageError}
         onAddDetectedDestination={handleAddDetectedDestinationFromSocial}
       />
-
 
       {addToTripModalOpen && addToTripItem && (
         <>

@@ -10,8 +10,9 @@ import {
   EyeOff,
   ArrowRight,
 } from 'lucide-react';
-import { apiUrl } from '../../api/apiConfig';
 import './AuthModal.css';
+
+const API_BASE = '/api';
 
 export default function AuthModal({ onClose, onLoginSuccess }) {
   const [tab, setTab] = useState('login');
@@ -54,7 +55,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(apiUrl('/api/auth/login'), {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,7 +101,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(apiUrl('/api/auth/register'), {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,7 +136,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       setError('');
       setLoading(true);
       try {
-        const res = await fetch(apiUrl('/api/auth/google'), {
+        const res = await fetch(`${API_BASE}/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ credential: tokenResponse.access_token }),
