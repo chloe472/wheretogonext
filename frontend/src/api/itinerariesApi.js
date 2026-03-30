@@ -197,14 +197,29 @@ export async function duplicateItinerary(id) {
 
 /** POST /api/itineraries — create (used for duplicate) */
 export async function createItinerary(body) {
-  const res = await fetch(apiUrl('/api/itineraries'), {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to create itinerary');
-  return data.itinerary;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(apiUrl('/api/itineraries'), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create itinerary');
+    return data.itinerary;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Create trip request timed out. Please check that the backend server is running and try again.');
+    }
+    if (error instanceof TypeError) {
+      throw new Error('Could not reach the backend server. Start the backend on port 5000 and try again.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** DELETE /api/itineraries/:id */

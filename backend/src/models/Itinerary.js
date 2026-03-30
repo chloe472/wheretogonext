@@ -25,6 +25,18 @@ const itinerarySchema = new mongoose.Schema(
     destination: { type: String, default: '', trim: true },
     /** Multi-city / broader location label (e.g. "Paris, France"). */
     locations: { type: String, default: '', trim: true },
+    /** Ordered city day allocation, e.g. [{ city: 'Seoul', startDay: 1, endDay: 3 }]. */
+    citySegments: {
+      type: [
+        {
+          city: { type: String, default: '', trim: true },
+          locationLabel: { type: String, default: '', trim: true },
+          startDay: { type: Number, default: 1, min: 1 },
+          endDay: { type: Number, default: 1, min: 1 },
+        },
+      ],
+      default: [],
+    },
     /** Trip date range (YYYY-MM-DD) and human-readable label for cards. */
     startDate: { type: String, default: '' },
     endDate: { type: String, default: '' },

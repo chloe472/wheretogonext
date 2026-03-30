@@ -56,8 +56,6 @@ import {
   Image
 } from 'lucide-react';
 import { fetchItineraryById, updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
-import { getCoordinatesForLocation } from '../../data/cityCoordinates';
-import { CITIES } from '../../data/cities';
 import { fetchDiscoveryData } from '../../api/discoveryApi';
 import { fetchUsdExchangeRates } from '../../api/currencyApi';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
@@ -68,6 +66,18 @@ import TripDetailsMapPanel from '../TripDetailsMapPanel/TripDetailsMapPanel';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import SocialImportModal from '../SocialImportModal/SocialImportModal';
 import { useSocialImport } from '../SocialImportModal/useSocialImport';
+import {
+  AIRPORTS_AND_CITIES,
+  AIRLINES,
+  searchAirportsAndCities,
+  searchLocationsForSurfaceTransport,
+  searchAirlines,
+} from './tripDetailsTransportData';
+import {
+  getMapCenterForDestination,
+  searchAddressSuggestions,
+  searchLocations,
+} from './tripDetailsLocationData';
 import './TripDetailsPage.css';
 import './TripDetailsPage.map.css';
 
@@ -140,42 +150,39 @@ function extractPrimaryDestination(destinationOrLocations) {
   return parts[0]?.trim() || String(destinationOrLocations).trim();
 }
 
-function getMapCenterForDestination(destinationOrLocations) {
-  return getCoordinatesForLocation(destinationOrLocations);
-}
+function getDestinationList(destination = '', locations = '') {
+  const fromLocations = String(locations || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const fallback = String(destination || '').trim();
+  const source = fromLocations.length > 0 ? fromLocations : (fallback ? [fallback] : []);
 
-function searchAddressSuggestions(destinationOrLocations, query, idPrefix = 'custom-location') {
-  const q = (query || '').trim();
-  if (!q) return [];
-  const [lat, lng] = getMapCenterForDestination(destinationOrLocations);
-  return [
-    {
-      id: `${idPrefix}-${q.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      name: q,
-      address: 'Custom location',
-      lat,
-      lng,
-      source: 'Custom location',
-    },
-  ];
-}
-
-const WHERE_LOCATIONS = [
-  ...countriesData.map((country) => ({ ...country, country: undefined })),
-  ...CITIES,
-];
-
-function searchLocations(query, limit = 12) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return [];
-  const matches = WHERE_LOCATIONS.filter((loc) => {
-    const nameMatch = String(loc?.name || '').toLowerCase().includes(q);
-    const countryMatch = String(loc?.country || '').toLowerCase().includes(q);
-    return nameMatch || countryMatch;
+  const seen = new Set();
+  const unique = [];
+  source.forEach((entry) => {
+    const label = String(entry || '').trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(label);
   });
-  const countriesFirst = matches.filter((entry) => entry.type === 'Country');
-  const others = matches.filter((entry) => entry.type !== 'Country');
-  return [...countriesFirst, ...others].slice(0, limit);
+
+  return unique;
+}
+
+function mergeUniqueBy(items = [], toKey) {
+  const seen = new Set();
+  const merged = [];
+  items.forEach((item, idx) => {
+    if (!item) return;
+    const key = toKey(item, idx);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  });
+  return merged;
 }
 
 function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
@@ -1182,219 +1189,6 @@ const ADD_TO_TRIP_OPTIONS = [
   },
 ];
 
-/** Mock airports and cities for transport autofill (in production use an API). */
-const AIRPORTS_AND_CITIES = [
-  // Major US Airports
-  { id: 'ATL', name: 'Atlanta Hartsfield-Jackson (ATL)', city: 'Atlanta', country: 'United States', type: 'Airport' },
-  { id: 'LAX', name: 'Los Angeles International (LAX)', city: 'Los Angeles', country: 'United States', type: 'Airport' },
-  { id: 'ORD', name: 'Chicago O\'Hare International (ORD)', city: 'Chicago', country: 'United States', type: 'Airport' },
-  { id: 'DFW', name: 'Dallas/Fort Worth International (DFW)', city: 'Dallas', country: 'United States', type: 'Airport' },
-  { id: 'DEN', name: 'Denver International (DEN)', city: 'Denver', country: 'United States', type: 'Airport' },
-  { id: 'JFK', name: 'John F. Kennedy International (JFK)', city: 'New York', country: 'United States', type: 'Airport' },
-  { id: 'SFO', name: 'San Francisco International (SFO)', city: 'San Francisco', country: 'United States', type: 'Airport' },
-  { id: 'SEA', name: 'Seattle-Tacoma International (SEA)', city: 'Seattle', country: 'United States', type: 'Airport' },
-  { id: 'LAS', name: 'Las Vegas McCarran (LAS)', city: 'Las Vegas', country: 'United States', type: 'Airport' },
-  { id: 'MCO', name: 'Orlando International (MCO)', city: 'Orlando', country: 'United States', type: 'Airport' },
-  { id: 'MIA', name: 'Miami International (MIA)', city: 'Miami', country: 'United States', type: 'Airport' },
-  { id: 'PHX', name: 'Phoenix Sky Harbor (PHX)', city: 'Phoenix', country: 'United States', type: 'Airport' },
-  { id: 'IAH', name: 'Houston George Bush (IAH)', city: 'Houston', country: 'United States', type: 'Airport' },
-  { id: 'BOS', name: 'Boston Logan International (BOS)', city: 'Boston', country: 'United States', type: 'Airport' },
-  { id: 'MSP', name: 'Minneapolis-St Paul (MSP)', city: 'Minneapolis', country: 'United States', type: 'Airport' },
-  { id: 'DTW', name: 'Detroit Metropolitan (DTW)', city: 'Detroit', country: 'United States', type: 'Airport' },
-  { id: 'PHL', name: 'Philadelphia International (PHL)', city: 'Philadelphia', country: 'United States', type: 'Airport' },
-  { id: 'LGA', name: 'LaGuardia Airport (LGA)', city: 'New York', country: 'United States', type: 'Airport' },
-  { id: 'EWR', name: 'Newark Liberty International (EWR)', city: 'Newark', country: 'United States', type: 'Airport' },
-  { id: 'CLT', name: 'Charlotte Douglas (CLT)', city: 'Charlotte', country: 'United States', type: 'Airport' },
-
-  // Canada
-  { id: 'YYZ', name: 'Toronto Pearson (YYZ)', city: 'Toronto', country: 'Canada', type: 'Airport' },
-  { id: 'YVR', name: 'Vancouver International (YVR)', city: 'Vancouver', country: 'Canada', type: 'Airport' },
-  { id: 'YUL', name: 'Montreal-Pierre Trudeau (YUL)', city: 'Montreal', country: 'Canada', type: 'Airport' },
-  { id: 'YYC', name: 'Calgary International (YYC)', city: 'Calgary', country: 'Canada', type: 'Airport' },
-
-  // Europe
-  { id: 'LHR', name: 'London Heathrow (LHR)', city: 'London', country: 'United Kingdom', type: 'Airport' },
-  { id: 'LGW', name: 'London Gatwick (LGW)', city: 'London', country: 'United Kingdom', type: 'Airport' },
-  { id: 'CDG', name: 'Paris Charles de Gaulle (CDG)', city: 'Paris', country: 'France', type: 'Airport' },
-  { id: 'ORY', name: 'Paris Orly (ORY)', city: 'Paris', country: 'France', type: 'Airport' },
-  { id: 'FRA', name: 'Frankfurt Airport (FRA)', city: 'Frankfurt', country: 'Germany', type: 'Airport' },
-  { id: 'AMS', name: 'Amsterdam Schiphol (AMS)', city: 'Amsterdam', country: 'Netherlands', type: 'Airport' },
-  { id: 'MAD', name: 'Madrid-Barajas (MAD)', city: 'Madrid', country: 'Spain', type: 'Airport' },
-  { id: 'BCN', name: 'Barcelona-El Prat (BCN)', city: 'Barcelona', country: 'Spain', type: 'Airport' },
-  { id: 'FCO', name: 'Rome Fiumicino (FCO)', city: 'Rome', country: 'Italy', type: 'Airport' },
-  { id: 'MXP', name: 'Milan Malpensa (MXP)', city: 'Milan', country: 'Italy', type: 'Airport' },
-  { id: 'MUC', name: 'Munich Airport (MUC)', city: 'Munich', country: 'Germany', type: 'Airport' },
-  { id: 'ZRH', name: 'Zurich Airport (ZRH)', city: 'Zurich', country: 'Switzerland', type: 'Airport' },
-  { id: 'VIE', name: 'Vienna International (VIE)', city: 'Vienna', country: 'Austria', type: 'Airport' },
-  { id: 'CPH', name: 'Copenhagen Airport (CPH)', city: 'Copenhagen', country: 'Denmark', type: 'Airport' },
-  { id: 'OSL', name: 'Oslo Gardermoen (OSL)', city: 'Oslo', country: 'Norway', type: 'Airport' },
-  { id: 'ARN', name: 'Stockholm Arlanda (ARN)', city: 'Stockholm', country: 'Sweden', type: 'Airport' },
-  { id: 'IST', name: 'Istanbul Airport (IST)', city: 'Istanbul', country: 'Turkey', type: 'Airport' },
-  { id: 'DUB', name: 'Dublin Airport (DUB)', city: 'Dublin', country: 'Ireland', type: 'Airport' },
-  { id: 'LIS', name: 'Lisbon Portela (LIS)', city: 'Lisbon', country: 'Portugal', type: 'Airport' },
-  { id: 'ATH', name: 'Athens International (ATH)', city: 'Athens', country: 'Greece', type: 'Airport' },
-
-  // Asia
-  { id: 'HND', name: 'Tokyo Haneda (HND)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
-  { id: 'NRT', name: 'Tokyo Narita (NRT)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
-  { id: 'SIN', name: 'Singapore Changi (SIN)', city: 'Singapore', country: 'Singapore', type: 'Airport' },
-  { id: 'HKG', name: 'Hong Kong International (HKG)', city: 'Hong Kong', country: 'Hong Kong', type: 'Airport' },
-  { id: 'ICN', name: 'Seoul Incheon (ICN)', city: 'Seoul', country: 'South Korea', type: 'Airport' },
-  { id: 'PVG', name: 'Shanghai Pudong (PVG)', city: 'Shanghai', country: 'China', type: 'Airport' },
-  { id: 'PEK', name: 'Beijing Capital (PEK)', city: 'Beijing', country: 'China', type: 'Airport' },
-  { id: 'CAN', name: 'Guangzhou Baiyun (CAN)', city: 'Guangzhou', country: 'China', type: 'Airport' },
-  { id: 'BKK', name: 'Bangkok Suvarnabhumi (BKK)', city: 'Bangkok', country: 'Thailand', type: 'Airport' },
-  { id: 'KUL', name: 'Kuala Lumpur International (KUL)', city: 'Kuala Lumpur', country: 'Malaysia', type: 'Airport' },
-  { id: 'CGK', name: 'Jakarta Soekarno-Hatta (CGK)', city: 'Jakarta', country: 'Indonesia', type: 'Airport' },
-  { id: 'DPS', name: 'Bali Ngurah Rai (DPS)', city: 'Bali', country: 'Indonesia', type: 'Airport' },
-  { id: 'MNL', name: 'Manila Ninoy Aquino (MNL)', city: 'Manila', country: 'Philippines', type: 'Airport' },
-  { id: 'HAN', name: 'Hanoi Noi Bai (HAN)', city: 'Hanoi', country: 'Vietnam', type: 'Airport' },
-  { id: 'SGN', name: 'Ho Chi Minh City (SGN)', city: 'Ho Chi Minh City', country: 'Vietnam', type: 'Airport' },
-  { id: 'DEL', name: 'Delhi Indira Gandhi (DEL)', city: 'Delhi', country: 'India', type: 'Airport' },
-  { id: 'BOM', name: 'Mumbai Chhatrapati Shivaji (BOM)', city: 'Mumbai', country: 'India', type: 'Airport' },
-  { id: 'KIX', name: 'Osaka Kansai (KIX)', city: 'Osaka', country: 'Japan', type: 'Airport' },
-  { id: 'TPE', name: 'Taiwan Taoyuan (TPE)', city: 'Taipei', country: 'Taiwan', type: 'Airport' },
-
-  // Middle East
-  { id: 'DXB', name: 'Dubai International (DXB)', city: 'Dubai', country: 'UAE', type: 'Airport' },
-  { id: 'DOH', name: 'Doha Hamad International (DOH)', city: 'Doha', country: 'Qatar', type: 'Airport' },
-  { id: 'AUH', name: 'Abu Dhabi International (AUH)', city: 'Abu Dhabi', country: 'UAE', type: 'Airport' },
-  { id: 'CAI', name: 'Cairo International (CAI)', city: 'Cairo', country: 'Egypt', type: 'Airport' },
-  { id: 'TLV', name: 'Tel Aviv Ben Gurion (TLV)', city: 'Tel Aviv', country: 'Israel', type: 'Airport' },
-
-  // Oceania
-  { id: 'SYD', name: 'Sydney Kingsford Smith (SYD)', city: 'Sydney', country: 'Australia', type: 'Airport' },
-  { id: 'MEL', name: 'Melbourne Airport (MEL)', city: 'Melbourne', country: 'Australia', type: 'Airport' },
-  { id: 'BNE', name: 'Brisbane Airport (BNE)', city: 'Brisbane', country: 'Australia', type: 'Airport' },
-  { id: 'AKL', name: 'Auckland Airport (AKL)', city: 'Auckland', country: 'New Zealand', type: 'Airport' },
-  { id: 'PER', name: 'Perth Airport (PER)', city: 'Perth', country: 'Australia', type: 'Airport' },
-
-  // Latin America
-  { id: 'GRU', name: 'São Paulo Guarulhos (GRU)', city: 'São Paulo', country: 'Brazil', type: 'Airport' },
-  { id: 'GIG', name: 'Rio de Janeiro Galeão (GIG)', city: 'Rio de Janeiro', country: 'Brazil', type: 'Airport' },
-  { id: 'MEX', name: 'Mexico City International (MEX)', city: 'Mexico City', country: 'Mexico', type: 'Airport' },
-  { id: 'BOG', name: 'Bogotá El Dorado (BOG)', city: 'Bogotá', country: 'Colombia', type: 'Airport' },
-  { id: 'EZE', name: 'Buenos Aires Ezeiza (EZE)', city: 'Buenos Aires', country: 'Argentina', type: 'Airport' },
-  { id: 'LIM', name: 'Lima Jorge Chávez (LIM)', city: 'Lima', country: 'Peru', type: 'Airport' },
-  { id: 'SCL', name: 'Santiago Arturo Merino (SCL)', city: 'Santiago', country: 'Chile', type: 'Airport' },
-
-  // Africa
-  { id: 'JNB', name: 'Johannesburg O.R. Tambo (JNB)', city: 'Johannesburg', country: 'South Africa', type: 'Airport' },
-  { id: 'CPT', name: 'Cape Town International (CPT)', city: 'Cape Town', country: 'South Africa', type: 'Airport' },
-  { id: 'NBO', name: 'Nairobi Jomo Kenyatta (NBO)', city: 'Nairobi', country: 'Kenya', type: 'Airport' },
-  { id: 'LOS', name: 'Lagos Murtala Muhammed (LOS)', city: 'Lagos', country: 'Nigeria', type: 'Airport' },
-  { id: 'ADD', name: 'Addis Ababa Bole (ADD)', city: 'Addis Ababa', country: 'Ethiopia', type: 'Airport' },
-
-  // Cities and Stations
-  { id: 'city-newyork', name: 'New York, United States', type: 'City' },
-  { id: 'city-london', name: 'London, United Kingdom', type: 'City' },
-  { id: 'city-paris', name: 'Paris, France', type: 'City' },
-  { id: 'city-tokyo', name: 'Tokyo, Japan', type: 'City' },
-  { id: 'city-singapore', name: 'Singapore', type: 'City' },
-  { id: 'city-bangkok', name: 'Bangkok, Thailand', type: 'City' },
-  { id: 'city-dubai', name: 'Dubai, UAE', type: 'City' },
-  { id: 'city-hongkong', name: 'Hong Kong', type: 'City' },
-  { id: 'city-seoul', name: 'Seoul, South Korea', type: 'City' },
-  { id: 'city-sydney', name: 'Sydney, Australia', type: 'City' },
-  { id: 'city-losangeles', name: 'Los Angeles, United States', type: 'City' },
-  { id: 'city-sanfrancisco', name: 'San Francisco, United States', type: 'City' },
-  { id: 'city-seattle', name: 'Seattle, United States', type: 'City' },
-  { id: 'city-chicago', name: 'Chicago, United States', type: 'City' },
-  { id: 'city-miami', name: 'Miami, United States', type: 'City' },
-  { id: 'city-toronto', name: 'Toronto, Canada', type: 'City' },
-  { id: 'city-vancouver', name: 'Vancouver, Canada', type: 'City' },
-  { id: 'city-amsterdam', name: 'Amsterdam, Netherlands', type: 'City' },
-  { id: 'city-barcelona', name: 'Barcelona, Spain', type: 'City' },
-  { id: 'city-rome', name: 'Rome, Italy', type: 'City' },
-  { id: 'city-berlin', name: 'Berlin, Germany', type: 'City' },
-  { id: 'city-madrid', name: 'Madrid, Spain', type: 'City' },
-  { id: 'city-istanbul', name: 'Istanbul, Turkey', type: 'City' },
-  { id: 'city-mumbai', name: 'Mumbai, India', type: 'City' },
-  { id: 'city-delhi', name: 'Delhi, India', type: 'City' },
-  { id: 'city-shanghai', name: 'Shanghai, China', type: 'City' },
-  { id: 'city-beijing', name: 'Beijing, China', type: 'City' },
-  { id: 'city-kualalumpur', name: 'Kuala Lumpur, Malaysia', type: 'City' },
-  { id: 'city-bali', name: 'Bali, Indonesia', type: 'City' },
-  { id: 'city-phuket', name: 'Phuket, Thailand', type: 'City' },
-  { id: 'city-hanoi', name: 'Hanoi, Vietnam', type: 'City' },
-  { id: 'city-saigon', name: 'Ho Chi Minh City, Vietnam', type: 'City' },
-  { id: 'city-osaka', name: 'Osaka, Japan', type: 'City' },
-  { id: 'city-kyoto', name: 'Kyoto, Japan', type: 'City' },
-  { id: 'city-melbourne', name: 'Melbourne, Australia', type: 'City' },
-  { id: 'station-penn', name: 'Penn Station, New York', type: 'Station' },
-  { id: 'station-union', name: 'Union Station, Washington DC', type: 'Station' },
-  { id: 'station-gare', name: 'Gare du Nord, Paris', type: 'Station' },
-  { id: 'station-kings', name: 'King\'s Cross, London', type: 'Station' },
-  { id: 'station-chang', name: 'Changi Airport, Singapore', type: 'Station' },
-  { id: 'station-shinjuku', name: 'Shinjuku Station, Tokyo', type: 'Station' },
-  { id: 'station-central', name: 'Central Station, Amsterdam', type: 'Station' },
-];
-
-const AIRLINES = [
-  { id: 'UA', name: 'United Airlines' },
-  { id: 'AA', name: 'American Airlines' },
-  { id: 'DL', name: 'Delta Air Lines' },
-  { id: 'BA', name: 'British Airways' },
-  { id: 'AF', name: 'Air France' },
-  { id: 'LH', name: 'Lufthansa' },
-  { id: 'SQ', name: 'Singapore Airlines' },
-  { id: 'EK', name: 'Emirates' },
-  { id: 'JL', name: 'Japan Airlines' },
-  { id: 'NH', name: 'ANA' },
-  { id: 'QF', name: 'Qantas' },
-  { id: 'AC', name: 'Air Canada' },
-  { id: 'TK', name: 'Turkish Airlines' },
-  { id: 'KL', name: 'KLM' },
-  { id: 'CX', name: 'Cathay Pacific' },
-];
-
-function searchAirportsAndCities(query, limit = 8) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return [];
-
-  // Search by airport code, city name, or full name
-  return AIRPORTS_AND_CITIES.filter((a) => {
-    const nameMatch = a.name.toLowerCase().includes(q);
-    const idMatch = a.id && a.id.toLowerCase().includes(q);
-    const cityMatch = a.city && a.city.toLowerCase().includes(q);
-    const countryMatch = a.country && a.country.toLowerCase().includes(q);
-
-    return nameMatch || idMatch || cityMatch || countryMatch;
-  }).slice(0, limit);
-}
-
-function searchLocationsForSurfaceTransport(query, limit = 10) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return [];
-
-  // Search by city name, country, or full name - prioritize cities over airports
-  const results = AIRPORTS_AND_CITIES.filter((a) => {
-    const nameMatch = a.name.toLowerCase().includes(q);
-    const idMatch = a.id && a.id.toLowerCase().includes(q);
-    const cityMatch = a.city && a.city.toLowerCase().includes(q);
-    const countryMatch = a.country && a.country.toLowerCase().includes(q);
-
-    return nameMatch || idMatch || cityMatch || countryMatch;
-  });
-
-  // Sort: Cities first, then Airports
-  const sorted = results.sort((a, b) => {
-    if (a.type === 'City' && b.type !== 'City') return -1;
-    if (a.type !== 'City' && b.type === 'City') return 1;
-    return 0;
-  });
-
-  return sorted.slice(0, limit);
-}
-
-function searchAirlines(query, limit = 8) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return [];
-  return AIRLINES.filter(
-    (a) => a.name.toLowerCase().includes(q) || (a.id && a.id.toLowerCase().includes(q))
-  ).slice(0, limit);
-}
-
 // Fetch Google Places Autocomplete predictions
 async function fetchPlacesPredictions(input, callback) {
   if (!input || !input.trim()) {
@@ -1907,28 +1701,77 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [openDayMenuKey]);
 
   useEffect(() => {
-    const targetDestination = extractPrimaryDestination(trip?.destination || trip?.locations);
-    if (!targetDestination) return;
+    const targets = getDestinationList(trip?.destination, trip?.locations);
+    if (targets.length === 0) return;
 
     let cancelled = false;
     const run = async () => {
       setDiscoveryLoading(true);
       setDiscoveryError('');
       try {
-        const data = await fetchDiscoveryData(targetDestination, 50);
-        if (!cancelled) {
-          setDiscoveryData({
-            places: Array.isArray(data?.places) ? data.places : [],
-            foods: Array.isArray(data?.foods) ? data.foods : [],
-            stays: Array.isArray(data?.stays) ? data.stays : [],
-            experiences: Array.isArray(data?.experiences) ? data.experiences : [],
-            communityItineraries: Array.isArray(data?.communityItineraries) ? data.communityItineraries : [],
-            center: Array.isArray(data?.center) ? data.center : null,
-            warning: data?.warning || '',
-            cached: Boolean(data?.cached),
-            stale: Boolean(data?.stale),
-          });
-        }
+        const responses = await Promise.all(targets.map((dest) => fetchDiscoveryData(dest, 50)));
+        if (cancelled) return;
+
+        const places = mergeUniqueBy(
+          responses.flatMap((data, idx) => (
+            Array.isArray(data?.places)
+              ? data.places.map((item) => ({ ...item, _sourceDestination: targets[idx] }))
+              : []
+          )),
+          (it, idx) => String(it?.googlePlaceId || it?.id || `${String(it?.name || '').toLowerCase()}|${it?.lat || ''}|${it?.lng || ''}|${idx}`),
+        );
+        const foods = mergeUniqueBy(
+          responses.flatMap((data, idx) => (
+            Array.isArray(data?.foods)
+              ? data.foods.map((item) => ({ ...item, _sourceDestination: targets[idx] }))
+              : []
+          )),
+          (it, idx) => String(it?.googlePlaceId || it?.id || `${String(it?.name || '').toLowerCase()}|${it?.lat || ''}|${it?.lng || ''}|${idx}`),
+        );
+        const stays = mergeUniqueBy(
+          responses.flatMap((data, idx) => (
+            Array.isArray(data?.stays)
+              ? data.stays.map((item) => ({ ...item, _sourceDestination: targets[idx] }))
+              : []
+          )),
+          (it, idx) => String(it?.id || `${String(it?.name || '').toLowerCase()}|${it?.lat || ''}|${it?.lng || ''}|${idx}`),
+        );
+        const experiences = mergeUniqueBy(
+          responses.flatMap((data, idx) => (
+            Array.isArray(data?.experiences)
+              ? data.experiences.map((item) => ({ ...item, _sourceDestination: targets[idx] }))
+              : []
+          )),
+          (it, idx) => String(it?.id || `${String(it?.name || '').toLowerCase()}|${it?.lat || ''}|${it?.lng || ''}|${idx}`),
+        );
+        const communityItineraries = mergeUniqueBy(
+          responses.flatMap((data) => (Array.isArray(data?.communityItineraries) ? data.communityItineraries : [])),
+          (it, idx) => String(it?.id || `${String(it?.title || '').toLowerCase()}|${idx}`),
+        );
+
+        const centers = responses
+          .map((data) => (Array.isArray(data?.center) && data.center.length === 2 ? data.center : null))
+          .filter(Boolean);
+        const center = centers.length > 0
+          ? [
+            centers.reduce((sum, c) => sum + Number(c[0] || 0), 0) / centers.length,
+            centers.reduce((sum, c) => sum + Number(c[1] || 0), 0) / centers.length,
+          ]
+          : null;
+
+        const warnings = Array.from(new Set(responses.map((data) => String(data?.warning || '').trim()).filter(Boolean)));
+
+        setDiscoveryData({
+          places,
+          foods,
+          stays,
+          experiences,
+          communityItineraries,
+          center,
+          warning: warnings.join(' '),
+          cached: responses.some((data) => Boolean(data?.cached)),
+          stale: responses.some((data) => Boolean(data?.stale)),
+        });
       } catch (err) {
         if (!cancelled) {
           setDiscoveryError(err?.message || 'Failed to load destination data');
@@ -1938,7 +1781,7 @@ export default function TripDetailsPage({ user, onLogout }) {
             foods: [],
             experiences: [],
             communityItineraries: [],
-            center: getMapCenterForDestination(targetDestination),
+            center: getMapCenterForDestination(targets[0]),
             warning: 'Could not connect to the discovery service. Please check that the backend is running and try again.',
             cached: false,
             stale: true,
@@ -2577,9 +2420,19 @@ export default function TripDetailsPage({ user, onLogout }) {
     }]);
   };
 
-  const cityQuery = useMemo(
-    () => extractPrimaryDestination(trip?.destination || trip?.locations),
+  const selectedDestinations = useMemo(
+    () => getDestinationList(trip?.destination, trip?.locations),
     [trip?.destination, trip?.locations],
+  );
+
+  const cityQuery = useMemo(
+    () => selectedDestinations[0] || '',
+    [selectedDestinations],
+  );
+
+  const destinationLabel = useMemo(
+    () => (selectedDestinations.length > 0 ? selectedDestinations.join(', ') : cityQuery),
+    [selectedDestinations, cityQuery],
   );
 
   const destinationCountry = useMemo(() => {
@@ -2852,6 +2705,16 @@ export default function TripDetailsPage({ user, onLogout }) {
     ];
     if (!Array.isArray(candidatePool) || candidatePool.length === 0) return [];
 
+    const normalizeCityToken = (value = '') => String(value || '').split(',')[0].trim().toLowerCase();
+    const matchesCityHint = (candidate, cityHint = '') => {
+      const hint = normalizeCityToken(cityHint);
+      if (!hint) return true;
+      const sourceCity = normalizeCityToken(candidate?._sourceDestination || '');
+      if (sourceCity && sourceCity === hint) return true;
+      const address = String(candidate?.address || '').toLowerCase();
+      return address.includes(hint);
+    };
+
     const normalizedPlaces = candidatePool
       .filter((place) => place && place.lat != null && place.lng != null)
       .map((place, index) => {
@@ -2893,6 +2756,19 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     // Plan across the full trip duration (no 7-day cap / feasibility cap).
     const dayCount = tripDayCount;
+
+    const cityHintByDay = {};
+    if (Array.isArray(trip?.citySegments) && trip.citySegments.length > 0) {
+      trip.citySegments.forEach((seg) => {
+        const city = String(seg?.city || seg?.locationLabel || '').trim();
+        const startDay = Math.max(1, Math.min(dayCount, Number(seg?.startDay) || 1));
+        const endDay = Math.max(startDay, Math.min(dayCount, Number(seg?.endDay) || startDay));
+        for (let day = startDay; day <= endDay; day += 1) {
+          cityHintByDay[day] = city;
+        }
+      });
+    }
+
     const targetStops = dayCount * 5;
 
     // Keep only top popular candidates so recommendations match user expectation.
@@ -2902,6 +2778,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     const remaining = [...workingPool];
     const orderedDayPlaces = Array.from({ length: dayCount }, (_, idx) => ({
       dayNum: idx + 1,
+      cityHint: cityHintByDay[idx + 1] || '',
       ordered: [],
     }));
     const CLUSTER_RADIUS_KM = 6;
@@ -2915,8 +2792,10 @@ export default function TripDetailsPage({ user, onLogout }) {
       let bestIdx = 0;
       let bestObjective = Number.NEGATIVE_INFINITY;
 
+      const dayCityHint = orderedDayPlaces[dayIdx]?.cityHint || '';
       for (let i = 0; i < remaining.length; i += 1) {
         const candidate = remaining[i];
+        if (dayCityHint && !matchesCityHint(candidate, dayCityHint)) continue;
         const spreadBonus = seededPlaces.length > 0
           ? Math.min(
             seededPlaces.reduce((minDist, seeded) => Math.min(minDist, distanceBetween(seeded, candidate)), Number.POSITIVE_INFINITY),
@@ -2930,7 +2809,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         }
       }
 
-      const seed = remaining.splice(bestIdx, 1)[0];
+      const seed = remaining.splice(bestIdx, 1)[0] || null;
+      if (!seed) continue;
       orderedDayPlaces[dayIdx].ordered.push(seed);
       seededPlaces.push(seed);
     }
@@ -2953,14 +2833,17 @@ export default function TripDetailsPage({ user, onLogout }) {
       if (day.ordered.length >= 5) continue;
 
       const anchor = day.ordered[day.ordered.length - 1] || remaining[0];
+      const dayCityHint = day.cityHint || '';
       let preferredIndices = [];
 
       for (let i = 0; i < remaining.length; i += 1) {
+        if (dayCityHint && !matchesCityHint(remaining[i], dayCityHint)) continue;
         const distKm = distanceBetween(anchor, remaining[i]);
         if (distKm <= CLUSTER_RADIUS_KM) preferredIndices.push(i);
       }
       if (preferredIndices.length === 0) {
         for (let i = 0; i < remaining.length; i += 1) {
+          if (dayCityHint && !matchesCityHint(remaining[i], dayCityHint)) continue;
           const distKm = distanceBetween(anchor, remaining[i]);
           if (distKm <= MAX_REASONABLE_RADIUS_KM) preferredIndices.push(i);
         }
@@ -3039,9 +2922,32 @@ export default function TripDetailsPage({ user, onLogout }) {
       usedCandidateKeys.add(toCandidateKey(selectedFood));
     });
 
+    // Backfill so each day has up to 5 stops even when unique candidates are limited.
+    orderedDayPlaces.forEach((bucket, bucketIdx) => {
+      if (bucket.ordered.length >= 5) return;
+      const cityPool = bucket.cityHint
+        ? rankedPlaces.filter((candidate) => matchesCityHint(candidate, bucket.cityHint))
+        : rankedPlaces;
+      const pool = cityPool.length > 0 ? cityPool : rankedPlaces;
+      if (pool.length === 0) return;
+
+      let cursor = bucketIdx;
+      while (bucket.ordered.length < 5) {
+        const base = pool[cursor % pool.length];
+        if (!base) break;
+        bucket.ordered.push({
+          ...base,
+          _reused: true,
+          _reuseNonce: `${bucket.dayNum}-${bucket.ordered.length}-${cursor}`,
+        });
+        cursor += 1;
+      }
+    });
+
     const itineraryPlaces = orderedDayPlaces
       .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => {
         const resolvedDurationMinutes = resolveSmartDurationMinutes(source);
+        const cityHint = bucket.cityHint || '';
         return {
         id: `smart-itinerary-${bucket.dayNum}-${index}-${source.id || source._idx || 'place'}`,
         name: source.name || `Stop ${index + 1}`,
@@ -3057,7 +2963,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         itemType: source._itemType === 'food' ? 'food' : 'place',
         category: source._itemType === 'food' ? 'Food & Beverage' : 'Place',
         dayNum: bucket.dayNum,
-        dayTitle: `Day ${bucket.dayNum}`,
+        dayTitle: cityHint ? `Day ${bucket.dayNum} - ${cityHint}` : `Day ${bucket.dayNum}`,
         durationMinutes: resolvedDurationMinutes,
         durationLabel: source.estimatedDuration || formatDurationLabelFromMinutes(resolvedDurationMinutes),
       };
@@ -3068,8 +2974,8 @@ export default function TripDetailsPage({ user, onLogout }) {
 
     return [{
       id: 'smart-itinerary-generator',
-      title: `${cityQuery}: Smart Itinerary Generator`,
-      destination: cityQuery,
+      title: `${destinationLabel}: Smart Itinerary Generator`,
+      destination: destinationLabel,
       duration: `${dayCount} days`,
       type: 'Smart-generated',
       creator: 'Smart Itinerary Generator',
@@ -3082,11 +2988,11 @@ export default function TripDetailsPage({ user, onLogout }) {
       image: itineraryPlaces[0]?.image || '',
       tags: ['Popularity-ranked', 'Clustered by 2km', 'Includes food & places'],
       views: 0,
-      countriesCount: 1,
+      countriesCount: Math.max(1, selectedDestinations.length),
       dayCount,
       places: itineraryPlaces,
     }];
-  }, [discoveryData?.places, discoveryData?.foods, filteredPlaces, filteredFoods, cityQuery, days?.length]);
+  }, [discoveryData?.places, discoveryData?.foods, filteredPlaces, filteredFoods, cityQuery, destinationLabel, selectedDestinations.length, days?.length, trip?.citySegments]);
 
   const mapCenter = useMemo(() => {
     if (Array.isArray(discoveryData?.center) && discoveryData.center.length === 2) {
@@ -6598,7 +6504,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         </span>
                         <span className="trip-details__itinerary-detail-stat">Smart-generated route</span>
                         <span className="trip-details__itinerary-detail-stat">{itineraryDetailsView.duration}</span>
-                        <span className="trip-details__itinerary-detail-stat">{cityQuery}</span>
+                        <span className="trip-details__itinerary-detail-stat">{destinationLabel}</span>
                         <span className="trip-details__itinerary-detail-stat">{itineraryPlaces.length} places</span>
                       </div>
                       <div className="trip-details__itinerary-detail-tags">
@@ -6731,7 +6637,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               <p className="trip-details__add-places-results">Could not load live data: {discoveryError}</p>
                             )}
                             {discoveryLoading && (
-                              <p className="trip-details__add-places-results">Loading live places for {cityQuery}...</p>
+                              <p className="trip-details__add-places-results">Loading live places for {destinationLabel}...</p>
                             )}
                             <div className="trip-details__add-places-filters">
                               <p className="trip-details__add-places-results">
@@ -7272,7 +7178,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <p className="trip-details__add-places-results">{discoveryData.warning}</p>
                       )}
                       {discoveryLoading && (
-                        <p className="trip-details__add-places-results">Loading live food places for {cityQuery}...</p>
+                        <p className="trip-details__add-places-results">Loading live food places for {destinationLabel}...</p>
                       )}
 
                       <div className="trip-details__add-places-grid">
@@ -7707,7 +7613,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                       <p className="trip-details__add-places-results">{discoveryData.warning}</p>
                     )}
                     {discoveryLoading && (
-                      <p className="trip-details__add-places-results">Loading stays for {cityQuery}...</p>
+                      <p className="trip-details__add-places-results">Loading stays for {destinationLabel}...</p>
                     )}
 
                     <div className="trip-details__add-places-grid">
@@ -8050,7 +7956,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         <p className="trip-details__add-places-results">{discoveryData.warning}</p>
                       )}
                       {discoveryLoading && (
-                        <p className="trip-details__add-places-results">Loading live experiences for {cityQuery}...</p>
+                        <p className="trip-details__add-places-results">Loading live experiences for {destinationLabel}...</p>
                       )}
 
                       <div className="trip-details__add-places-grid">

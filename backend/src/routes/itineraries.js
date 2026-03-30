@@ -179,6 +179,24 @@ function normalizeCategories(raw) {
   return raw.map((c) => String(c).trim()).filter(Boolean);
 }
 
+function normalizeCitySegments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((seg) => ({
+      city: String(seg?.city || '').trim(),
+      locationLabel: String(seg?.locationLabel || '').trim(),
+      startDay: Math.max(1, Number(seg?.startDay) || 1),
+      endDay: Math.max(1, Number(seg?.endDay) || 1),
+    }))
+    .filter((seg) => seg.city)
+    .map((seg) => ({
+      ...seg,
+      startDay: Math.min(seg.startDay, seg.endDay),
+      endDay: Math.max(seg.startDay, seg.endDay),
+    }))
+    .sort((a, b) => a.startDay - b.startDay);
+}
+
 function normalizeCoverImages(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map((u) => String(u).trim()).filter(Boolean);
@@ -793,6 +811,7 @@ router.post('/', requireAuth, async (req, res) => {
       creator: req.userId,
       destination: req.body?.destination != null ? String(req.body.destination).trim() : '',
       locations: req.body?.locations != null ? String(req.body.locations).trim() : '',
+      citySegments: normalizeCitySegments(req.body?.citySegments),
       startDate,
       endDate,
       dates: req.body?.dates != null ? String(req.body.dates) : '',
@@ -869,6 +888,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.overview != null) existing.overview = String(body.overview);
     if (body.destination != null) existing.destination = String(body.destination).trim();
     if (body.locations != null) existing.locations = String(body.locations).trim();
+    if (body.citySegments != null) existing.citySegments = normalizeCitySegments(body.citySegments);
     if (body.startDate != null) existing.startDate = String(body.startDate).trim();
     if (body.endDate != null) existing.endDate = String(body.endDate).trim();
     if (body.dates != null) existing.dates = String(body.dates);

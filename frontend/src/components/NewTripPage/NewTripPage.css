@@ -82,6 +82,114 @@
   position: relative;
 }
 
+.new-trip__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+.new-trip__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: 1px solid var(--wtg-border);
+  border-radius: 999px;
+}
+
+.new-trip__chip--pending {
+  background: #fff;
+  cursor: pointer;
+}
+
+.new-trip__chip-remove {
+  width: 1.125rem;
+  height: 1.125rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--wtg-text-muted);
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 1rem;
+}
+
+.new-trip__chip-remove:hover {
+  background: #e5e7eb;
+  color: #111;
+}
+
+.new-trip__city-plan {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  background: var(--wtg-surface);
+}
+
+.new-trip__city-plan-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.new-trip__city-plan-hint {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--wtg-text-muted);
+}
+
+.new-trip__city-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+}
+
+.new-trip__city-plan-city {
+  font-size: 0.9rem;
+  color: var(--wtg-text);
+  font-weight: 500;
+}
+
+.new-trip__city-plan-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.new-trip__city-plan-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--wtg-text-muted);
+}
+
+.new-trip__city-plan-input {
+  width: 64px;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--wtg-text);
+}
+
+.new-trip__city-plan-foot {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  color: var(--wtg-text-muted);
+}
+
 /* Where to? suggestions */
 .new-trip__suggestions {
   position: absolute;
