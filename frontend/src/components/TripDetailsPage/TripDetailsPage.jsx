@@ -269,6 +269,17 @@ function addDays(dateStr, delta) {
   return d.toISOString().slice(0, 10);
 }
 
+function shouldShiftForInsertedDay(value, anchorDate, position) {
+  if (!value || !anchorDate) return false;
+  return position === 'before' ? value >= anchorDate : value > anchorDate;
+}
+
+function shiftDayKeyAfterInsert(dayNum, anchorDayNum, position) {
+  if (!Number.isFinite(dayNum) || !Number.isFinite(anchorDayNum)) return dayNum;
+  if (position === 'before') return dayNum >= anchorDayNum ? dayNum + 1 : dayNum;
+  return dayNum > anchorDayNum ? dayNum + 1 : dayNum;
+}
+
 function isStayItem(item) {
   const raw = String(item?.categoryId || item?.category || '').toLowerCase();
   return raw === 'stays' || raw === 'stay';
@@ -393,6 +404,7 @@ const CALENDAR_ROW_HEIGHT = 48;
 const CALENDAR_ALL_DAY_HEIGHT = 28;
 const CALENDAR_GUTTER_WIDTH = 52;
 const CALENDAR_DRAG_SNAP_MINS = 30;
+const CALENDAR_EVENT_VERTICAL_INSET = 7;
 const DAY_COLUMN_DEFAULT_WIDTH = 280;
 const CALENDAR_DAY_COLUMN_DEFAULT_WIDTH = 240;
 const DAY_COLUMN_MIN_WIDTH = 220;
@@ -450,8 +462,11 @@ function getCalendarEventPosition(item) {
   const durationHrs = Number(item.durationHrs ?? 0);
   const durationMins = Number(item.durationMins ?? 0);
   const durationRows = Math.max(0.5, (durationHrs * 60 + durationMins) / 60);
-  const topPx = CALENDAR_ALL_DAY_HEIGHT + Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT);
-  const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, durationRows * CALENDAR_ROW_HEIGHT);
+  const topPx = CALENDAR_ALL_DAY_HEIGHT
+    + Math.max(0, (startHour - CALENDAR_START_HOUR) * CALENDAR_ROW_HEIGHT)
+    + CALENDAR_EVENT_VERTICAL_INSET;
+  const rawHeight = durationRows * CALENDAR_ROW_HEIGHT;
+  const heightPx = Math.max(CALENDAR_ROW_HEIGHT * 0.5, rawHeight);
   return { top: topPx, height: heightPx };
 }
 
@@ -546,6 +561,54 @@ function minutesToHHmm(totalMinutes) {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function getDefaultStartTimeForDate(items, dayDate, fallback = '07:00', desiredDurationMinutes = 60) {
+  if (!dayDate) return fallback;
+
+  const minAllowed = CALENDAR_START_HOUR * 60;
+  const dayEnd = (CALENDAR_START_HOUR + CALENDAR_HOURS) * 60;
+  const snappedDuration = Math.max(
+    CALENDAR_DRAG_SNAP_MINS,
+    Math.ceil(Math.max(1, Number(desiredDurationMinutes) || 60) / CALENDAR_DRAG_SNAP_MINS) * CALENDAR_DRAG_SNAP_MINS,
+  );
+  const latestAllowedStart = Math.max(minAllowed, dayEnd - snappedDuration);
+
+  const fallbackMinutes = clamp(
+    Math.ceil(timeToMinutes(fallback) / CALENDAR_DRAG_SNAP_MINS) * CALENDAR_DRAG_SNAP_MINS,
+    minAllowed,
+    latestAllowedStart,
+  );
+
+  const dayItems = (items || [])
+    .filter((it) => (
+      it?.date === dayDate
+      && !isStayItem(it)
+      && typeof it?.startTime === 'string'
+      && String(it.startTime).trim()
+    ))
+    .map((it) => {
+      const start = timeToMinutes(it.startTime);
+      const mins = Math.max(CALENDAR_DRAG_SNAP_MINS, (Number(it.durationHrs ?? 0) * 60) + Number(it.durationMins ?? 0));
+      return { start, end: start + mins };
+    })
+    .sort((a, b) => a.start - b.start);
+
+  if (dayItems.length === 0) return minutesToHHmm(fallbackMinutes);
+
+  for (
+    let candidate = fallbackMinutes;
+    candidate <= latestAllowedStart;
+    candidate += CALENDAR_DRAG_SNAP_MINS
+  ) {
+    const candidateEnd = candidate + snappedDuration;
+    const overlaps = dayItems.some((slot) => rangesOverlap(candidate, candidateEnd, slot.start, slot.end));
+    if (!overlaps) return minutesToHHmm(candidate);
+  }
+
+  const latestEndMins = dayItems.reduce((latest, slot) => Math.max(latest, slot.end), minAllowed);
+  const snappedAfterLatest = Math.ceil(latestEndMins / CALENDAR_DRAG_SNAP_MINS) * CALENDAR_DRAG_SNAP_MINS;
+  return minutesToHHmm(clamp(snappedAfterLatest, minAllowed, latestAllowedStart));
 }
 
 function durationMinutesToParts(totalMinutes) {
@@ -644,6 +707,39 @@ function getEndTime(startTime, durationHrs = 0, durationMins = 0) {
   endM = endM % 60;
   endH = endH % 24;
   return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+function findTimeOverlapItem(items, candidate) {
+  const date = String(candidate?.date || '').trim();
+  const startTime = String(candidate?.startTime || '').trim();
+  const excludeId = String(candidate?.excludeId || '');
+  if (!date || !startTime) return null;
+
+  const candidateStart = timeToMinutes(startTime);
+  const candidateDuration = Math.max(
+    1,
+    (Number(candidate?.durationHrs || 0) * 60) + Number(candidate?.durationMins || 0),
+  );
+  const candidateEnd = candidateStart + candidateDuration;
+
+  const dayItems = (items || []).filter((it) => {
+    if (!it || String(it.date || '') !== date) return false;
+    if (isStayItem(it)) return false;
+    if (excludeId && String(it.id || '') === excludeId) return false;
+    return true;
+  });
+
+  return dayItems.find((it) => {
+    const itemStartRaw = String(it.startTime || '').trim();
+    if (!itemStartRaw) return false;
+    const itemStart = timeToMinutes(itemStartRaw);
+    const itemDuration = Math.max(
+      1,
+      (Number(it.durationHrs || 0) * 60) + Number(it.durationMins || 0),
+    );
+    const itemEnd = itemStart + itemDuration;
+    return rangesOverlap(candidateStart, candidateEnd, itemStart, itemEnd);
+  }) || null;
 }
 
 function formatTimeRange(item) {
@@ -1219,6 +1315,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [addCustomExperienceOpen, setAddCustomExperienceOpen] = useState(false);
   const [addPlacesDay, setAddPlacesDay] = useState(1);
   const [addFoodDay, setAddFoodDay] = useState(1);
+  const [addExperiencesDay, setAddExperiencesDay] = useState(1);
   const [addToTripModalOpen, setAddToTripModalOpen] = useState(false);
   const [addToTripItem, setAddToTripItem] = useState(null);
   const [addToTripDate, setAddToTripDate] = useState('');
@@ -1347,6 +1444,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [generalNotes, setGeneralNotes] = useState('');
   const [generalAttachments, setGeneralAttachments] = useState([]);
   const [notesActiveTab, setNotesActiveTab] = useState('general');
+  const [notesSaving, setNotesSaving] = useState(false);
   const [editPlaceItem, setEditPlaceItem] = useState(null);
   const [pendingDeleteItemId, setPendingDeleteItemId] = useState(null);
   const [whereModalOpen, setWhereModalOpen] = useState(false);
@@ -1394,30 +1492,23 @@ export default function TripDetailsPage({ user, onLogout }) {
   });
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryError, setDiscoveryError] = useState('');
-  const [inAppNotice, setInAppNotice] = useState(null);
   const dayResizeSessionRef = useRef(null);
-  const inAppNoticeTimerRef = useRef(null);
-
-  useEffect(() => () => {
-    if (inAppNoticeTimerRef.current) {
-      clearTimeout(inAppNoticeTimerRef.current);
-    }
-  }, []);
+  const skipExpenseSaveToastUntilRef = useRef(0);
 
   const showInAppNotice = (message, type = 'info', durationMs = 3200) => {
     if (!message) return;
-    if (inAppNoticeTimerRef.current) {
-      clearTimeout(inAppNoticeTimerRef.current);
+    const normalizedMessage = String(message).trim().toLowerCase();
+    if (/^inserted a new day (before|after) day \d+\.?$/.test(normalizedMessage)) return;
+    const toastOptions = { duration: durationMs };
+    if (type === 'success') {
+      toast.success(message, toastOptions);
+      return;
     }
-    setInAppNotice({
-      id: Date.now(),
-      message,
-      type,
-    });
-    inAppNoticeTimerRef.current = setTimeout(() => {
-      setInAppNotice(null);
-      inAppNoticeTimerRef.current = null;
-    }, durationMs);
+    if (type === 'warning') {
+      toast(message, { ...toastOptions, icon: '⚠️' });
+      return;
+    }
+    toast(message, toastOptions);
   };
 
   const handleCalendarDragStart = (e, itemId) => {
@@ -1602,8 +1693,46 @@ export default function TripDetailsPage({ user, onLogout }) {
       : [];
 
     setTripExpenseItems(persistedItems);
+    setGeneralNotes(String(tripData?.generalNotes ?? tripData?.overview ?? ''));
+    setGeneralAttachments(Array.isArray(tripData?.generalAttachments) ? tripData.generalAttachments : []);
     hydratedTripItemsForIdRef.current = tripId;
   }, [tripId, tripData]);
+
+  const saveGeneralNotesAndDocuments = async () => {
+    if (!tripId) return;
+    setNotesSaving(true);
+    try {
+      const updated = await updateItinerary(tripId, {
+        generalNotes,
+        generalAttachments,
+        // Keep overview in sync for compatibility with existing data.
+        overview: generalNotes,
+      });
+      if (updated) setServerItinerary(updated);
+      toast.success('General notes saved', { id: 'trip-notes-saved' });
+    } catch (e) {
+      console.error('Failed to save general notes/documents', e);
+      toast.error(e?.message || 'Could not save general notes', { id: 'trip-notes-save-error' });
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
+  const saveDayNotesAndDocuments = async (dayDate, dayLabel) => {
+    if (!tripId || !dayDate) return;
+    setNotesSaving(true);
+    try {
+      skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
+      const updated = await updateItinerary(tripId, { tripExpenseItems });
+      if (updated) setServerItinerary(updated);
+      toast.success(`${dayLabel} notes saved`, { id: 'trip-day-notes-saved' });
+    } catch (e) {
+      console.error('Failed to save day notes/documents', e);
+      toast.error(e?.message || `Could not save ${dayLabel} notes`, { id: 'trip-day-notes-save-error' });
+    } finally {
+      setNotesSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (tripLoading || !tripData) return;
@@ -1620,9 +1749,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         const m = expensePersistCountByTripRef.current;
         if (m.tripId !== tripId) return;
         m.count += 1;
-        if (m.count > 1) {
-          toast.success('Changes saved', { id: 'trip-details-saved' });
-        }
       } catch (e) {
         if (!cancelled) console.error('Failed to save trip items', e);
       }
@@ -2637,6 +2763,19 @@ export default function TripDetailsPage({ user, onLogout }) {
       : 0;
     const stayDuration = isStayCategory ? durationMinutesToParts(stayDurationMinutes) : { durationHrs: durationHrsNum, durationMins: durationMinsNum };
 
+    if (!isStayCategory) {
+      const overlapping = findTimeOverlapItem(tripExpenseItems, {
+        date: resolvedDate,
+        startTime,
+        durationHrs: stayDuration.durationHrs,
+        durationMins: stayDuration.durationMins,
+      });
+      if (overlapping) {
+        showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
+        return false;
+      }
+    }
+
     const docs = Array.isArray(values?.travelDocs)
       ? values.travelDocs
         .map((file, idx) => {
@@ -2682,6 +2821,8 @@ export default function TripDetailsPage({ user, onLogout }) {
       rating: data.rating,
       reviewCount: data.reviewCount,
     }]);
+
+    return true;
   };
 
   const { openSocialImportForDay, socialImportModalProps } = useSocialImport({
@@ -2749,15 +2890,25 @@ export default function TripDetailsPage({ user, onLogout }) {
       reviewCount: marker.reviewCount,
     };
 
-    const day = days.find((d) => d.dayNum === 1);
+    const preferredDayNum = markerType === 'food'
+      ? addFoodDay
+      : markerType === 'experience'
+        ? addExperiencesDay
+        : addPlacesDay;
+    const day = days.find((d) => d.dayNum === preferredDayNum) || days.find((d) => d.dayNum === 1);
+    const selectedDate = day?.date || days[0]?.date || '';
+    const sourceDurationMins = type === 'experience'
+      ? Math.max(1, Math.round((Number(data?.durationHours || 0) || 2) * 60))
+      : 60;
+    const sourceDurationParts = durationMinutesToParts(sourceDurationMins);
     setAddToTripItem({ type, data, categoryId, category, Icon });
-    setAddToTripDate(day?.date || days[0]?.date || '');
-    setAddToTripStartTime('07:00');
-    setAddToTripDurationHrs('1');
-    setAddToTripDurationMins('0');
-    setAddToTripCheckInDate(day?.date || days[0]?.date || '');
+    setAddToTripDate(selectedDate);
+    setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00', sourceDurationMins));
+    setAddToTripDurationHrs(String(sourceDurationParts.durationHrs));
+    setAddToTripDurationMins(String(sourceDurationParts.durationMins));
+    setAddToTripCheckInDate(selectedDate);
     setAddToTripCheckInTime('15:00');
-    setAddToTripCheckOutDate(days.find((d) => d.dayNum === 2)?.date || addDays(day?.date || days[0]?.date || '', 1));
+    setAddToTripCheckOutDate(days.find((d) => d.dayNum === 2)?.date || addDays(selectedDate, 1));
     setAddToTripCheckOutTime('11:00');
     setAddToTripNotes('');
     setAddToTripCost('');
@@ -3289,26 +3440,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         </div>
       </header>
 
-      {inAppNotice ? (
-        <div className={`trip-details__inline-notice trip-details__inline-notice--${inAppNotice.type}`} role="status" aria-live="polite">
-          <span className="trip-details__inline-notice-text">{inAppNotice.message}</span>
-          <button
-            type="button"
-            className="trip-details__inline-notice-close"
-            aria-label="Dismiss notification"
-            onClick={() => {
-              if (inAppNoticeTimerRef.current) {
-                clearTimeout(inAppNoticeTimerRef.current);
-                inAppNoticeTimerRef.current = null;
-              }
-              setInAppNotice(null);
-            }}
-          >
-            <X size={14} aria-hidden />
-          </button>
-        </div>
-      ) : null}
-
       <div className="trip-details__body">
         {viewMode === 'kanban' ? (
           <div className="trip-details__columns">
@@ -3403,7 +3534,42 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__day-dropdown-item"
                               role="menuitem"
                               onClick={() => {
-                                setDateRange({ startDate: addDays(displayStart, -1), endDate: displayEnd });
+                                skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
+                                setTripExpenseItems((prev) => prev.map((it) => {
+                                  const next = { ...it };
+                                  if (shouldShiftForInsertedDay(next.date, day.date, 'before')) next.date = addDays(next.date, 1);
+                                  if (shouldShiftForInsertedDay(next.checkInDate, day.date, 'before')) next.checkInDate = addDays(next.checkInDate, 1);
+                                  if (shouldShiftForInsertedDay(next.checkOutDate, day.date, 'before')) next.checkOutDate = addDays(next.checkOutDate, 1);
+                                  if (shouldShiftForInsertedDay(next.startDate, day.date, 'before')) next.startDate = addDays(next.startDate, 1);
+                                  if (shouldShiftForInsertedDay(next.endDate, day.date, 'before')) next.endDate = addDays(next.endDate, 1);
+                                  return next;
+                                }));
+                                setDayTitles((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'before')] = v;
+                                  });
+                                  return next;
+                                });
+                                setDayColors((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'before')] = v;
+                                  });
+                                  return next;
+                                });
+                                setDayColumnWidths((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'before')] = v;
+                                  });
+                                  return next;
+                                });
+                                setMapDayFilterSelected((prev) => prev.map((n) => shiftDayKeyAfterInsert(n, day.dayNum, 'before')));
+                                setDateRange({ startDate: displayStart, endDate: addDays(displayEnd, 1) });
                                 setOpenDayMenuKey(null);
                               }}
                             >
@@ -3414,6 +3580,41 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__day-dropdown-item"
                               role="menuitem"
                               onClick={() => {
+                                skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
+                                setTripExpenseItems((prev) => prev.map((it) => {
+                                  const next = { ...it };
+                                  if (shouldShiftForInsertedDay(next.date, day.date, 'after')) next.date = addDays(next.date, 1);
+                                  if (shouldShiftForInsertedDay(next.checkInDate, day.date, 'after')) next.checkInDate = addDays(next.checkInDate, 1);
+                                  if (shouldShiftForInsertedDay(next.checkOutDate, day.date, 'after')) next.checkOutDate = addDays(next.checkOutDate, 1);
+                                  if (shouldShiftForInsertedDay(next.startDate, day.date, 'after')) next.startDate = addDays(next.startDate, 1);
+                                  if (shouldShiftForInsertedDay(next.endDate, day.date, 'after')) next.endDate = addDays(next.endDate, 1);
+                                  return next;
+                                }));
+                                setDayTitles((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'after')] = v;
+                                  });
+                                  return next;
+                                });
+                                setDayColors((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'after')] = v;
+                                  });
+                                  return next;
+                                });
+                                setDayColumnWidths((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    next[shiftDayKeyAfterInsert(key, day.dayNum, 'after')] = v;
+                                  });
+                                  return next;
+                                });
+                                setMapDayFilterSelected((prev) => prev.map((n) => shiftDayKeyAfterInsert(n, day.dayNum, 'after')));
                                 setDateRange({ startDate: displayStart, endDate: addDays(displayEnd, 1) });
                                 setOpenDayMenuKey(null);
                               }}
@@ -3436,12 +3637,64 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__day-dropdown-item trip-details__day-dropdown-item--danger"
                               role="menuitem"
                               onClick={() => {
-                                setTripExpenseItems((prev) => prev.filter((it) => it.date !== day.date));
+                                skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
                                 const isFirst = day.dayNum === 1;
                                 const isLast = day.dayNum === days.length;
                                 if (days.length <= 1) { setOpenDayMenuKey(null); return; }
+                                setTripExpenseItems((prev) => prev
+                                  .filter((it) => it.date !== day.date)
+                                  .map((it) => {
+                                    if (isFirst || isLast) return it;
+                                    const next = { ...it };
+                                    if (next.date && next.date > day.date) next.date = addDays(next.date, -1);
+                                    if (next.checkInDate && next.checkInDate > day.date) next.checkInDate = addDays(next.checkInDate, -1);
+                                    if (next.checkOutDate && next.checkOutDate > day.date) next.checkOutDate = addDays(next.checkOutDate, -1);
+                                    if (next.startDate && next.startDate > day.date) next.startDate = addDays(next.startDate, -1);
+                                    if (next.endDate && next.endDate > day.date) next.endDate = addDays(next.endDate, -1);
+                                    return next;
+                                  }));
+
+                                setDayTitles((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    if (key === day.dayNum) return;
+                                    next[key > day.dayNum ? key - 1 : key] = v;
+                                  });
+                                  return next;
+                                });
+
+                                setDayColors((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    if (key === day.dayNum) return;
+                                    next[key > day.dayNum ? key - 1 : key] = v;
+                                  });
+                                  return next;
+                                });
+
+                                setDayColumnWidths((prev) => {
+                                  const next = {};
+                                  Object.entries(prev || {}).forEach(([k, v]) => {
+                                    const key = Number(k);
+                                    if (key === day.dayNum) return;
+                                    next[key > day.dayNum ? key - 1 : key] = v;
+                                  });
+                                  return next;
+                                });
+
+                                setMapDayFilterSelected((prev) => {
+                                  const shifted = prev
+                                    .filter((n) => n !== day.dayNum)
+                                    .map((n) => (n > day.dayNum ? n - 1 : n));
+                                  return Array.from(new Set(shifted)).sort((a, b) => a - b);
+                                });
+
                                 if (isFirst) setDateRange({ startDate: addDays(displayStart, 1), endDate: displayEnd });
-                                else if (isLast) setDateRange({ startDate: displayStart, endDate: addDays(displayEnd, -1) });
+                                else setDateRange({ startDate: displayStart, endDate: addDays(displayEnd, -1) });
+
+                                showInAppNotice(`Deleted Day ${day.dayNum}.`, 'success');
                                 setOpenDayMenuKey(null);
                               }}
                             >
@@ -3535,14 +3788,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
                         return (
                           <div key={item.id} className="trip-details__itinerary-block">
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              className="trip-details__itinerary-card"
-                              onClick={() => isEditableItineraryItem(item) && setEditPlaceItem(item)}
-                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); isEditableItineraryItem(item) && setEditPlaceItem(item); } }}
-                            >
-                              <span className="trip-details__itinerary-num" aria-hidden>{idx + 1}</span>
+                            <div className="trip-details__itinerary-card">
                               <div className="trip-details__itinerary-card-thumb">
                                 {item.placeImageUrl ? (
                                   <img src={resolveImageUrl(item.placeImageUrl, item.name, 'landmark')} alt="" className="trip-details__itinerary-card-img" onError={handleImageError} />
@@ -3928,10 +4174,11 @@ export default function TripDetailsPage({ user, onLogout }) {
                   placeholder="Where do you want to go?"
                   value={whereQuery}
                   onChange={(e) => {
-                    setWhereQuery(e.target.value);
-                    setWhereSuggestionsOpen(true);
+                    const nextQuery = e.target.value;
+                    setWhereQuery(nextQuery);
+                    setWhereSuggestionsOpen(Boolean(nextQuery.trim()));
                   }}
-                  onFocus={() => setWhereSuggestionsOpen(true)}
+                  onFocus={() => setWhereSuggestionsOpen(Boolean(whereQuery.trim()))}
                   autoComplete="off"
                   aria-expanded={whereSuggestionsOpen}
                   aria-controls="where-modal-listbox"
@@ -3940,7 +4187,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                   aria-label="Destination"
                 />
               </div>
-              {whereSuggestionsOpen && (
+              {whereSuggestionsOpen && whereQuery.trim() && (
                 <ul id="where-modal-listbox" className="trip-details__where-suggestions" role="listbox">
                   {searchLocations(whereQuery).length === 0 ? (
                     <li className="trip-details__where-suggestion trip-details__where-suggestion--empty" role="option">No results</li>
@@ -3957,6 +4204,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               prev.some((l) => l.id === loc.id || l.name === loc.name) ? prev : [...prev, loc]
                             );
                             setWhereQuery('');
+                            setWhereSuggestionsOpen(false);
                           }}
                         >
                           <span className="trip-details__where-suggestion-name">{loc.name}</span>
@@ -4153,6 +4401,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                         ))}
                       </ul>
                     )}
+                    <div className="trip-details__notes-actions">
+                      <button
+                        type="button"
+                        className="trip-details__modal-update"
+                        onClick={saveGeneralNotesAndDocuments}
+                        disabled={notesSaving}
+                      >
+                        {notesSaving ? 'Saving...' : 'Save general notes'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -4160,6 +4418,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const dayIdx = parseInt(notesActiveTab.replace('day-', ''), 10);
                 const day = days[dayIdx];
                 const dayItems = (tripExpenseItems || []).filter((it) => it.date === day?.date);
+                const dayLabel = `Day ${dayIdx + 1}`;
                 return (
                   <div className="trip-details__notes-day">
                     <h3 className="trip-details__notes-section-title">Day {dayIdx + 1} notes</h3>
@@ -4214,6 +4473,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                         ))}
                       </ul>
                     )}
+                    <div className="trip-details__notes-actions">
+                      <button
+                        type="button"
+                        className="trip-details__modal-update"
+                        onClick={() => saveDayNotesAndDocuments(day?.date, dayLabel)}
+                        disabled={notesSaving || !day?.date}
+                      >
+                        {notesSaving ? 'Saving...' : `Save ${dayLabel} notes`}
+                      </button>
+                    </div>
                   </div>
                 );
               })()}
@@ -5778,9 +6047,6 @@ export default function TripDetailsPage({ user, onLogout }) {
                 <div className="trip-details__add-places-body">
                   <div className="trip-details__itinerary-detail-panel">
                     <div className="trip-details__itinerary-detail-header">
-                      <button type="button" className="trip-details__place-detail-back" onClick={() => setItineraryDetailsView(null)} aria-label="Back to list">
-                        <ArrowLeft size={20} aria-hidden /> Back
-                      </button>
                       <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={() => { setAddPlacesOpen(false); setItineraryDetailsView(null); setSelectedPlaceMarkerId(null); }}>
                         <X size={20} aria-hidden />
                       </button>
@@ -5879,7 +6145,10 @@ export default function TripDetailsPage({ user, onLogout }) {
                     <button
                       type="button"
                       className="trip-details__add-places-filter-days"
-                      onClick={() => { resetMapDays(); setMapDayFilterOpen(true); }}
+                      onClick={() => {
+                        resetMapDays();
+                        setMapDayFilterOpen(true);
+                      }}
                     >
                       <CalendarIcon size={16} aria-hidden /> Filter days
                     </button>
@@ -6085,6 +6354,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__place-detail-add-btn"
                               onClick={() => {
                                 const day = days.find((d) => d.dayNum === addPlacesDay);
+                                const selectedDate = day?.date || days[0]?.date || '';
                                 setAddToTripItem({
                                   type: 'place',
                                   data: detailPlace,
@@ -6092,8 +6362,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   category: 'Places',
                                   Icon: Camera,
                                 });
-                                setAddToTripDate(day?.date || days[0]?.date || '');
-                                setAddToTripStartTime('07:00');
+                                setAddToTripDate(selectedDate);
+                                setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00'));
                                 setAddToTripDurationHrs('1');
                                 setAddToTripDurationMins('0');
                                 setAddToTripNotes('');
@@ -6288,6 +6558,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                               className="trip-details__place-detail-add-btn"
                               onClick={() => {
                                 const day = days.find((d) => d.dayNum === addFoodDay);
+                                const selectedDate = day?.date || days[0]?.date || '';
                                 setAddToTripItem({
                                   type: 'food',
                                   data: foodDetailsView,
@@ -6295,8 +6566,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                                   category: 'Food & Beverage',
                                   Icon: UtensilsCrossed,
                                 });
-                                setAddToTripDate(day?.date || days[0]?.date || '');
-                                setAddToTripStartTime('07:00');
+                                setAddToTripDate(selectedDate);
+                                setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00'));
                                 setAddToTripDurationHrs('1');
                                 setAddToTripDurationMins('0');
                                 setAddToTripNotes('');
@@ -7122,11 +7393,17 @@ export default function TripDetailsPage({ user, onLogout }) {
                                         className="trip-details__place-detail-add-btn"
                                         style={{ padding: '8px 16px' }}
                                         onClick={() => {
-                                          const day = days[0];
+                                          const day = days.find((d) => d.dayNum === addExperiencesDay) || days[0];
+                                          const selectedDate = day?.date || '';
+                                          const parsedDurationHours = Number(experienceDetailsView?.durationHours);
+                                          const bookingDurationMins = Math.max(
+                                            1,
+                                            Math.round(((Number.isFinite(parsedDurationHours) && parsedDurationHours > 0) ? parsedDurationHours : 2) * 60),
+                                          );
                                           setBookingExperience(experienceDetailsView);
                                           setBookingOption(option);
-                                          setBookingDate(day?.date || '');
-                                          setBookingStartTime('07:00');
+                                          setBookingDate(selectedDate);
+                                          setBookingStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00', bookingDurationMins));
                                           setBookingTravellers(2);
                                           setBookingNotes('');
                                           setExperienceBookingModalOpen(true);
@@ -7289,12 +7566,13 @@ export default function TripDetailsPage({ user, onLogout }) {
                           type="button"
                           className="trip-details__add-places-card trip-details__add-places-card--manual"
                           onClick={() => {
-                            const day = days.find((d) => d.dayNum === (addSheetDay || 1));
+                            const day = days.find((d) => d.dayNum === addExperiencesDay);
+                            const selectedDate = day?.date || days[0]?.date || '';
                             setCustomExperienceName('');
                             setCustomExperienceType('Attraction');
                             setCustomExperienceAddress('');
-                            setCustomExperienceDateKey(day?.date || days[0]?.date || '');
-                            setCustomExperienceStartTime('07:00');
+                            setCustomExperienceDateKey(selectedDate);
+                            setCustomExperienceStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00', 120));
                             setCustomExperienceDurationHrs(2);
                             setCustomExperienceDurationMins(0);
                             setCustomExperienceNote('');
@@ -7401,6 +7679,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                 e.preventDefault();
                 const [fallbackLat, fallbackLng] = mapCenter;
                 const costNum = parseFloat(customExperienceCost) || 0;
+                const overlapping = findTimeOverlapItem(tripExpenseItems, {
+                  date: customExperienceDateKey,
+                  startTime: customExperienceStartTime,
+                  durationHrs: customExperienceDurationHrs,
+                  durationMins: customExperienceDurationMins,
+                });
+                if (overlapping) {
+                  showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
+                  return;
+                }
                 setTripExpenseItems((prev) => [...prev, {
                   id: `experience-${Date.now()}`,
                   name: customExperienceName,
@@ -7449,7 +7737,17 @@ export default function TripDetailsPage({ user, onLogout }) {
               <div className="trip-details__custom-place-row">
                 <label className="trip-details__custom-place-label">
                   Date <span className="trip-details__custom-place-required">*</span>
-                  <select className="trip-details__custom-place-select" value={customExperienceDateKey} onChange={(e) => setCustomExperienceDateKey(e.target.value)} required>
+                  <select
+                    className="trip-details__custom-place-select"
+                    value={customExperienceDateKey}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      const durationMinutes = (Number(customExperienceDurationHrs || 0) * 60) + Number(customExperienceDurationMins || 0);
+                      setCustomExperienceDateKey(nextDate);
+                      setCustomExperienceStartTime(getDefaultStartTimeForDate(tripExpenseItems, nextDate, '07:00', durationMinutes));
+                    }}
+                    required
+                  >
                     <option value="">Select day</option>
                     {days.map((d) => (
                       <option key={d.date} value={d.date}>Day {d.dayNum}: {d.label}</option>
@@ -7529,6 +7827,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const resolvedAddress = customPlaceAddressSelection
                   ?? searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress)[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
+                const overlapping = findTimeOverlapItem(tripExpenseItems, {
+                  date: customPlaceDateKey,
+                  startTime: customPlaceStartTime,
+                  durationHrs: customPlaceDurationHrs,
+                  durationMins: customPlaceDurationMins,
+                });
+                if (overlapping) {
+                  showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
+                  return;
+                }
                 setTripExpenseItems((prev) => [...prev, {
                   id: `place-${Date.now()}`,
                   name: customPlaceName,
@@ -7722,6 +8030,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const resolvedAddress = customFoodAddressSelection
                   ?? searchFoodAddressSuggestions(trip.destination || trip.locations, customFoodAddress)[0];
                 const [fallbackLat, fallbackLng] = mapCenter;
+                const overlapping = findTimeOverlapItem(tripExpenseItems, {
+                  date: customFoodDateKey,
+                  startTime: customFoodStartTime,
+                  durationHrs: customFoodDurationHrs,
+                  durationMins: customFoodDurationMins,
+                });
+                if (overlapping) {
+                  showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
+                  return;
+                }
                 setTripExpenseItems((prev) => [...prev, {
                   id: `food-${Date.now()}`,
                   name: customFoodName,
@@ -8023,6 +8341,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                         setStaySortBy('Recommended');
                         setAddStaysOpen(true);
                       } else if (id === 'experience') {
+                        setAddExperiencesDay(addSheetDay ?? 1);
                         setExperienceSearchQuery('');
                         setExperienceTypeFilter('All');
                         setExperiencePriceRange('All');
@@ -8094,7 +8413,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                     return;
                   }
                 }
-                appendItemToTrip({
+                const didAppend = appendItemToTrip({
                   itemType: addToTripItem.type,
                   data,
                   categoryId: addToTripItem.categoryId,
@@ -8115,6 +8434,7 @@ export default function TripDetailsPage({ user, onLogout }) {
                     travelDocs: addToTripTravelDocs,
                   },
                 });
+                if (!didAppend) return;
                 setAddToTripModalOpen(false);
                 if (addToTripItem.type === 'place') {
                   setPlaceDetailsView(null);
@@ -8212,7 +8532,12 @@ export default function TripDetailsPage({ user, onLogout }) {
                         id="add-to-trip-date"
                         className="trip-details__custom-place-select"
                         value={addToTripDate}
-                        onChange={(e) => setAddToTripDate(e.target.value)}
+                        onChange={(e) => {
+                          const selectedDate = e.target.value;
+                          const durationMinutes = (Number(addToTripDurationHrs || 0) * 60) + Number(addToTripDurationMins || 0);
+                          setAddToTripDate(selectedDate);
+                          setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00', durationMinutes));
+                        }}
                         required
                       >
                         {days.map((day) => (
@@ -8359,6 +8684,18 @@ export default function TripDetailsPage({ user, onLogout }) {
                 const fallbackDurationHours = Number.isFinite(parsedDurationHours) && parsedDurationHours > 0
                   ? parsedDurationHours
                   : 2;
+                const fallbackDurationMins = Math.max(1, Math.round(fallbackDurationHours * 60));
+                const fallbackDurationParts = durationMinutesToParts(fallbackDurationMins);
+                const overlapping = findTimeOverlapItem(tripExpenseItems, {
+                  date: bookingDate,
+                  startTime: bookingStartTime,
+                  durationHrs: fallbackDurationParts.durationHrs,
+                  durationMins: fallbackDurationParts.durationMins,
+                });
+                if (overlapping) {
+                  showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
+                  return;
+                }
                 const optionLabel = bookingOption.option || bookingOption.name || bookingOption.type || 'Experience package';
                 const totalCost = bookingOption.price * bookingTravellers;
                 setTripExpenseItems((prev) => [...prev, {
@@ -8375,8 +8712,8 @@ export default function TripDetailsPage({ user, onLogout }) {
                   notes: bookingNotes,
                   attachments: [],
                   startTime: bookingStartTime,
-                  durationHrs: Math.floor(fallbackDurationHours),
-                  durationMins: Math.round((fallbackDurationHours % 1) * 60),
+                  durationHrs: fallbackDurationParts.durationHrs,
+                  durationMins: fallbackDurationParts.durationMins,
                   externalLink: '',
                   placeImageUrl: bookingExperience.image,
                   rating: bookingExperience.rating,
@@ -8422,7 +8759,16 @@ export default function TripDetailsPage({ user, onLogout }) {
                   id="booking-date"
                   className="trip-details__custom-place-select"
                   value={bookingDate}
-                  onChange={(e) => setBookingDate(e.target.value)}
+                  onChange={(e) => {
+                    const nextDate = e.target.value;
+                    const parsedDurationHours = Number(bookingExperience?.durationHours);
+                    const durationMinutes = Math.max(
+                      1,
+                      Math.round(((Number.isFinite(parsedDurationHours) && parsedDurationHours > 0) ? parsedDurationHours : 2) * 60),
+                    );
+                    setBookingDate(nextDate);
+                    setBookingStartTime(getDefaultStartTimeForDate(tripExpenseItems, nextDate, '07:00', durationMinutes));
+                  }}
                   required
                 >
                   {days.map((day) => (
