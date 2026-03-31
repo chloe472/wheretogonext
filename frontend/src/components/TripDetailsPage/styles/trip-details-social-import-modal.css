@@ -243,14 +243,15 @@
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
   border-radius: 10px;
-  border: 1px solid rgba(139, 92, 246, 0.35);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(14, 165, 233, 0.06));
+  border: 1px solid rgba(161, 130, 102, 0.28);
+  background: #f6efe4;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .trip-details__social-import-location-banner-icon {
   flex-shrink: 0;
   margin-top: 0.1rem;
-  color: #7c3aed;
+  color: #8b6b4a;
 }
 
 .trip-details__social-import-location-banner-main {
@@ -266,7 +267,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--wtg-text-muted);
+  color: #8b6b4a;
 }
 
 .trip-details__social-import-location-banner-desc {
@@ -281,14 +282,17 @@
   margin-top: 0.25rem;
   padding: 0.45rem 0.85rem;
   border-radius: 8px;
-  border: none;
+  border: 1px solid rgba(139, 107, 74, 0.25);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  color: #fff;
-  background: linear-gradient(135deg, #7c3aed, #0ea5e9);
+  color: #5f4630;
+  background: #efe1cf;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .trip-details__social-import-location-banner-btn:hover {
-  filter: brightness(1.06);
+  background: #e7d5be;
+  border-color: rgba(139, 107, 74, 0.4);
+  color: #4a3525;
 }

@@ -315,6 +315,13 @@ export function useTripDetailsAddToTrip({
     });
     if (!didAppend) return;
 
+    const addedDayLabel = days.find((day) => day.date === addToTripDate)?.dayNum;
+    const addedTargetLabel = isStayForm
+      ? 'your trip'
+      : addedDayLabel
+        ? `Day ${addedDayLabel}`
+        : 'your trip';
+    showInAppNotice(`Added ${data.name || addToTripItem.category || 'item'} to ${addedTargetLabel}.`, 'success');
     setAddToTripModalOpen(false);
     if (addToTripItem.type === 'place') {
       setPlaceDetailsView(null);
@@ -343,8 +350,10 @@ export function useTripDetailsAddToTrip({
     addToTripCost,
     addToTripExternalLink,
     addToTripTravelDocs,
+    days,
     setFriendlyDialog,
     appendItemToTrip,
+    showInAppNotice,
     setPlaceDetailsView,
     setFoodDetailsView,
     setStayDetailsView,

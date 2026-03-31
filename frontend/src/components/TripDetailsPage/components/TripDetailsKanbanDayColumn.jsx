@@ -81,6 +81,12 @@ export default function TripDetailsKanbanDayColumn({
   setAddSheetFromCalendar,
   setAddSheetDay,
   setAddSheetAnchor,
+  kanbanDraggingDayNum,
+  kanbanDragOverDayNum,
+  handleKanbanDayDragStart,
+  handleKanbanDayDragEnter,
+  handleKanbanDayDragEnd,
+  handleKanbanDayDrop,
 }) {
   const dayStayItems = getDayStayItems(tripExpenseItems, day.date);
   const boardDayItems = getSortedDayItems(tripExpenseItems, day.date, { includeOvernightStays: true })
@@ -93,11 +99,37 @@ export default function TripDetailsKanbanDayColumn({
 
   return (
     <section
-      className="trip-details__day-col"
+      className={`trip-details__day-col${kanbanDraggingDayNum === day.dayNum ? ' trip-details__day-col--dragging' : ''}${kanbanDragOverDayNum === day.dayNum && kanbanDraggingDayNum !== day.dayNum ? ' trip-details__day-col--drag-over' : ''}`}
       style={{ width: getDayColumnWidth(day.dayNum), flexBasis: getDayColumnWidth(day.dayNum) }}
+      onDragOver={(e) => {
+        if (kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      }}
+      onDragEnter={(e) => {
+        if (kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
+        e.preventDefault();
+        handleKanbanDayDragEnter(day.dayNum);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        handleKanbanDayDrop(day.dayNum);
+      }}
     >
       <div className="trip-details__day-header">
-        <div className="trip-details__day-heading">
+        <div
+          className="trip-details__day-heading"
+          draggable
+          onDragStart={(e) => {
+            handleKanbanDayDragStart(day.dayNum);
+            if (e.dataTransfer) {
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', String(day.dayNum));
+            }
+          }}
+          onDragEnd={handleKanbanDayDragEnd}
+          aria-label={`Drag Day ${day.dayNum} to reorder`}
+        >
           <GripVertical size={14} className="trip-details__grip" aria-hidden />
           <h2 className="trip-details__day-title">
             Day {day.dayNum}: {day.label}
@@ -426,7 +458,27 @@ export default function TripDetailsKanbanDayColumn({
           const isTravelDropdownOpen = openTravelDropdownKey === segmentKey;
           return (
             <div key={item.id} className="trip-details__itinerary-block">
-              <div className="trip-details__itinerary-card">
+              <div
+                className="trip-details__itinerary-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (isEditableItineraryItem(item)) {
+                    setEditPlaceItem(item);
+                    return;
+                  }
+                  openInternalItemOverview(item);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  if (isEditableItineraryItem(item)) {
+                    setEditPlaceItem(item);
+                    return;
+                  }
+                  openInternalItemOverview(item);
+                }}
+              >
                 <div className="trip-details__itinerary-card-thumb">
                   {item.placeImageUrl ? (
                     <img src={resolveImageUrl(item.placeImageUrl, item.name, 'landmark')} alt="" className="trip-details__itinerary-card-img" onError={handleImageError} />

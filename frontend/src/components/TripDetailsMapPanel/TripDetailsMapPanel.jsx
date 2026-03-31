@@ -2,7 +2,7 @@ import { ChevronDown, ZoomIn, Filter, Info } from 'lucide-react';
 import TripMap from '../TripMap/TripMap';
 
 const MAP_VIEWS = ['Default', 'Expand half', 'Expand full'];
-const MAP_FILTERS = ['Default', 'Food & Beverages', 'Experiences', 'My Trip'];
+const MAP_FILTERS = ['Places', 'Food & Beverages', 'Experiences', 'My Trip'];
 
 export default function TripDetailsMapPanel({
   mapView,
@@ -18,9 +18,13 @@ export default function TripDetailsMapPanel({
   activeDayNums,
   openAddToTripFromMapMarker,
   openAddPlacesDetailsFromMapMarker,
+  panelWidth,
 }) {
   return (
-    <aside className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}>
+    <aside
+      className={`trip-details__map-col trip-details__map-col--${mapView.toLowerCase().replace(/\s+/g, '-')}`}
+      style={panelWidth ? { width: `${panelWidth}px`, flex: `0 0 ${panelWidth}px` } : undefined}
+    >
       <div className="trip-details__map-header">
         <div className="trip-details__map-dropdown-wrap">
           <button

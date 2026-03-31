@@ -99,6 +99,7 @@ export function useTripDetailsCustomItems({
           placeImageUrl: '',
         },
       ]);
+      showInAppNotice(`Added ${customExperienceName || 'experience'} to your trip.`, 'success');
       setAddCustomExperienceOpen(false);
     },
     [
@@ -172,6 +173,7 @@ export function useTripDetailsCustomItems({
           reviewCount: null,
         },
       ]);
+      showInAppNotice(`Added ${customPlaceName || 'place'} to your trip.`, 'success');
       setAddCustomPlaceOpen(false);
       setCustomPlaceName('');
       setCustomPlaceAddress('');
@@ -255,6 +257,7 @@ export function useTripDetailsCustomItems({
           reviewCount: null,
         },
       ]);
+      showInAppNotice(`Added ${customFoodName || 'food & beverage'} to your trip.`, 'success');
       setAddCustomFoodOpen(false);
       setCustomFoodName('');
       setCustomFoodAddress('');

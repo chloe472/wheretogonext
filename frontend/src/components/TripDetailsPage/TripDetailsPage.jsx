@@ -147,7 +147,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   } = useTripDetailsTripCurrency(exchangeRates);
   const [friendlyDialog, setFriendlyDialog] = useTripDetailsFriendlyDialog();
   const [mapView, setMapView] = useState('Default');
-  const [mapFilter, setMapFilter] = useState('Default');
+  const [mapFilter, setMapFilter] = useState('Places');
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
   const [dayTitles, setDayTitles] = useState({});
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
@@ -385,6 +385,9 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
   };
 
+  const [kanbanDraggingDayNum, setKanbanDraggingDayNum] = useState(null);
+  const [kanbanDragOverDayNum, setKanbanDragOverDayNum] = useState(null);
+
   const openBudgetDetails = useCallback(() => {
     setBudgetModalOpen(true);
   }, []);
@@ -402,16 +405,90 @@ export default function TripDetailsPage({ user, onLogout }) {
     setDayTitles((prev) => ({ ...prev, [dayNum]: value }));
   };
 
+  const reorderKanbanDays = useCallback((sourceDayNum, targetDayNum) => {
+    const fromDayNum = Number(sourceDayNum);
+    const toDayNum = Number(targetDayNum);
+    if (!Number.isFinite(fromDayNum) || !Number.isFinite(toDayNum) || fromDayNum === toDayNum) return;
+
+    const sourceIndex = days.findIndex((day) => Number(day.dayNum) === fromDayNum);
+    const targetIndex = days.findIndex((day) => Number(day.dayNum) === toDayNum);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const orderedDates = days.map((day) => day.date);
+    const moveArrayItem = (list, fromIndex, toIndex) => {
+      const next = [...list];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    };
+
+    const reorderedSourceDates = moveArrayItem(orderedDates, sourceIndex, targetIndex);
+    const dateMap = new Map(reorderedSourceDates.map((oldDate, index) => [oldDate, orderedDates[index]]));
+    const remapDate = (value) => (value && dateMap.has(value) ? dateMap.get(value) : value);
+
+    const remapDayKeyState = (setter) => {
+      setter((prev) => {
+        const orderedValues = days.map((day) => prev?.[day.dayNum]);
+        const movedValues = moveArrayItem(orderedValues, sourceIndex, targetIndex);
+        const next = {};
+        movedValues.forEach((value, index) => {
+          if (value !== undefined && value !== null && value !== '') {
+            next[index + 1] = value;
+          }
+        });
+        return next;
+      });
+    };
+
+    skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
+    setTripExpenseItems((prev) => prev.map((item) => ({
+      ...item,
+      date: remapDate(item.date),
+      checkInDate: remapDate(item.checkInDate),
+      checkOutDate: remapDate(item.checkOutDate),
+      startDate: remapDate(item.startDate),
+      endDate: remapDate(item.endDate),
+    })));
+    remapDayKeyState(setDayTitles);
+    remapDayKeyState(setDayColors);
+    remapDayKeyState(setDayColumnWidths);
+
+    setMapDayFilterSelected((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      const orderedDayNums = days.map((day) => day.dayNum);
+      const movedDayNums = moveArrayItem(orderedDayNums, sourceIndex, targetIndex);
+      const dayNumMap = new Map(movedDayNums.map((oldDayNum, index) => [oldDayNum, index + 1]));
+      return Array.from(new Set(prev.map((dayNum) => dayNumMap.get(dayNum) || dayNum))).sort((a, b) => a - b);
+    });
+
+    showInAppNotice(`Moved Day ${fromDayNum} to position ${toDayNum}.`, 'success');
+  }, [days, setDayTitles, setDayColors, setDayColumnWidths, setMapDayFilterSelected, setTripExpenseItems, showInAppNotice]);
+
+  const handleKanbanDayDragStart = useCallback((dayNum) => {
+    setKanbanDraggingDayNum(dayNum);
+    setKanbanDragOverDayNum(dayNum);
+  }, []);
+
+  const handleKanbanDayDragEnd = useCallback(() => {
+    setKanbanDraggingDayNum(null);
+    setKanbanDragOverDayNum(null);
+  }, []);
+
+  const handleKanbanDayDragEnter = useCallback((dayNum) => {
+    setKanbanDragOverDayNum(dayNum);
+  }, []);
+
+  const handleKanbanDayDrop = useCallback((targetDayNum) => {
+    if (kanbanDraggingDayNum == null) return;
+    reorderKanbanDays(kanbanDraggingDayNum, targetDayNum);
+    setKanbanDraggingDayNum(null);
+    setKanbanDragOverDayNum(null);
+  }, [kanbanDraggingDayNum, reorderKanbanDays]);
+
   const visibleDays = useMemo(() => {
     if (!days || days.length === 0) return [];
-    if (mapView === 'Expand half') {
-      return days.slice(0, 2);
-    }
-    if (mapView === 'Expand full') {
-      return days.slice(0, 1);
-    }
     return days;
-  }, [days, mapView]);
+  }, [days]);
 
   const resetMapDays = () => {
     setMapDayFilterSelected(allDayNums);
@@ -776,6 +853,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     exchangeRates,
     days,
     setTripExpenseItems,
+    showInAppNotice,
   });
 
   const addEntireItineraryToTrip = useTripDetailsBulkItineraryAdd({
@@ -790,6 +868,8 @@ export default function TripDetailsPage({ user, onLogout }) {
     appendItemToTrip,
     days,
     cityQuery,
+    tripDestinations: selectedDestinations,
+    tripExpenseItems,
   });
 
   const {
@@ -980,6 +1060,12 @@ export default function TripDetailsPage({ user, onLogout }) {
         handleCalendarDragStart={handleCalendarDragStart}
         handleCalendarDragEnd={handleCalendarDragEnd}
         handleCalendarResizeStart={handleCalendarResizeStart}
+        kanbanDraggingDayNum={kanbanDraggingDayNum}
+        kanbanDragOverDayNum={kanbanDragOverDayNum}
+        handleKanbanDayDragStart={handleKanbanDayDragStart}
+        handleKanbanDayDragEnter={handleKanbanDayDragEnter}
+        handleKanbanDayDragEnd={handleKanbanDayDragEnd}
+        handleKanbanDayDrop={handleKanbanDayDrop}
         dateModalOpen={dateModalOpen}
         applyDateRange={applyDateRange}
         setDateModalOpen={setDateModalOpen}

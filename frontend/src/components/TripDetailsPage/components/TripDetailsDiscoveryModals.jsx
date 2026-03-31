@@ -441,9 +441,9 @@ export default function TripDetailsDiscoveryModals(props) {
           onClose={onCloseAddCustomPlace}
           onSubmit={handleAddCustomPlaceSubmit}
           customPlaceName={customPlaceName}
-          setCustomPlaceName={setCustomPlaceNameState}
+          setCustomPlaceName={setCustomPlaceName}
           customPlaceAddress={customPlaceAddress}
-          setCustomPlaceAddress={setCustomPlaceAddressState}
+          setCustomPlaceAddress={setCustomPlaceAddress}
           setCustomPlaceAddressSelection={setCustomPlaceAddressSelection}
           customPlaceAddressSuggestionsOpen={customPlaceAddressSuggestionsOpen}
           setCustomPlaceAddressSuggestionsOpen={setCustomPlaceAddressSuggestionsOpen}

@@ -86,6 +86,12 @@ export default function TripDetailsPageLayout({
   handleCalendarDragStart,
   handleCalendarDragEnd,
   handleCalendarResizeStart,
+  kanbanDraggingDayNum,
+  kanbanDragOverDayNum,
+  handleKanbanDayDragStart,
+  handleKanbanDayDragEnter,
+  handleKanbanDayDragEnd,
+  handleKanbanDayDrop,
   dateModalOpen,
   applyDateRange,
   setDateModalOpen,
@@ -182,6 +188,12 @@ export default function TripDetailsPageLayout({
         handleCalendarDragStart={handleCalendarDragStart}
         handleCalendarDragEnd={handleCalendarDragEnd}
         handleCalendarResizeStart={handleCalendarResizeStart}
+        kanbanDraggingDayNum={kanbanDraggingDayNum}
+        kanbanDragOverDayNum={kanbanDragOverDayNum}
+        handleKanbanDayDragStart={handleKanbanDayDragStart}
+        handleKanbanDayDragEnter={handleKanbanDayDragEnter}
+        handleKanbanDayDragEnd={handleKanbanDayDragEnd}
+        handleKanbanDayDrop={handleKanbanDayDrop}
       />
 
       <DateRangePickerModal

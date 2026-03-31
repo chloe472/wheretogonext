@@ -19,6 +19,11 @@ export function useTripDetailsInAppNotice() {
       return;
     }
 
+    if (type === 'error') {
+      toast.error(message, toastOptions);
+      return;
+    }
+
     toast(message, toastOptions);
   }, []);
 }

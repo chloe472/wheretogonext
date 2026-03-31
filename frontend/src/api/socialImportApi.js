@@ -1,13 +1,12 @@
 import { apiUrl } from './apiConfig';
 
 /**
- * Analyze a social post URL and/or screenshots; returns ranked places for the trip destination.
- * Backend uses oEmbed/noembed + optional OpenAI vision + Google Places text search (when configured).
+ * Analyze uploaded social screenshots and return ranked places for the trip destination.
  */
-export async function analyzeSocialImport({ destination, url, imageFiles }) {
+export async function analyzeSocialImport({ destination, tripDestinations, imageFiles }) {
   const fd = new FormData();
   fd.append('destination', destination || '');
-  if (url?.trim()) fd.append('url', url.trim());
+  fd.append('tripDestinations', JSON.stringify(Array.isArray(tripDestinations) ? tripDestinations : []));
   for (const f of imageFiles || []) {
     fd.append('images', f);
   }

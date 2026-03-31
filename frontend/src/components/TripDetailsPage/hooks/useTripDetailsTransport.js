@@ -7,6 +7,7 @@ export function useTripDetailsTransport({
   exchangeRates,
   days,
   setTripExpenseItems,
+  showInAppNotice,
 }) {
   const [addTransportOpen, setAddTransportOpen] = useState(false);
   const [addTransportDay, setAddTransportDay] = useState(1);
@@ -44,7 +45,8 @@ export function useTripDetailsTransport({
       externalLink: '',
       transportType,
     }]);
-  }, [currency, exchangeRates, days, setTripExpenseItems]);
+    showInAppNotice(`Added ${name || 'transport'} to your trip.`, 'success');
+  }, [currency, exchangeRates, days, setTripExpenseItems, showInAppNotice]);
 
   return {
     addTransportOpen,
