@@ -54,7 +54,6 @@ import {
   useTripDetailsWhereApply,
   useTripDetailsWhereSuggestions,
   useTripDetailsDayMenuOutsideClose,
-  useTripDetailsAddToTrip,
   useTripDetailsBookingModals,
   useTripDetailsBulkItineraryAdd,
   useTripDetailsAddSheet,
@@ -64,6 +63,7 @@ import {
   useTripDetailsNotes,
   useTripDetailsTransport,
 } from './hooks';
+import { useTripDetailsAddToTrip } from './hooks/useTripDetailsAddToTrip';
 import {
   AIRPORTS_AND_CITIES,
   AIRLINES,
@@ -540,6 +540,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddToTripTravelDocs,
     appendItemToTrip,
     openAddToTripFromMapMarker,
+    openAddToTripFromAiPlace,
     openAddStayToTrip,
     onCloseAddToTrip,
     handleAddToTripSubmit,
@@ -564,6 +565,15 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddStaysOpen,
     setAddExperiencesOpen,
   });
+
+  useEffect(() => {
+    const place = location.state?.aiPlace || location.state?.aiPlaces?.[0];
+    if (!place || !trip) return;
+
+    openAddToTripFromAiPlace(place);
+
+    navigate(location.pathname, { replace: true });
+  }, [location.state, location.pathname, trip, openAddToTripFromAiPlace, navigate]);
 
   const {
     filteredPlaces,

@@ -36,6 +36,7 @@ async function start() {
   const { default: itinerariesRoutes } = await import('./routes/itineraries.js');
   const { default: profileRoutes } = await import('./routes/profile.js');
   const { default: moodboardRoutes } = await import('./routes/moodboard.js');
+  const { default: moodboardAnalysisRoutes } = await import('./routes/moodboardAnalysis.js');
   const { default: socialImportRoutes } = await import('./routes/socialImport.js');
   const { default: currencyRoutes } = await import('./routes/currency.js');
   const { default: notificationsRoutes } = await import('./routes/notifications.js');
@@ -48,6 +49,7 @@ async function start() {
   app.use('/api/profile', profileRoutes);
   app.use('/api/moodboard', moodboardRoutes);
   app.use('/api/notifications', notificationsRoutes);
+  app.use('/api/moodboard-analysis', moodboardAnalysisRoutes);
 
   if (MONGODB_URI) {
     try {

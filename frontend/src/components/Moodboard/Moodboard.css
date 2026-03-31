@@ -232,3 +232,11 @@
   background: #5c4a3d;
   color: white;
 }
+
+.moodboard-loading, .moodboard-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+}

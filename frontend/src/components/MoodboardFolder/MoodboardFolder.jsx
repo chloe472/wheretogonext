@@ -127,6 +127,46 @@ export default function MoodboardFolder({ user }) {
     }
   };
 
+  // Analyze Moodboard
+  const [aiResult, setAiResult] = useState(null);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const HandleAnalyzeMoodboard = async () => {
+    if (images.length === 0) return alert("No images to analyze!");
+      setAiLoading(true);
+      setAiResult(null);
+      setShowAiModal(true);
+
+    try {
+      const res = await fetch("/api/moodboard-analysis/analyze-moodboard", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ images }),
+      });
+
+      const data = await res.json();
+
+      setAiResult(data);
+      setShowAiModal(true);
+
+    } catch (err) {
+      console.error(err);
+      alert("AI failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Add to itinerary
+  const addToItinerary = (place) => {
+    navigate(`/trip/${tripId}`, {
+      state: { aiPlaces: [place] },
+    });
+  };
+    
   if (loading) return <div className="moodboard-loading">Loading folder…</div>;
   if (error) return <div className="moodboard-error">{error}</div>;
 
@@ -141,6 +181,52 @@ export default function MoodboardFolder({ user }) {
         />
       )}
 
+      {showAiModal && (
+        <div className="ai-modal-overlay" onClick={() => !aiLoading && setShowAiModal(false)}>
+          <div className="ai-modal-content" onClick={e => e.stopPropagation()}>
+            <button
+              className="close-btn"
+              onClick={() => !aiLoading && setShowAiModal(false)}
+              title={aiLoading ? "Wait for analysis..." : "Close"}
+            >
+              ✖
+            </button>
+
+            {aiLoading ? (
+              <div className="ai-loading">
+                <div className="ai-loading-spinner" aria-hidden="true" />
+                <p>Analyzing Moodboard...</p>
+              </div>
+            ) : (
+              aiResult && (
+                <>
+                  <h2>Theme: {aiResult.theme}</h2>
+                  {aiResult.places.map((place, i) => (
+                    <div key={i} className="ai-place-card">
+                      {place.image ? (
+                        <img
+                          src={place.image}
+                          alt={place.name}
+                          style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px' }}
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : null}
+                      <h3>{place.name}</h3>
+                      <p>{place.description}</p>
+                      <p><em>{place.location}</em></p>
+                      <button onClick={() => addToItinerary(place)}>Add to Trip</button>
+                    </div>
+                  ))}
+                </>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="container">
         <div className="folder-header-row">
           <div className="folder-left">
@@ -152,6 +238,10 @@ export default function MoodboardFolder({ user }) {
           </div>
 
           <div className="folder-right">
+            <button onClick={HandleAnalyzeMoodboard} className="analyze-btn">
+              ✨ AI Analyze
+            </button>
+
             <div className="dropdown">
               <button className="upload-dropdown-btn">Add Image ▾</button>
               <div className="dropdown-content">
