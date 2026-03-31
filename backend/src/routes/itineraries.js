@@ -447,7 +447,7 @@ router.get('/', async (req, res) => {
     const docs = await Itinerary.find(filter)
       .sort(sort)
       .limit(limit)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -469,7 +469,7 @@ router.get('/mine', requireAuth, async (req, res) => {
 
     const docs = await Itinerary.find({ creator: req.userId })
       .sort({ updatedAt: -1 })
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -505,7 +505,7 @@ router.get('/shared-with-me', requireAuth, async (req, res) => {
       },
     })
       .sort({ updatedAt: -1 })
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -756,7 +756,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     });
 
     const populated = await Itinerary.findById(doc._id)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
@@ -819,7 +819,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     let itinerary = await Itinerary.findById(id)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     if (!itinerary) {
@@ -837,7 +837,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         { $inc: { viewCount: 1 } },
         { new: true }
       )
-        .populate('creator', 'name email picture username')
+        .populate('creator', 'name email picture username intro')
         .lean();
     }
 
@@ -950,7 +950,7 @@ router.post('/', requireAuth, async (req, res) => {
     });
 
     const populated = await Itinerary.findById(doc._id)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     if (collaboratorIds.length > 0) {
@@ -1096,7 +1096,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     const populated = await Itinerary.findById(existing._id)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
@@ -1194,7 +1194,7 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     await existing.save();
 
     const populated = await Itinerary.findById(existing._id)
-      .populate('creator', 'name email picture username')
+      .populate('creator', 'name email picture username intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
