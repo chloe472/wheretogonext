@@ -8,6 +8,8 @@ import {
   updateMoodboardFolder,
   deleteMoodboardFolder,
 } from '../../api/moodboardApi';
+import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 
 export default function Moodboard({ user, onLogout }) {
@@ -120,7 +122,10 @@ export default function Moodboard({ user, onLogout }) {
               <p>No folders yet. Create one to start collecting images.</p>
             </div>
           ) : (
-            folders.map((folder) => (
+            folders.map((folder) => {
+              const fallbackHint = trip?.destination || trip?.locations || 'Trip destination';
+              const placeholderUrl = getCoverImageForDestination(trip?.destination, trip?.locations);
+              return (
               <div
                 key={folder.id}
                 className="folder-card"
@@ -131,7 +136,16 @@ export default function Moodboard({ user, onLogout }) {
                     <img key={img.id || idx} src={img.url} alt={`preview-${idx}`} />
                   ))}
                   {(!folder.images || folder.images.length === 0) && (
-                    <div className="folder-placeholder"></div>
+                    <img
+                      className="folder-placeholder folder-placeholder--photo"
+                      src={resolveImageUrl(
+                        placeholderUrl,
+                        fallbackHint,
+                        'destination'
+                      )}
+                      alt={fallbackHint}
+                      onError={(event) => applyImageFallback(event, fallbackHint, 'destination')}
+                    />
                   )}
                 </div>
 
@@ -181,7 +195,8 @@ export default function Moodboard({ user, onLogout }) {
                   </div>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 
