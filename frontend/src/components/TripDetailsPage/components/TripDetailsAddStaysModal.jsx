@@ -8,8 +8,8 @@ import {
   Star,
   X,
 } from 'lucide-react';
-import { applyImageFallback, resolveImageUrl } from '../../lib/imageFallback';
-import TripMap from '../TripMap/TripMap';
+import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
+import TripMap from '../../TripMap/TripMap';
 import {
   formatStayDateTime,
   formatUsdAsCurrency,
@@ -17,7 +17,7 @@ import {
   getStayWindow,
   hasStayBookingData,
   normalizeAttachment,
-} from './lib/tripDetailsPageHelpers';
+} from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddStaysModal({
   trip,

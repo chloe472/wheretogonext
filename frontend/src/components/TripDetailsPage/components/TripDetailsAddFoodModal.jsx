@@ -8,13 +8,13 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
-import { applyImageFallback, resolveImageUrl } from '../../lib/imageFallback';
-import TripMap from '../TripMap/TripMap';
+import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
+import TripMap from '../../TripMap/TripMap';
 import {
   FOOD_FILTER_OPTIONS,
   FOOD_SORT_OPTIONS,
   getDefaultStartTimeForDate,
-} from './lib/tripDetailsPageHelpers';
+} from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddFoodModal({
   trip,

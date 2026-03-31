@@ -1,34 +1,34 @@
 import { Clock, MapPin, Paperclip, PlusCircle, X } from 'lucide-react';
-import { searchAddressSuggestions } from './lib/tripDetailsLocationData';
+import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
 
-export default function TripDetailsAddCustomFoodModal({
+export default function TripDetailsAddCustomPlaceModal({
   trip,
   days,
   onClose,
   onSubmit,
-  customFoodName,
-  setCustomFoodName,
-  customFoodAddress,
-  setCustomFoodAddress,
-  setCustomFoodAddressSelection,
-  customFoodAddressSuggestionsOpen,
-  setCustomFoodAddressSuggestionsOpen,
-  customFoodDateKey,
-  setCustomFoodDateKey,
-  customFoodStartTime,
-  setCustomFoodStartTime,
-  customFoodDurationHrs,
-  setCustomFoodDurationHrs,
-  customFoodDurationMins,
-  setCustomFoodDurationMins,
-  customFoodNote,
-  setCustomFoodNote,
-  customFoodCost,
-  setCustomFoodCost,
-  customFoodImage,
-  setCustomFoodImage,
-  customFoodTravelDocs,
-  setCustomFoodTravelDocs,
+  customPlaceName,
+  setCustomPlaceName,
+  customPlaceAddress,
+  setCustomPlaceAddress,
+  setCustomPlaceAddressSelection,
+  customPlaceAddressSuggestionsOpen,
+  setCustomPlaceAddressSuggestionsOpen,
+  customPlaceDateKey,
+  setCustomPlaceDateKey,
+  customPlaceStartTime,
+  setCustomPlaceStartTime,
+  customPlaceDurationHrs,
+  setCustomPlaceDurationHrs,
+  customPlaceDurationMins,
+  setCustomPlaceDurationMins,
+  customPlaceNote,
+  setCustomPlaceNote,
+  customPlaceCost,
+  setCustomPlaceCost,
+  customPlaceImage,
+  setCustomPlaceImage,
+  customPlaceTravelDocs,
+  setCustomPlaceTravelDocs,
   currency,
 }) {
   const destinationQuery = trip.destination || trip.locations;
@@ -39,12 +39,12 @@ export default function TripDetailsAddCustomFoodModal({
       <div
         className="trip-details__custom-place-modal"
         role="dialog"
-        aria-labelledby="custom-food-title"
+        aria-labelledby="custom-place-title"
         aria-modal="true"
       >
         <div className="trip-details__custom-place-head">
-          <h2 id="custom-food-title" className="trip-details__custom-place-title">
-            Add Custom Food &amp; Beverage
+          <h2 id="custom-place-title" className="trip-details__custom-place-title">
+            Add Custom Place
           </h2>
           <button type="button" className="trip-details__modal-close" aria-label="Close" onClick={onClose}>
             <X size={20} aria-hidden />
@@ -54,18 +54,18 @@ export default function TripDetailsAddCustomFoodModal({
           <div className="trip-details__custom-place-upload">
             <input
               type="file"
-              id="custom-food-image"
+              id="custom-place-image"
               accept=".svg,.png,.jpg,.jpeg,.webp,.gif"
               className="trip-details__custom-place-file-input"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) setCustomFoodImage(f);
+                if (f) setCustomPlaceImage(f);
               }}
             />
-            <label htmlFor="custom-food-image" className="trip-details__custom-place-upload-label">
-              {customFoodImage ? (
+            <label htmlFor="custom-place-image" className="trip-details__custom-place-upload-label">
+              {customPlaceImage ? (
                 <span className="trip-details__custom-place-upload-preview">
-                  Image selected: {customFoodImage instanceof File ? customFoodImage.name : 'Preview'}
+                  Image selected: {customPlaceImage instanceof File ? customPlaceImage.name : 'Preview'}
                 </span>
               ) : (
                 <>
@@ -80,13 +80,13 @@ export default function TripDetailsAddCustomFoodModal({
           </div>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
-              Food &amp; Beverage name <span className="trip-details__custom-place-required">*</span>
+              Place name <span className="trip-details__custom-place-required">*</span>
               <input
                 type="text"
                 className="trip-details__custom-place-input"
                 placeholder="Enter the place name"
-                value={customFoodName}
-                onChange={(e) => setCustomFoodName(e.target.value)}
+                value={customPlaceName}
+                onChange={(e) => setCustomPlaceName(e.target.value)}
                 required
               />
             </label>
@@ -98,36 +98,34 @@ export default function TripDetailsAddCustomFoodModal({
                   type="text"
                   className="trip-details__custom-place-input"
                   placeholder="Search by landmark or address"
-                  value={customFoodAddress}
+                  value={customPlaceAddress}
                   onChange={(e) => {
-                    setCustomFoodAddress(e.target.value);
-                    setCustomFoodAddressSelection(null);
-                    setCustomFoodAddressSuggestionsOpen(true);
+                    setCustomPlaceAddress(e.target.value);
+                    setCustomPlaceAddressSelection(null);
+                    setCustomPlaceAddressSuggestionsOpen(true);
                   }}
-                  onFocus={() => setCustomFoodAddressSuggestionsOpen(true)}
-                  onBlur={() => setTimeout(() => setCustomFoodAddressSuggestionsOpen(false), 200)}
+                  onFocus={() => setCustomPlaceAddressSuggestionsOpen(true)}
+                  onBlur={() => setTimeout(() => setCustomPlaceAddressSuggestionsOpen(false), 200)}
                   required
                 />
-                {customFoodAddressSuggestionsOpen && customFoodAddress.trim() && (
+                {customPlaceAddressSuggestionsOpen && customPlaceAddress.trim() && (
                   <ul className="trip-details__custom-transport-suggestions">
-                    {searchAddressSuggestions(destinationQuery, customFoodAddress, 'custom-food').map(
-                      (suggestion) => (
-                        <li key={suggestion.id}>
-                          <button
-                            type="button"
-                            className="trip-details__custom-transport-suggestion"
-                            onClick={() => {
-                              setCustomFoodAddress(suggestion.name);
-                              setCustomFoodAddressSelection(suggestion);
-                              setCustomFoodAddressSuggestionsOpen(false);
-                            }}
-                          >
-                            <strong>{suggestion.name}</strong>
-                            <span>{suggestion.address}</span>
-                          </button>
-                        </li>
-                      ),
-                    )}
+                    {searchAddressSuggestions(destinationQuery, customPlaceAddress).map((suggestion) => (
+                      <li key={suggestion.id}>
+                        <button
+                          type="button"
+                          className="trip-details__custom-transport-suggestion"
+                          onClick={() => {
+                            setCustomPlaceAddress(suggestion.name);
+                            setCustomPlaceAddressSelection(suggestion);
+                            setCustomPlaceAddressSuggestionsOpen(false);
+                          }}
+                        >
+                          <strong>{suggestion.name}</strong>
+                          <span>{suggestion.address}</span>
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </span>
@@ -138,8 +136,8 @@ export default function TripDetailsAddCustomFoodModal({
               Date <span className="trip-details__custom-place-required">*</span>
               <select
                 className="trip-details__custom-place-select"
-                value={customFoodDateKey}
-                onChange={(e) => setCustomFoodDateKey(e.target.value)}
+                value={customPlaceDateKey}
+                onChange={(e) => setCustomPlaceDateKey(e.target.value)}
                 required
               >
                 <option value="">Select day</option>
@@ -157,8 +155,8 @@ export default function TripDetailsAddCustomFoodModal({
                 <input
                   type="time"
                   className="trip-details__custom-place-input"
-                  value={customFoodStartTime}
-                  onChange={(e) => setCustomFoodStartTime(e.target.value)}
+                  value={customPlaceStartTime}
+                  onChange={(e) => setCustomPlaceStartTime(e.target.value)}
                   required
                 />
               </span>
@@ -167,49 +165,19 @@ export default function TripDetailsAddCustomFoodModal({
           <label className="trip-details__custom-place-label">
             Duration <span className="trip-details__custom-place-required">*</span>
             <div className="trip-details__custom-place-duration">
-              <input
-                type="number"
-                min={0}
-                max={23}
-                className="trip-details__custom-place-duration-input"
-                value={customFoodDurationHrs}
-                onChange={(e) => setCustomFoodDurationHrs(Number(e.target.value) || 0)}
-                aria-label="Hours"
-              />
+              <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customPlaceDurationHrs} onChange={(e) => setCustomPlaceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
               <span> hr </span>
-              <input
-                type="number"
-                min={0}
-                max={59}
-                className="trip-details__custom-place-duration-input"
-                value={customFoodDurationMins}
-                onChange={(e) => setCustomFoodDurationMins(Number(e.target.value) || 0)}
-                aria-label="Minutes"
-              />
+              <input type="number" min={0} max={59} className="trip-details__custom-place-duration-input" value={customPlaceDurationMins} onChange={(e) => setCustomPlaceDurationMins(Number(e.target.value) || 0)} aria-label="Minutes" />
               <span> mins</span>
             </div>
           </label>
           <label className="trip-details__custom-place-label">
             Note (Optional)
-            <textarea
-              className="trip-details__custom-place-textarea"
-              placeholder="Enter your note..."
-              value={customFoodNote}
-              onChange={(e) => setCustomFoodNote(e.target.value)}
-              rows={3}
-            />
+            <textarea className="trip-details__custom-place-textarea" placeholder="Enter your note..." value={customPlaceNote} onChange={(e) => setCustomPlaceNote(e.target.value)} rows={3} />
           </label>
           <label className="trip-details__custom-place-label">
             Cost (Optional)
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              className="trip-details__custom-place-input"
-              placeholder="0"
-              value={customFoodCost}
-              onChange={(e) => setCustomFoodCost(e.target.value)}
-            />
+            <input type="number" step="0.01" min={0} className="trip-details__custom-place-input" placeholder="0" value={customPlaceCost} onChange={(e) => setCustomPlaceCost(e.target.value)} />
             <span className="trip-details__custom-place-currency-hint">{currency} — adds to trip budget</span>
           </label>
           <label className="trip-details__custom-place-label">
@@ -218,27 +186,20 @@ export default function TripDetailsAddCustomFoodModal({
               Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.
             </p>
             <input
-              id="custom-food-docs"
+              id="custom-place-docs"
               type="file"
               multiple
               accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
               className="trip-details__custom-place-file-input"
               onChange={(e) => {
                 const files = Array.from(e.target.files || []).slice(0, 3);
-                setCustomFoodTravelDocs(files);
+                setCustomPlaceTravelDocs(files);
               }}
             />
-            <button
-              type="button"
-              className="trip-details__custom-place-attach"
-              onClick={() => document.getElementById('custom-food-docs')?.click()}
-            >
+            <button type="button" className="trip-details__custom-place-attach" onClick={() => document.getElementById('custom-place-docs')?.click()}>
               <Paperclip size={18} aria-hidden /> Attach files
-              {customFoodTravelDocs.length > 0 && (
-                <span className="trip-details__custom-place-attach-count">
-                  {' '}
-                  ({customFoodTravelDocs.length})
-                </span>
+              {customPlaceTravelDocs.length > 0 && (
+                <span className="trip-details__custom-place-attach-count"> ({customPlaceTravelDocs.length})</span>
               )}
             </button>
           </label>

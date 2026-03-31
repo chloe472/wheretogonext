@@ -12,13 +12,13 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
-import { applyImageFallback, resolveImageUrl } from '../../lib/imageFallback';
-import TripMap from '../TripMap/TripMap';
+import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
+import TripMap from '../../TripMap/TripMap';
 import {
   distanceBetween,
   getDefaultStartTimeForDate,
   PLACE_SORT_OPTIONS,
-} from './lib/tripDetailsPageHelpers';
+} from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddPlacesModal({
   trip,

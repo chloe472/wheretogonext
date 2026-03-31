@@ -1,5 +1,5 @@
 import { Paperclip, X } from 'lucide-react';
-import { EXPERIENCE_TYPES, getDefaultStartTimeForDate } from './lib/tripDetailsPageHelpers';
+import { EXPERIENCE_TYPES, getDefaultStartTimeForDate } from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddCustomExperienceModal({
   onClose,
@@ -33,12 +33,7 @@ export default function TripDetailsAddCustomExperienceModal({
   return (
     <>
       <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={onClose} />
-      <div
-        className="trip-details__custom-place-modal"
-        role="dialog"
-        aria-labelledby="custom-experience-title"
-        aria-modal="true"
-      >
+      <div className="trip-details__custom-place-modal" role="dialog" aria-labelledby="custom-experience-title" aria-modal="true">
         <div className="trip-details__custom-place-head">
           <h2 id="custom-experience-title" className="trip-details__custom-place-title">
             Add Custom Experience
@@ -51,23 +46,11 @@ export default function TripDetailsAddCustomExperienceModal({
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
               Experience name <span className="trip-details__custom-place-required">*</span>
-              <input
-                type="text"
-                className="trip-details__custom-place-input"
-                placeholder="Enter experience name"
-                value={customExperienceName}
-                onChange={(e) => setCustomExperienceName(e.target.value)}
-                required
-              />
+              <input type="text" className="trip-details__custom-place-input" placeholder="Enter experience name" value={customExperienceName} onChange={(e) => setCustomExperienceName(e.target.value)} required />
             </label>
             <label className="trip-details__custom-place-label">
               Experience type <span className="trip-details__custom-place-required">*</span>
-              <select
-                className="trip-details__custom-place-select"
-                value={customExperienceType}
-                onChange={(e) => setCustomExperienceType(e.target.value)}
-                required
-              >
+              <select className="trip-details__custom-place-select" value={customExperienceType} onChange={(e) => setCustomExperienceType(e.target.value)} required>
                 {EXPERIENCE_TYPES.filter((type) => type !== 'All').map((type) => (
                   <option key={type} value={type}>
                     {type}
@@ -78,14 +61,7 @@ export default function TripDetailsAddCustomExperienceModal({
           </div>
           <label className="trip-details__custom-place-label">
             Address / meeting point <span className="trip-details__custom-place-required">*</span>
-            <input
-              type="text"
-              className="trip-details__custom-place-input"
-              placeholder="Enter meeting point or location"
-              value={customExperienceAddress}
-              onChange={(e) => setCustomExperienceAddress(e.target.value)}
-              required
-            />
+            <input type="text" className="trip-details__custom-place-input" placeholder="Enter meeting point or location" value={customExperienceAddress} onChange={(e) => setCustomExperienceAddress(e.target.value)} required />
           </label>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
@@ -95,8 +71,7 @@ export default function TripDetailsAddCustomExperienceModal({
                 value={customExperienceDateKey}
                 onChange={(e) => {
                   const nextDate = e.target.value;
-                  const durationMinutes =
-                    Number(customExperienceDurationHrs || 0) * 60 + Number(customExperienceDurationMins || 0);
+                  const durationMinutes = Number(customExperienceDurationHrs || 0) * 60 + Number(customExperienceDurationMins || 0);
                   setCustomExperienceDateKey(nextDate);
                   setCustomExperienceStartTime(
                     getDefaultStartTimeForDate(tripExpenseItems, nextDate, '07:00', durationMinutes),
@@ -114,100 +89,44 @@ export default function TripDetailsAddCustomExperienceModal({
             </label>
             <label className="trip-details__custom-place-label">
               Start time <span className="trip-details__custom-place-required">*</span>
-              <input
-                type="time"
-                className="trip-details__custom-place-input"
-                value={customExperienceStartTime}
-                onChange={(e) => setCustomExperienceStartTime(e.target.value)}
-                required
-              />
+              <input type="time" className="trip-details__custom-place-input" value={customExperienceStartTime} onChange={(e) => setCustomExperienceStartTime(e.target.value)} required />
             </label>
           </div>
           <label className="trip-details__custom-place-label">
             Duration <span className="trip-details__custom-place-required">*</span>
             <div className="trip-details__custom-place-duration">
-              <input
-                type="number"
-                min={0}
-                max={23}
-                className="trip-details__custom-place-duration-input"
-                value={customExperienceDurationHrs}
-                onChange={(e) => setCustomExperienceDurationHrs(Number(e.target.value) || 0)}
-                aria-label="Hours"
-              />
+              <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customExperienceDurationHrs} onChange={(e) => setCustomExperienceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
               <span> hr </span>
-              <input
-                type="number"
-                min={0}
-                max={59}
-                className="trip-details__custom-place-duration-input"
-                value={customExperienceDurationMins}
-                onChange={(e) => setCustomExperienceDurationMins(Number(e.target.value) || 0)}
-                aria-label="Minutes"
-              />
+              <input type="number" min={0} max={59} className="trip-details__custom-place-duration-input" value={customExperienceDurationMins} onChange={(e) => setCustomExperienceDurationMins(Number(e.target.value) || 0)} aria-label="Minutes" />
               <span> mins</span>
             </div>
           </label>
           <label className="trip-details__custom-place-label">
             Note (Optional)
-            <textarea
-              className="trip-details__custom-place-textarea"
-              placeholder="Enter your note..."
-              value={customExperienceNote}
-              onChange={(e) => setCustomExperienceNote(e.target.value)}
-              rows={3}
-            />
+            <textarea className="trip-details__custom-place-textarea" placeholder="Enter your note..." value={customExperienceNote} onChange={(e) => setCustomExperienceNote(e.target.value)} rows={3} />
           </label>
           <label className="trip-details__custom-place-label">
             Cost (Optional)
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              className="trip-details__custom-place-input"
-              placeholder="0"
-              value={customExperienceCost}
-              onChange={(e) => setCustomExperienceCost(e.target.value)}
-            />
+            <input type="number" step="0.01" min={0} className="trip-details__custom-place-input" placeholder="0" value={customExperienceCost} onChange={(e) => setCustomExperienceCost(e.target.value)} />
             <span className="trip-details__custom-place-currency-hint">{currency} — adds to trip budget</span>
           </label>
           <label className="trip-details__custom-place-label">
             External link (Optional)
-            <input
-              type="url"
-              className="trip-details__custom-place-input"
-              placeholder="https://"
-              value={customExperienceExternalLink}
-              onChange={(e) => setCustomExperienceExternalLink(e.target.value)}
-            />
+            <input type="url" className="trip-details__custom-place-input" placeholder="https://" value={customExperienceExternalLink} onChange={(e) => setCustomExperienceExternalLink(e.target.value)} />
           </label>
           <label className="trip-details__custom-place-label">
             Travel Documents
             <p className="trip-details__custom-place-docs-hint">
               Supported file types: DOCX, XLSX, PDF, JPG, PNG or WEBP (max. 3 MB). Up to 3 files.
             </p>
-            <input
-              id="custom-experience-docs"
-              type="file"
-              multiple
-              accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp"
-              className="trip-details__custom-place-file-input"
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []).slice(0, 3);
-                setCustomExperienceTravelDocs(files);
-              }}
-            />
-            <button
-              type="button"
-              className="trip-details__custom-place-attach"
-              onClick={() => document.getElementById('custom-experience-docs')?.click()}
-            >
+            <input id="custom-experience-docs" type="file" multiple accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png,.webp" className="trip-details__custom-place-file-input" onChange={(e) => {
+              const files = Array.from(e.target.files || []).slice(0, 3);
+              setCustomExperienceTravelDocs(files);
+            }} />
+            <button type="button" className="trip-details__custom-place-attach" onClick={() => document.getElementById('custom-experience-docs')?.click()}>
               <Paperclip size={18} aria-hidden /> Attach files
               {customExperienceTravelDocs.length > 0 && (
-                <span className="trip-details__custom-place-attach-count">
-                  {' '}
-                  ({customExperienceTravelDocs.length})
-                </span>
+                <span className="trip-details__custom-place-attach-count"> ({customExperienceTravelDocs.length})</span>
               )}
             </button>
           </label>

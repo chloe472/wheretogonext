@@ -1,10 +1,10 @@
-import TripDetailsAddPlacesModal from '../TripDetailsAddPlacesModal';
-import TripDetailsAddFoodModal from '../TripDetailsAddFoodModal';
-import TripDetailsAddStaysModal from '../TripDetailsAddStaysModal';
-import TripDetailsAddExperiencesModal from '../TripDetailsAddExperiencesModal';
-import TripDetailsAddCustomExperienceModal from '../TripDetailsAddCustomExperienceModal';
-import TripDetailsAddCustomPlaceModal from '../TripDetailsAddCustomPlaceModal';
-import TripDetailsAddCustomFoodModal from '../TripDetailsAddCustomFoodModal';
+import TripDetailsAddPlacesModal from './TripDetailsAddPlacesModal';
+import TripDetailsAddFoodModal from './TripDetailsAddFoodModal';
+import TripDetailsAddStaysModal from './TripDetailsAddStaysModal';
+import TripDetailsAddExperiencesModal from './TripDetailsAddExperiencesModal';
+import TripDetailsAddCustomExperienceModal from './TripDetailsAddCustomExperienceModal';
+import TripDetailsAddCustomPlaceModal from './TripDetailsAddCustomPlaceModal';
+import TripDetailsAddCustomFoodModal from './TripDetailsAddCustomFoodModal';
 
 export default function TripDetailsDiscoveryModals(props) {
   const {

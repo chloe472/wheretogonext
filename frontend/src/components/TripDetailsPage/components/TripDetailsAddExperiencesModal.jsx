@@ -8,15 +8,15 @@ import {
   Ticket,
   X,
 } from 'lucide-react';
-import { applyImageFallback, resolveImageUrl } from '../../lib/imageFallback';
-import TripMap from '../TripMap/TripMap';
+import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
+import TripMap from '../../TripMap/TripMap';
 import {
   EXPERIENCE_DURATIONS,
   EXPERIENCE_PRICE_RANGES,
   EXPERIENCE_SORT_OPTIONS,
   EXPERIENCE_TYPES,
   getDefaultStartTimeForDate,
-} from './lib/tripDetailsPageHelpers';
+} from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddExperiencesModal({
   trip,
