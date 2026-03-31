@@ -265,6 +265,59 @@ export function useTripDetailsAddToTrip({
     exchangeRates,
   ]);
 
+  const openAddToTripFromAiPlace = useCallback((aiPlace) => {
+    if (!aiPlace) return;
+
+    const type = aiPlace.type || 'place';
+    let categoryId = 'places';
+    let category = 'Places';
+    let Icon = Camera;
+
+    if (type === 'food') {
+      categoryId = 'food';
+      category = 'Food & Beverage';
+      Icon = UtensilsCrossed;
+    } else if (type === 'experience') {
+      categoryId = 'experiences';
+      category = 'Experience';
+      Icon = Ticket;
+    }
+
+    setAddToTripItem({
+      type,
+      data: {
+        id: aiPlace.id,
+        name: aiPlace.name,
+        address: aiPlace.location,
+        image: aiPlace.image,
+        website: aiPlace.website,
+        lat: aiPlace.lat,
+        lng: aiPlace.lng,
+      },
+      categoryId,
+      category,
+      Icon,
+    });
+
+    const day = days.find((d) => d.dayNum === 1) || days[0];
+    const selectedDate = day?.date || '';
+
+    setAddToTripDate(selectedDate);
+    setAddToTripStartTime('07:00');
+    setAddToTripDurationHrs('1');
+    setAddToTripDurationMins('0');
+    setAddToTripCheckInDate(selectedDate);
+    setAddToTripCheckInTime('15:00');
+    setAddToTripCheckOutDate(days.find((d) => d.dayNum === 2)?.date || addDays(selectedDate, 1));
+    setAddToTripCheckOutTime('11:00');
+    setAddToTripNotes('');
+    setAddToTripCost('');
+    setAddToTripExternalLink(aiPlace.website || '');
+    setAddToTripTravelDocs([]);
+
+    setAddToTripModalOpen(true);
+  }, [days]);
+
   const onCloseAddToTrip = useCallback(() => {
     setAddToTripModalOpen(false);
   }, []);
@@ -395,6 +448,7 @@ export function useTripDetailsAddToTrip({
     setAddToTripTravelDocs,
     appendItemToTrip,
     openAddToTripFromMapMarker,
+    openAddToTripFromAiPlace,
     openAddStayToTrip,
     onCloseAddToTrip,
     handleAddToTripSubmit,

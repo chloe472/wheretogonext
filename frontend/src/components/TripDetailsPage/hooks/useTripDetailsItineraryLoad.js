@@ -6,11 +6,13 @@ export function useTripDetailsItineraryLoad(tripId, locationState) {
   const [tripLoading, setTripLoading] = useState(true);
   const [tripLoadError, setTripLoadError] = useState(null);
 
+  const preloadedItinerary = locationState?.preloadedItinerary ?? null;
+
   useEffect(() => {
     let cancelled = false;
     setTripLoadError(null);
 
-    const preloaded = locationState?.preloadedItinerary || null;
+    const preloaded = preloadedItinerary || null;
     const preloadedId = preloaded?._id ?? preloaded?.id;
     const hasMatchingPreloaded = preloaded && String(preloadedId || '') === String(tripId || '');
 
@@ -74,7 +76,7 @@ export function useTripDetailsItineraryLoad(tripId, locationState) {
     return () => {
       cancelled = true;
     };
-  }, [tripId, locationState]);
+  }, [tripId, preloadedItinerary]);
 
   return { serverItinerary, setServerItinerary, tripLoading, tripLoadError };
 }

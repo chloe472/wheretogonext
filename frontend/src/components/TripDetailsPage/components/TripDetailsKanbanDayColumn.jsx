@@ -88,6 +88,14 @@ export default function TripDetailsKanbanDayColumn({
   handleKanbanDayDragEnd,
   handleKanbanDayDrop,
 }) {
+
+  // Icon render break fix
+  const isRenderableIcon = (candidate) => (
+    typeof candidate === 'function'
+    || typeof candidate === 'string'
+    || Boolean(candidate && typeof candidate === 'object' && candidate.$$typeof)
+  );
+
   const dayStayItems = getDayStayItems(tripExpenseItems, day.date);
   const boardDayItems = getSortedDayItems(tripExpenseItems, day.date, { includeOvernightStays: true })
     .filter((item) => !isStayItem(item));
@@ -427,7 +435,7 @@ export default function TripDetailsKanbanDayColumn({
         })}
         {boardDayItems.map((item, idx) => {
           const style = getCategoryStyle(item);
-          const IconComponent = item.Icon || Camera;
+          const IconComponent = isRenderableIcon(item?.Icon) ? item.Icon : Camera;
           const timeRange = formatTimeRange(item);
           const isTransportItem = item.categoryId === 'transportations' || Boolean(item.transportType);
           const transportTypeLabel = item.transportType
@@ -449,7 +457,7 @@ export default function TripDetailsKanbanDayColumn({
           const segmentKey = `${day.date}-${idx}`;
           const mode = transportModeBySegment[segmentKey] || 'driving';
           const travelModeInfo = TRAVEL_MODES.find((m) => m.id === mode) || TRAVEL_MODES[2];
-          const TravelSegmentIcon = travelModeInfo.Icon;
+          const TravelSegmentIcon = isRenderableIcon(travelModeInfo?.Icon) ? travelModeInfo.Icon : Route;
           const nextItem = boardDayItems[idx + 1];
           const hideTravelSegment = Boolean(nextItem) && (isFlightItem(item) || isFlightItem(nextItem));
           const travelToNext = nextItem && !hideTravelSegment
