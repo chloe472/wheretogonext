@@ -1,0 +1,36 @@
+/* View toggle (Kanban / Calendar) */
+.trip-details__view-toggle {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.trip-details__view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: var(--wtg-surface);
+  color: var(--wtg-text-muted);
+  cursor: pointer;
+}
+
+.trip-details__view-toggle-btn:hover {
+  background: var(--wtg-hover);
+  color: var(--wtg-text);
+}
+
+.trip-details__view-toggle-btn--active {
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
+}
+
+.trip-details__view-toggle-btn--active:hover {
+  background: var(--wtg-text);
+  color: var(--wtg-primary-contrast);
+}

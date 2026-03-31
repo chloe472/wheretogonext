@@ -1,0 +1,253 @@
+/* Calendar view */
+.trip-details__calendar-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.trip-details__calendar-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--wtg-surface);
+  border-right: 1px solid var(--wtg-border);
+}
+
+.trip-details__calendar-day-tabs-row {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--wtg-border);
+  background: var(--wtg-hover);
+}
+
+.trip-details__calendar-day-tabs-spacer {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--wtg-border);
+}
+
+.trip-details__calendar-day-tabs-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.trip-details__calendar-day-tabs {
+  display: flex;
+  min-width: max-content;
+  will-change: transform;
+}
+
+.trip-details__calendar-day-tab {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-right: 1px solid var(--wtg-border);
+}
+
+.trip-details__calendar-day-tab-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.trip-details__calendar-day-tab-city {
+  font-size: 0.75rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__calendar-timeline-wrap {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: auto;
+}
+
+.trip-details__calendar-times {
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--wtg-surface);
+  border-right: 1px solid var(--wtg-border);
+}
+
+.trip-details__calendar-time-row {
+  box-sizing: border-box;
+  height: 48px;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.trip-details__calendar-time-row--all-day {
+  height: 28px;
+  align-items: center;
+  padding-top: 0;
+}
+
+.trip-details__calendar-time-label {
+  font-size: 0.6875rem;
+  color: var(--wtg-text-muted);
+  padding-left: 4px;
+}
+
+.trip-details__calendar-grid {
+  flex: 0 0 auto;
+  display: flex;
+  min-width: max-content;
+}
+
+.trip-details__calendar-day-col {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border-right: 1px solid var(--wtg-hover);
+}
+
+.trip-details__calendar-day-col-content {
+  position: relative;
+  min-height: 604px;
+}
+
+.trip-details__calendar-day-col-content--drop-target {
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
+}
+
+.trip-details__calendar-all-day-cell {
+  box-sizing: border-box;
+  height: 28px;
+  border-bottom: 1px solid var(--wtg-hover);
+  background: var(--wtg-surface);
+}
+
+.trip-details__calendar-cell {
+  box-sizing: border-box;
+  height: 48px;
+  border-bottom: 1px solid var(--wtg-hover);
+}
+
+.trip-details__calendar-events {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.trip-details__calendar-events > * {
+  pointer-events: auto;
+}
+
+.trip-details__calendar-event {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 2px 6px;
+  padding: 6px 6px 5px;
+  border: none;
+  border-left: 3px solid;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  color: var(--wtg-text);
+  overflow: hidden;
+  transition: box-shadow 0.15s ease;
+}
+
+.trip-details__calendar-event:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.trip-details__calendar-event--dragging {
+  opacity: 0.65;
+  cursor: grabbing;
+}
+
+.trip-details__calendar-event--resizing {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.trip-details__calendar-event-time {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__calendar-event-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.trip-details__calendar-event-name {
+  flex: 1 1 100%;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-details__calendar-event-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  cursor: ns-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.trip-details__calendar-event-resize::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 22px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.35);
+  border-radius: 999px;
+}
+
+.trip-details__calendar-event:hover .trip-details__calendar-event-resize,
+.trip-details__calendar-event:focus-visible .trip-details__calendar-event-resize,
+.trip-details__calendar-event--resizing .trip-details__calendar-event-resize {
+  opacity: 1;
+}
+
+.trip-details__calendar-fab {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+}
+
+.trip-details__calendar-fab:hover {
+  background: var(--wtg-text);
+  transform: scale(1.05);
+}
+
+.trip-details__calendar-fab:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}

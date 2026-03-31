@@ -1,0 +1,101 @@
+/* Filter days modal */
+.trip-details__filter-days-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: 90%;
+  max-width: 360px;
+  max-height: 85vh;
+  padding: 1.25rem;
+  background: var(--wtg-surface);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.trip-details__filter-days-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.trip-details__filter-days-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--wtg-text);
+}
+
+.trip-details__filter-days-hint {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.trip-details__filter-days-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.trip-details__filter-days-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.trip-details__filter-days-btn:hover {
+  background: var(--wtg-border);
+}
+
+.trip-details__filter-days-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.trip-details__filter-days-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 0.35rem;
+}
+
+.trip-details__filter-days-item:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__filter-days-item--selected {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.trip-details__filter-days-check {
+  display: inline-flex;
+  color: #16a34a;
+}
+
+.trip-details__filter-days-footer {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--wtg-border);
+}

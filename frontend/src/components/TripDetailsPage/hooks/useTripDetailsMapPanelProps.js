@@ -1,0 +1,50 @@
+import { useMemo } from 'react';
+
+export function useTripDetailsMapPanelProps({
+  mapView,
+  mapExpandOpen,
+  setMapExpandOpen,
+  setMapView,
+  mapFilter,
+  setMapFilter,
+  resetMapDays,
+  setMapDayFilterOpen,
+  mapCenter,
+  mapMarkers,
+  activeDayNums,
+  openAddToTripFromMapMarker,
+  openAddPlacesDetailsFromMapMarker,
+}) {
+  return useMemo(
+    () => ({
+      mapView,
+      mapExpandOpen,
+      setMapExpandOpen,
+      setMapView,
+      mapFilter,
+      setMapFilter,
+      resetMapDays,
+      setMapDayFilterOpen,
+      mapCenter,
+      mapMarkers,
+      activeDayNums,
+      openAddToTripFromMapMarker,
+      openAddPlacesDetailsFromMapMarker,
+    }),
+    [
+      mapView,
+      mapExpandOpen,
+      setMapExpandOpen,
+      setMapView,
+      mapFilter,
+      setMapFilter,
+      resetMapDays,
+      setMapDayFilterOpen,
+      mapCenter,
+      mapMarkers,
+      activeDayNums,
+      openAddToTripFromMapMarker,
+      openAddPlacesDetailsFromMapMarker,
+    ],
+  );
+}

@@ -1,0 +1,70 @@
+/* Taupe/black theme for Add Places modal (match dashboard) */
+.trip-details__add-places-modal--theme {
+  --place-bg: var(--wtg-bg);
+  --place-surface: var(--wtg-surface);
+  --place-border: var(--wtg-border);
+  --place-text: var(--wtg-text);
+  --place-text-muted: var(--wtg-text-muted);
+  --place-accent: var(--wtg-accent);
+  --place-primary: var(--wtg-primary);
+  --place-hover: var(--wtg-hover);
+  background: var(--wtg-bg);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-head {
+  border-bottom-color: var(--place-border);
+  background: var(--place-surface);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-title { color: var(--place-text); }
+.trip-details__add-places-modal--theme .trip-details__add-places-location {
+  background: var(--place-hover);
+  border-color: var(--place-border);
+  color: var(--place-text-muted);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-list-panel {
+  background: var(--place-surface);
+  border-right-color: var(--place-border);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-search-input {
+  background: var(--wtg-surface);
+  border-color: var(--place-border);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-search-input:focus {
+  border-color: var(--place-primary);
+  box-shadow: 0 0 0 2px rgba(92, 74, 61, 0.2);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-results { color: var(--place-text-muted); }
+.trip-details__add-places-modal--theme .trip-details__add-places-tag {
+  background: var(--place-hover);
+  color: var(--place-text);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-tag:hover,
+.trip-details__add-places-modal--theme .trip-details__add-places-tag--active {
+  background: var(--place-primary);
+  color: #faf8f5;
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-sort label { color: var(--place-text-muted); }
+.trip-details__add-places-modal--theme .trip-details__add-places-sort-select {
+  border-color: var(--place-border);
+  background: var(--place-surface);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-card {
+  background: var(--place-surface);
+  border-color: var(--place-border);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-card-name { color: var(--place-text); }
+.trip-details__add-places-modal--theme .trip-details__add-places-card-rating { color: var(--place-text-muted); }
+.trip-details__add-places-modal--theme .trip-details__add-places-card-add { color: var(--place-primary); }
+.trip-details__add-places-modal--theme .trip-details__add-places-card-add:hover {
+  background: var(--place-primary);
+  color: #faf8f5;
+}
+
+.trip-details__add-places-modal--theme .trip-details__add-places-map-panel {
+  background: var(--place-hover);
+  border-left-color: var(--place-border);
+}
+.trip-details__add-places-modal--theme .trip-details__add-places-filter-days {
+  background: var(--place-surface);
+  border-color: var(--place-border);
+  color: var(--place-text);
+}

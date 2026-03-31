@@ -1,0 +1,75 @@
+/* Currency modal */
+.trip-details__currency-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 380px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  background: var(--wtg-surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.trip-details__currency-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.trip-details__currency-modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__currency-list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.trip-details__currency-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.625rem 0.5rem;
+  font-size: 0.9375rem;
+  text-align: left;
+  color: var(--wtg-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__currency-option:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__currency-option--selected {
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.trip-details__currency-check {
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
+.trip-details__currency-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

@@ -3,6 +3,21 @@ import toast from 'react-hot-toast';
 import { Camera } from 'lucide-react';
 import { analyzeSocialImport } from '../../api/socialImportApi';
 import { placeKeySocialImport } from './socialImportUtils';
+import { getDefaultStartTimeForDate } from '../TripDetailsPage/lib/tripDetailsPageHelpers';
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!(file instanceof Blob)) {
+      resolve('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error || new Error('Could not read image file.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * State and handlers for "Import from social media" (Add to trip sheet).
@@ -12,11 +27,12 @@ export function useSocialImport({
   appendItemToTrip,
   days,
   cityQuery,
+  tripDestinations = [],
+  tripExpenseItems = [],
 }) {
   const [socialImportOpen, setSocialImportOpen] = useState(false);
   const [socialImportDay, setSocialImportDay] = useState(1);
   const [socialImportStep, setSocialImportStep] = useState('input');
-  const [socialImportUrl, setSocialImportUrl] = useState('');
   const [socialImportFiles, setSocialImportFiles] = useState([]);
   const [socialImportFilePreviews, setSocialImportFilePreviews] = useState([]);
   const [socialImportResults, setSocialImportResults] = useState([]);
@@ -27,7 +43,6 @@ export function useSocialImport({
   const resetSocialImportModal = useCallback(() => {
     setSocialImportOpen(false);
     setSocialImportStep('input');
-    setSocialImportUrl('');
     setSocialImportFiles([]);
     setSocialImportFilePreviews([]);
     setSocialImportResults([]);
@@ -39,7 +54,6 @@ export function useSocialImport({
   const openSocialImportForDay = useCallback((dayNum) => {
     setSocialImportDay(dayNum ?? 1);
     setSocialImportStep('input');
-    setSocialImportUrl('');
     setSocialImportFiles([]);
     setSocialImportResults([]);
     setSocialImportSelected(new Set());
@@ -75,10 +89,9 @@ export function useSocialImport({
   }, []);
 
   const runSocialImportAnalysis = useCallback(async () => {
-    const hasLink = socialImportUrl.trim().length > 0;
     const hasFiles = socialImportFiles.length > 0;
-    if (!hasLink && !hasFiles) {
-      toast.error('Paste a link or upload at least one screenshot, then press Next.');
+    if (!hasFiles) {
+      toast.error('Upload at least one screenshot, then press Next.');
       return;
     }
     if (!cityQuery) {
@@ -89,13 +102,13 @@ export function useSocialImport({
     try {
       const data = await analyzeSocialImport({
         destination: cityQuery,
-        url: socialImportUrl,
+        tripDestinations,
         imageFiles: socialImportFiles,
       });
       setSocialImportLocationInsight(data.locationInsight || null);
       const places = Array.isArray(data.places) ? data.places : [];
       if (places.length === 0) {
-        toast.error(data.warning || 'No matching places found. Try another link or clearer screenshots.');
+        toast.error(data.warning || 'No matching places found. Try clearer screenshots.');
         setSocialImportStep('input');
         return;
       }
@@ -109,7 +122,7 @@ export function useSocialImport({
     } catch (e) {
       if (e?.status === 422 && (e?.code === 'LLM_REQUIRED' || e?.code === 'OPENAI_REQUIRED')) {
         toast.error(
-          'Screenshot analysis needs GEMINI_API_KEY in the backend .env. You can still paste a link without screenshots.',
+          'Screenshot analysis needs GEMINI_API_KEY in the backend .env.',
           { duration: 6000 },
         );
       } else {
@@ -117,7 +130,7 @@ export function useSocialImport({
       }
       setSocialImportStep('input');
     }
-  }, [socialImportUrl, socialImportFiles, cityQuery]);
+  }, [socialImportFiles, cityQuery, tripDestinations]);
 
   const toggleSocialImportPlace = useCallback((key) => {
     setSocialImportSelected((prev) => {
@@ -128,7 +141,7 @@ export function useSocialImport({
     });
   }, []);
 
-  const addSocialImportPlacesToTrip = useCallback(() => {
+  const addSocialImportPlacesToTrip = useCallback(async () => {
     const dateForDay = days.find((d) => d.dayNum === socialImportDay)?.date || days[0]?.date;
     if (!dateForDay) {
       toast.error('Could not resolve a day for this trip.');
@@ -139,11 +152,26 @@ export function useSocialImport({
       toast.error('Select at least one place to add.');
       return;
     }
-    const note = socialImportUrl.trim()
-      ? `Imported from social (${socialImportUrl.trim().slice(0, 120)}${socialImportUrl.length > 120 ? '…' : ''})`
-      : 'Imported from social (screenshots)';
-    selected.forEach((place) => {
-      appendItemToTrip({
+    const note = 'Imported from social (screenshots)';
+    const durationHrs = 1;
+    const durationMins = 30;
+    const durationMinutes = durationHrs * 60 + durationMins;
+    const stagedDayItems = [...tripExpenseItems];
+    let addedCount = 0;
+    let failedCount = 0;
+    for (const place of selected) {
+      const startTime = getDefaultStartTimeForDate(stagedDayItems, dateForDay, '10:00', durationMinutes);
+      let persistedImage = place.image || '';
+
+      if (!persistedImage && Number.isInteger(place?.imageIndex)) {
+        try {
+          persistedImage = await fileToDataUrl(socialImportFiles[place.imageIndex]);
+        } catch {
+          persistedImage = '';
+        }
+      }
+
+      const didAppend = appendItemToTrip({
         itemType: 'place',
         data: {
           id: place.id || place.name,
@@ -153,31 +181,55 @@ export function useSocialImport({
           lng: place.lng,
           rating: place.rating,
           reviewCount: place.reviewCount,
-          image: place.image,
+          image: persistedImage,
         },
         categoryId: 'places',
         category: 'Places',
         Icon: Camera,
         values: {
           date: dateForDay,
-          startTime: '10:00',
-          durationHrs: '1',
-          durationMins: '30',
+          startTime,
+          durationHrs,
+          durationMins,
           note,
           cost: '',
-          externalLink: socialImportUrl.trim() || '',
+          externalLink: '',
         },
       });
-    });
-    toast.success(`Added ${selected.length} place${selected.length === 1 ? '' : 's'} to Day ${socialImportDay}`);
-    resetSocialImportModal();
+      if (didAppend) {
+        addedCount += 1;
+        stagedDayItems.push({
+          date: dateForDay,
+          startTime,
+          durationHrs,
+          durationMins,
+          categoryId: 'places',
+          name: place.name,
+        });
+      } else {
+        failedCount += 1;
+      }
+    }
+
+    if (addedCount > 0) {
+      toast.success(`Added ${addedCount} place${addedCount === 1 ? '' : 's'} to Day ${socialImportDay}.`);
+    }
+    if (failedCount > 0) {
+      toast.error(
+        `${failedCount} place${failedCount === 1 ? '' : 's'} could not be added. Check for time conflicts and try again.`,
+      );
+    }
+    if (addedCount > 0) {
+      resetSocialImportModal();
+    }
   }, [
     appendItemToTrip,
     days,
     socialImportDay,
+    socialImportFiles,
     socialImportResults,
     socialImportSelected,
-    socialImportUrl,
+    tripExpenseItems,
     resetSocialImportModal,
   ]);
 
@@ -198,8 +250,6 @@ export function useSocialImport({
       onStepChange: setSocialImportStep,
       day: socialImportDay,
       cityQuery,
-      url: socialImportUrl,
-      onUrlChange: setSocialImportUrl,
       files: socialImportFiles,
       onFilesAppend: appendFiles,
       filePreviews: socialImportFilePreviews,

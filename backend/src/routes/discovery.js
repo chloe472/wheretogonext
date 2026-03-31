@@ -2220,7 +2220,7 @@ router.get('/destination', async (req, res) => {
       ...place,
       osmTags: place.rawTags || {},
       tags: Array.isArray(place.tags) ? place.tags : [],
-    })), 18, 'landmark')).map((place) => {
+    })), 60, 'landmark')).map((place) => {
       const hours = parseOpeningHours(place.openingHoursRaw);
       const overview = place.description || `${place.name} is a notable attraction in ${destination}.`;
       const fallbackGallery = [

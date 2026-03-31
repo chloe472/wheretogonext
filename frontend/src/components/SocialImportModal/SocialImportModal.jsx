@@ -2,8 +2,8 @@ import { X, Plus, Loader2, MapPin } from 'lucide-react';
 import { placeKeySocialImport } from './socialImportUtils';
 
 /**
- * Multi-step modal: paste social URL / upload screenshots → analyzing → pick places.
- * Styles: `trip-details__social-import-*` in TripDetailsPage/TripDetailsPage.css (loaded by the page).
+ * Multi-step modal: upload screenshots -> analyzing -> pick places.
+ * Styles: `trip-details__social-import-*` in TripDetailsPage/styles/trip-details-social-import-modal.css (via TripDetailsPage.css).
  */
 export default function SocialImportModal({
   isOpen,
@@ -12,8 +12,6 @@ export default function SocialImportModal({
   onStepChange,
   day,
   cityQuery,
-  url,
-  onUrlChange,
   files,
   onFilesAppend,
   filePreviews,
@@ -59,21 +57,10 @@ export default function SocialImportModal({
               ) : null}
             </p>
             <p className="trip-details__social-import-hint">
-              Paste a link to a TikTok, Instagram Reel, or Pinterest pin, or upload screenshots.
+              Upload screenshots from TikTok, Instagram, Pinterest, or anywhere else and we&apos;ll detect places from them.
             </p>
             <div className="trip-details__social-import-field">
-              <label htmlFor="social-import-url" className="trip-details__custom-place-label">Post or reel link</label>
-              <input
-                id="social-import-url"
-                type="url"
-                className="trip-details__custom-place-input"
-                placeholder="https://www.tiktok.com/… or https://www.instagram.com/reel/…"
-                value={url}
-                onChange={(e) => onUrlChange(e.target.value)}
-              />
-            </div>
-            <div className="trip-details__social-import-field">
-              <span className="trip-details__custom-place-label">Screenshots (optional)</span>
+              <span className="trip-details__custom-place-label">Screenshots</span>
               <div className="trip-details__social-import-upload-wrap">
                 {filePreviews.length > 0 ? (
                   <div className="trip-details__social-import-preview-row">
@@ -137,7 +124,7 @@ export default function SocialImportModal({
         {step === 'analyzing' && (
           <div className="trip-details__social-import-analyzing" aria-busy="true">
             <Loader2 size={36} className="trip-details__social-import-spinner" aria-hidden />
-            <p>Analyzing your link and screenshots…</p>
+            <p>Analyzing your screenshots…</p>
             <p className="trip-details__social-import-analyzing-sub">
               Finding popular places near {cityQuery || 'your destination'}.
             </p>
@@ -154,7 +141,7 @@ export default function SocialImportModal({
                   <p className="trip-details__social-import-location-banner-desc">
                     {locationInsight.message}
                   </p>
-                  {onAddDetectedDestination ? (
+                  {locationInsight.canAddDetectedDestination && onAddDetectedDestination ? (
                     <button
                       type="button"
                       className="trip-details__social-import-location-banner-btn"
@@ -182,6 +169,11 @@ export default function SocialImportModal({
             <ul className="trip-details__social-import-list">
               {results.map((place, idx) => {
                 const key = placeKeySocialImport(place, idx);
+                const fallbackPreviewUrl =
+                  Number.isInteger(place?.imageIndex) && filePreviews[place.imageIndex]?.url
+                    ? filePreviews[place.imageIndex].url
+                    : '';
+                const resultImageUrl = place.image || fallbackPreviewUrl;
                 return (
                   <li key={key} className="trip-details__social-import-row">
                     <label className="trip-details__social-import-label">
@@ -192,7 +184,7 @@ export default function SocialImportModal({
                         onChange={() => onTogglePlace(key)}
                       />
                       <img
-                        src={resolveImageUrl(place.image, place.name, 'landmark')}
+                        src={resolveImageUrl(resultImageUrl, place.name, 'landmark')}
                         alt=""
                         className="trip-details__social-import-thumb"
                         onError={onImageError}

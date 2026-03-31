@@ -1,0 +1,552 @@
+/* Itinerary detail view (inside Add Places modal) */
+.trip-details__itinerary-detail-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--place-surface, #faf8f5);
+  border-right: 1px solid var(--place-border, #d4c4b0);
+}
+
+.trip-details__itinerary-detail-header {
+  padding: 1.5rem 1.5rem 1rem;
+  flex-shrink: 0;
+  position: relative;
+  border-bottom: 1px solid var(--place-border, #e5e5e5);
+}
+
+.trip-details__itinerary-detail-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--place-text, #3d3428);
+  margin: 0.5rem 0 1rem 0;
+  line-height: 1.3;
+}
+
+.trip-details__itinerary-detail-author-style {
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  color: var(--place-text-muted, #6b6055);
+}
+
+.trip-details__itinerary-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.trip-details__itinerary-detail-creator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--place-accent, #5c4a3d);
+}
+
+.trip-details__itinerary-detail-stat {
+  font-size: 13px;
+  color: var(--place-text-muted, #6b6055);
+}
+
+.trip-details__itinerary-detail-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trip-details__itinerary-detail-tag {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.trip-details__itinerary-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.trip-details__itinerary-detail-day {
+  margin-bottom: 32px;
+}
+
+.trip-details__itinerary-detail-day-header {
+  margin-bottom: 16px;
+}
+
+.trip-details__itinerary-detail-day-badge {
+  display: inline-block;
+  background: #d1fae5;
+  color: #047857;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.trip-details__itinerary-detail-day-title {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--place-text, #3d3428);
+  margin-top: 8px;
+}
+
+.trip-details__itinerary-detail-places {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.trip-details__itinerary-detail-place {
+  display: flex;
+  gap: 16px;
+  background: var(--place-bg, #fff);
+  border: 1px solid var(--place-border, #e5e5e5);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.trip-details__itinerary-detail-place:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: var(--place-accent, #5c4a3d);
+}
+
+.trip-details__itinerary-detail-place--interactive {
+  cursor: pointer;
+}
+
+.trip-details__itinerary-detail-place--interactive:focus-visible {
+  outline: 2px solid var(--place-accent, #5c4a3d);
+  outline-offset: 2px;
+}
+
+.trip-details__itinerary-detail-place-img-wrap {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.trip-details__itinerary-detail-place-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trip-details__itinerary-detail-place-content {
+  flex: 1;
+  padding: 16px 16px 16px 0;
+}
+
+.trip-details__itinerary-detail-place-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--place-text, #3d3428);
+  margin: 0 0 8px 0;
+}
+
+.trip-details__itinerary-detail-place-rating,
+.trip-details__itinerary-detail-place-address,
+.trip-details__itinerary-detail-place-duration {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--place-text-muted, #6b6055);
+  margin-bottom: 6px;
+}
+
+.trip-details__itinerary-detail-place-rating svg {
+  color: #d4a574;
+}
+
+.trip-details__itinerary-detail-place-note {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--place-text, #3d3428);
+}
+
+.trip-details__itinerary-detail-place-note strong {
+  font-weight: 600;
+}
+
+.trip-details__place-detail-header {
+  padding: 1rem 1.25rem;
+  flex-shrink: 0;
+  position: relative;
+}
+.trip-details__place-detail-close {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  padding: 0.35rem;
+  border: none;
+  background: none;
+  color: var(--place-text-muted, #6b5d4f);
+  cursor: pointer;
+}
+.trip-details__place-detail-close:hover { color: var(--place-primary, #5c4a3d); }
+.trip-details__place-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding: 0.35rem 0;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  color: var(--place-accent, #7d6b5a);
+  cursor: pointer;
+  font-family: inherit;
+}
+.trip-details__place-detail-back:hover { color: var(--place-primary, #5c4a3d); }
+.trip-details__place-detail-name {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--place-text, #3d3428);
+  line-height: 1.2;
+}
+.trip-details__place-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.trip-details__place-detail-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9375rem;
+  color: var(--place-text-muted, #6b5d4f);
+}
+.trip-details__place-detail-rating svg { color: #d4a574; }
+.trip-details__place-detail-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(92, 74, 61, 0.12);
+  color: var(--place-primary, #5c4a3d);
+}
+.trip-details__place-detail-heart {
+  margin-left: auto;
+  padding: 0.35rem;
+  border: none;
+  background: none;
+  color: var(--place-text-muted, #6b5d4f);
+  cursor: pointer;
+}
+.trip-details__place-detail-heart:hover { color: var(--place-primary, #5c4a3d); }
+.trip-details__place-detail-hero {
+  width: 100%;
+  flex-shrink: 0;
+}
+.trip-details__place-detail-img {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+}
+.trip-details__place-detail-gallery {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+.trip-details__place-detail-gallery-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.75rem;
+}
+.trip-details__place-detail-img--primary {
+  height: 320px;
+  border-radius: 14px;
+}
+.trip-details__place-detail-img--secondary {
+  height: 154px;
+  border-radius: 14px;
+}
+@media (max-width: 900px) {
+  .trip-details__place-detail-gallery {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-details__place-detail-gallery-side {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: none;
+  }
+
+  .trip-details__place-detail-img--primary {
+    height: 260px;
+  }
+
+  .trip-details__place-detail-img--secondary {
+    height: 140px;
+  }
+}
+.trip-details__place-detail-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--place-border, #d4c4b0);
+  padding: 0 1.25rem;
+  flex-shrink: 0;
+}
+.trip-details__place-detail-tab {
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--place-text-muted, #6b5d4f);
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.trip-details__place-detail-tab:hover { color: var(--place-text, #3d3428); }
+.trip-details__place-detail-tab--active {
+  color: var(--place-primary, #5c4a3d);
+  border-bottom-color: var(--place-primary, #5c4a3d);
+}
+.trip-details__place-detail-content {
+  padding: 1rem 1.25rem 1.5rem;
+  flex: 1;
+}
+.trip-details__place-detail-overview {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--place-text, #3d3428);
+  margin: 0 0 1rem;
+}
+.trip-details__place-detail-read-more {
+  color: var(--place-accent, #7d6b5a);
+  cursor: pointer;
+}
+.trip-details__place-detail-add-wrap { margin-bottom: 1.25rem; }
+.trip-details__place-detail-add-btn {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #faf8f5;
+  background: var(--place-primary, #5c4a3d);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.trip-details__place-detail-add-btn:hover {
+  background: var(--place-text, #3d3428);
+}
+
+.trip-details__place-detail-book-btn {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.trip-details__place-detail-book-btn:hover {
+  background: #1d4ed8;
+}
+.trip-details__place-detail-section {
+  margin-bottom: 1rem;
+}
+.trip-details__place-detail-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--place-text-muted, #6b5d4f);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.trip-details__place-detail-section-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--place-text, #3d3428);
+  line-height: 1.45;
+}
+.trip-details__place-detail-section-text a { margin-left: 0.25rem; }
+.trip-details__place-detail-status {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.trip-details__place-detail-status--open { color: #047857; }
+.trip-details__place-detail-status--closed { color: #b91c1c; }
+.trip-details__place-detail-hours {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--place-text, #3d3428);
+  line-height: 1.6;
+}
+.trip-details__place-detail-link {
+  color: var(--place-primary, #5c4a3d);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.trip-details__place-detail-link:hover { text-decoration: underline; }
+.trip-details__place-detail-nearby-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--place-text, #3d3428);
+}
+.trip-details__place-detail-nearby-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.trip-details__place-detail-nearby-card {
+  position: relative;
+  width: 160px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--place-surface, #faf8f5);
+  border: 1px solid var(--place-border, #d4c4b0);
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.trip-details__place-detail-nearby-card:hover {
+  box-shadow: 0 4px 12px rgba(61, 52, 40, 0.12);
+  border-color: var(--place-accent, #7d6b5a);
+}
+.trip-details__place-detail-nearby-img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+.trip-details__place-detail-nearby-heart,
+.trip-details__place-detail-nearby-plus {
+  position: absolute;
+  top: 0.35rem;
+  padding: 0.25rem;
+  border: none;
+  background: rgba(250, 248, 245, 0.95);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--place-text-muted, #6b5d4f);
+}
+.trip-details__place-detail-nearby-heart { left: 0.35rem; }
+.trip-details__place-detail-nearby-plus { right: 0.35rem; }
+.trip-details__place-detail-nearby-heart:hover,
+.trip-details__place-detail-nearby-plus:hover { color: var(--place-primary, #5c4a3d); }
+.trip-details__place-detail-nearby-info {
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.trip-details__place-detail-nearby-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--place-text, #3d3428);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trip-details__place-detail-nearby-rating {
+  font-size: 0.75rem;
+  color: var(--place-text-muted, #6b5d4f);
+}
+
+.trip-details__add-places-map-panel {
+  width: 400px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: var(--wtg-hover);
+  border-left: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-places-filter-days {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__add-places-map {
+  position: relative;
+  flex: 1;
+  min-height: 220px;
+  margin-bottom: 0.75rem;
+  border-radius: 12px;
+}
+
+.trip-details__add-places-map .trip-map {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.trip-details__add-places-map-base {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(135deg, var(--wtg-border) 25%, var(--wtg-hover) 25%, var(--wtg-hover) 50%, var(--wtg-border) 50%, var(--wtg-border) 75%, var(--wtg-hover) 75%, var(--wtg-hover) 100%);
+  background-size: 32px 32px;
+  filter: saturate(0.9);
+}
+
+.trip-details__add-places-map-label {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.6rem;
+  z-index: 1;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+}
+
+.trip-details__add-places-map-marker {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: #16a34a;
+  color: var(--wtg-primary-contrast);
+  box-shadow: 0 4px 8px rgba(22, 163, 74, 0.3);
+  cursor: pointer;
+}
+
+.trip-details__add-places-map-marker:hover {
+  background: #15803d;
+}

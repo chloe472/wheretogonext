@@ -1,0 +1,83 @@
+/* Positioned just above the "Add things to do" button (kanban) */
+.trip-details__add-sheet--anchored {
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.trip-details__add-sheet-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-sheet-subtitle {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-sheet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.trip-details__add-sheet-list li {
+  margin: 0;
+}
+
+.trip-details__add-sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  margin: 0 -0.5rem;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.trip-details__add-sheet-option:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__add-sheet-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.trip-details__add-sheet-icon-svg {
+  color: var(--wtg-primary-contrast);
+  stroke: #fff;
+}
+
+.trip-details__add-sheet-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.trip-details__add-sheet-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-sheet-desc {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  line-height: 1.3;
+}
