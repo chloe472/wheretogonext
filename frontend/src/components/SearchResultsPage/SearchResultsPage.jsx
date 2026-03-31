@@ -116,7 +116,10 @@ export default function SearchResultsPage({ user, onLogout }) {
       <section className="search-results__hero">
         <HeroSlideshowBackground images={EXPLORE_HERO_IMAGES} />
         <div className="search-results__hero-content">
-          <h1 className="search-results__hero-title">Community made itineraries</h1>
+          <p className="search-results__hero-eyebrow">Community made itineraries</p>
+          <h1 className="search-results__hero-title">
+            Find your next <em>adventure</em>
+          </h1>
           <form className="search-results__search-form" onSubmit={handleSearchSubmit} ref={searchRef}>
             <Search size={20} className="search-results__search-icon" aria-hidden />
             <input
@@ -224,7 +227,7 @@ export default function SearchResultsPage({ user, onLogout }) {
               <ItineraryCard
                 key={it.id}
                 itineraryId={it.id}
-                title={it.title}
+                title={it.destination || it.title}
                 coverImages={it.coverImages}
                 destination={it.destination}
                 locations={it.locations}

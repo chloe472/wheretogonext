@@ -674,6 +674,13 @@
   font-weight: 600;
 }
 
+.itinerary-detail__creator-bio {
+  margin: 0.45rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #57534e;
+}
+
 .itinerary-detail__creator-meta {
   margin: 0.35rem 0 0;
   font-size: 0.8125rem;
