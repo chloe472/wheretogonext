@@ -1,0 +1,305 @@
+/* Add Places modal */
+.trip-details__add-places-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  max-width: 1200px;
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  background: var(--wtg-surface);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.trip-details__add-places-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--wtg-border);
+  flex-shrink: 0;
+}
+
+.trip-details__add-places-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-places-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 320px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--wtg-text-muted);
+  background: var(--wtg-hover);
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+}
+
+.trip-details__add-places-location-icon {
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.trip-details__add-places-close {
+  margin-left: auto;
+}
+
+.trip-details__add-places-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.trip-details__add-places-list-panel {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  border-right: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-places-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-places-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--wtg-text-muted);
+  pointer-events: none;
+}
+
+.trip-details__add-places-search-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem 0.6rem 2.5rem;
+  font-size: 0.9375rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.trip-details__add-places-search-input:focus {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.trip-details__add-places-results {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-places-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-places-tag {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.trip-details__add-places-tag:hover,
+.trip-details__add-places-tag--active {
+  background: #16a34a;
+  color: var(--wtg-primary-contrast);
+}
+
+.trip-details__add-places-sort {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.trip-details__add-places-sort label {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-places-sort-select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 6px;
+  background: var(--wtg-surface);
+}
+
+.trip-details__add-places-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.trip-details__add-places-pagination {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.trip-details__add-places-page-text {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-places-page-btn {
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
+  color: var(--wtg-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trip-details__add-places-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trip-details__add-places-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--wtg-hover);
+  border: 1px solid var(--wtg-border);
+  text-align: left;
+}
+
+.trip-details__add-places-card--manual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 160px;
+  padding: 1rem;
+  cursor: pointer;
+  border: 2px dashed var(--wtg-border);
+  color: var(--wtg-text-muted);
+  font-size: 0.875rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.trip-details__add-places-card--manual:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.trip-details__add-places-card-manual-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 10px;
+}
+
+.trip-details__add-places-card-manual-text {
+  text-align: center;
+  line-height: 1.3;
+}
+
+.trip-details__add-places-card-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.trip-details__add-places-card-heart,
+.trip-details__add-places-card-add {
+  position: absolute;
+  top: 0.5rem;
+  padding: 0.35rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-places-card-heart {
+  left: 0.5rem;
+}
+
+.trip-details__add-places-card-add {
+  right: 0.5rem;
+  color: #16a34a;
+}
+
+.trip-details__add-places-card-add:hover {
+  background: #16a34a;
+  color: var(--wtg-primary-contrast);
+}
+
+.trip-details__add-places-card-info {
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.trip-details__add-places-card-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-places-card-rating {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-places-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.trip-details__add-places-card-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.trip-details__add-places-card-tag[data-tag="Hidden gem"] {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.trip-details__add-places-card-tag[data-tag="Must go"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.trip-details__add-places-card-tag[data-tag="Seen in 100+ plans"] {
+  background: #e0e7ff;
+  color: #4338ca;
+}

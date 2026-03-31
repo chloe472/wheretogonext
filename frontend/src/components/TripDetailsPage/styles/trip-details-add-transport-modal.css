@@ -1,0 +1,387 @@
+/* Add Transport modal */
+.trip-details__add-transport-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: var(--wtg-surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.trip-details__add-transport-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-transport-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__add-transport-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-transport-tab {
+  padding: 0.875rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--wtg-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.trip-details__add-transport-tab:hover {
+  color: var(--wtg-text);
+}
+
+.trip-details__add-transport-tab--active {
+  color: var(--wtg-text);
+  border-bottom-color: #ea580c;
+}
+
+.trip-details__add-transport-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.trip-details__add-transport-radio {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.trip-details__add-transport-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--wtg-text);
+  cursor: pointer;
+}
+
+.trip-details__add-transport-radio-label input {
+  accent-color: #ea580c;
+}
+
+.trip-details__add-transport-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1.25rem;
+}
+
+.trip-details__add-transport-fields--flight {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.trip-details__add-transport-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.trip-details__add-transport-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-transport-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  outline: none;
+  background: var(--wtg-surface);
+}
+
+.trip-details__add-transport-input:focus {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.2);
+}
+
+.trip-details__add-transport-date-time {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.trip-details__add-transport-date-time .trip-details__add-transport-input {
+  flex: 1;
+}
+
+.trip-details__add-transport-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--wtg-primary);
+  color: var(--wtg-primary-contrast);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.trip-details__add-transport-search:hover {
+  background: #6b5344;
+}
+
+.trip-details__add-transport-search:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trip-details__add-transport-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.trip-details__add-transport-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #dc2626;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.trip-details__add-transport-loading p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.trip-details__add-transport-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin: 1rem 0;
+  color: #dc2626;
+}
+
+.trip-details__add-transport-error p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.trip-details__add-transport-results {
+  margin: 1.5rem 0;
+}
+
+.trip-details__add-transport-results-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-transport-result-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+}
+
+.trip-details__add-transport-result-card:hover {
+  border-color: #dc2626;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.trip-details__add-transport-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.trip-details__add-transport-result-airline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #dc2626;
+}
+
+.trip-details__add-transport-result-airline strong {
+  display: block;
+  color: #111827;
+  font-size: 1rem;
+}
+
+.trip-details__add-transport-result-code {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+  margin-top: 0.125rem;
+}
+
+.trip-details__add-transport-result-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.trip-details__add-transport-result-status--scheduled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.trip-details__add-transport-result-status--active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.trip-details__add-transport-result-status--en-route {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.trip-details__add-transport-result-status--landed {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.trip-details__add-transport-result-route {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-transport-result-location {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.trip-details__add-transport-result-time {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.trip-details__add-transport-result-airport {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.trip-details__add-transport-result-city {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.trip-details__add-transport-result-terminal {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+.trip-details__add-transport-result-duration {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+}
+
+.trip-details__add-transport-result-line {
+  width: 100%;
+  height: 2px;
+  background: #e5e7eb;
+  position: relative;
+  min-width: 80px;
+}
+
+.trip-details__add-transport-result-line svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #dc2626;
+  background: white;
+  padding: 0 0.25rem;
+}
+
+.trip-details__add-transport-result-time-info {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.trip-details__add-transport-result-aircraft {
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-transport-result-aircraft span {
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.trip-details__add-transport-result-add {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  background: var(--wtg-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.trip-details__add-transport-result-add:hover {
+  background: #6b5344;
+}

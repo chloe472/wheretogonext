@@ -1,0 +1,226 @@
+/* Compact flight card variant (matches lightweight result row style) */
+.trip-details__add-transport-result-card--compact {
+  padding: 0.8rem 1rem;
+}
+
+.trip-details__add-transport-result-header--compact {
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+.trip-details__add-transport-result-route--compact {
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-airline strong {
+  font-size: 0.95rem;
+}
+
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-code {
+  font-size: 0.78rem;
+}
+
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-time {
+  font-size: 1.05rem;
+}
+
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-airport {
+  font-size: 0.8rem;
+}
+
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-city,
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-terminal,
+.trip-details__add-transport-result-card--compact .trip-details__add-transport-result-time-info {
+  font-size: 0.74rem;
+}
+
+.trip-details__add-transport-result-add--compact {
+  width: auto;
+  min-width: 108px;
+  padding: 0.55rem 0.95rem;
+  border-radius: 10px;
+  margin-left: auto;
+  font-size: 0.875rem;
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+}
+
+.trip-details__add-transport-result-add--compact:hover {
+  background: #f9fafb;
+  color: #111827;
+  border-color: #9ca3af;
+}
+
+.trip-details__add-transport-result-aircraft--compact {
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+  padding: 0.5rem 0.65rem;
+}
+
+@media (max-width: 900px) {
+  .trip-details__add-transport-result-route--compact {
+    flex-wrap: wrap;
+  }
+
+  .trip-details__add-transport-result-add--compact {
+    width: 100%;
+  }
+}
+
+.trip-details__add-transport-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.trip-details__add-transport-feature {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--wtg-hover);
+  border-radius: 10px;
+  border: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-transport-feature strong {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--wtg-text);
+  margin-bottom: 0.25rem;
+}
+
+.trip-details__add-transport-feature p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  line-height: 1.4;
+}
+
+.trip-details__add-transport-feature svg {
+  flex-shrink: 0;
+  color: #ea580c;
+}
+
+.trip-details__add-transport-faq {
+  margin-bottom: 1.5rem;
+}
+
+.trip-details__add-transport-faq-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  margin: 0 0 0.75rem;
+}
+
+.trip-details__add-transport-faq-item {
+  border-bottom: 1px solid var(--wtg-border);
+}
+
+.trip-details__add-transport-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.trip-details__add-transport-faq-q:hover {
+  color: #ea580c;
+}
+
+.trip-details__add-transport-faq-a {
+  margin: 0 0 0.5rem;
+  padding-left: 0;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+  line-height: 1.5;
+}
+
+.trip-details__add-transport-hint {
+  font-size: 0.9375rem;
+  color: var(--wtg-text-muted);
+  margin: 0 0 1rem;
+}
+
+.trip-details__add-transport-or {
+  text-align: center;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__add-transport-or::before,
+.trip-details__add-transport-or::after {
+  content: '';
+  display: inline-block;
+  vertical-align: middle;
+  width: 40%;
+  height: 1px;
+  background: var(--wtg-border);
+  margin: 0 0.5rem;
+}
+
+.trip-details__add-transport-reservations {
+  margin-bottom: 1rem;
+}
+
+.trip-details__add-transport-reservations-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  margin: 0 0 0.35rem;
+}
+
+.trip-details__add-transport-reservations-sub {
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.trip-details__add-transport-forward {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__add-transport-forward:hover {
+  background: var(--wtg-border);
+}
+
+.trip-details__add-transport-manual {
+  font-size: 0.9375rem;
+  color: var(--wtg-text-muted);
+  margin: 0;
+}
+
+.trip-details__add-transport-manual-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: #dc2626;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.trip-details__add-transport-manual-link:hover {
+  color: #b91c1c;
+}

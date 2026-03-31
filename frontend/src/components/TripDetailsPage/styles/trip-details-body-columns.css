@@ -1,0 +1,28 @@
+/* Body: columns */
+.trip-details__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.trip-details__body > .trip-details__columns {
+  overflow: hidden;
+}
+
+.trip-details__columns {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - 60px);
+  min-width: 0;
+  align-items: stretch;
+}
+
+.trip-details__columns-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  display: flex;
+  align-items: stretch;
+}

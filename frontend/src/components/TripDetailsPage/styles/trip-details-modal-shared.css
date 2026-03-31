@@ -1,0 +1,74 @@
+/* Shared modal */
+.trip-details__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: default;
+}
+
+.trip-details__modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--wtg-text-muted);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.trip-details__modal-close:hover {
+  background: var(--wtg-hover);
+  color: var(--wtg-text);
+}
+
+.trip-details__modal-cancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-cancel:hover {
+  background: var(--wtg-border);
+}
+
+.trip-details__modal-update {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-primary-contrast);
+  background: var(--wtg-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-update:hover {
+  background: #6b5344;
+}
+
+.trip-details__modal-delete {
+  padding: 0.5rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-primary-contrast);
+  background: #dc2626;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__modal-delete:hover {
+  background: #b91c1c;
+}

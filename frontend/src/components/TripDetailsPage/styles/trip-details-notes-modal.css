@@ -1,0 +1,254 @@
+/* Notes & Documents modal */
+.trip-details__notes-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--wtg-surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.trip-details__notes-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--wtg-border);
+  flex-shrink: 0;
+}
+
+.trip-details__notes-modal-title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__notes-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--wtg-border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.trip-details__notes-tab {
+  padding: 0.875rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--wtg-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.trip-details__notes-tab:hover {
+  color: var(--wtg-text);
+}
+
+.trip-details__notes-tab--active {
+  color: var(--wtg-text);
+  border-bottom-color: #dc2626;
+}
+
+.trip-details__notes-tab-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--wtg-text-muted);
+  margin-left: 0.25rem;
+}
+
+.trip-details__notes-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.trip-details__notes-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.trip-details__notes-general {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.trip-details__notes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.trip-details__notes-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: var(--wtg-hover);
+  border-radius: 6px;
+  color: var(--wtg-text);
+  cursor: pointer;
+}
+
+.trip-details__notes-toolbar-btn:hover {
+  background: var(--wtg-border);
+  color: var(--wtg-text);
+}
+
+.trip-details__notes-general-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trip-details__notes-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.trip-details__notes-actions .trip-details__modal-update {
+  min-width: 190px;
+}
+
+.trip-details__notes-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.875rem 1rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.trip-details__notes-textarea:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.trip-details__notes-textarea::placeholder {
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__notes-textarea--item {
+  min-height: 72px;
+}
+
+.trip-details__notes-attach-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+  cursor: pointer;
+}
+
+.trip-details__notes-attach-label:hover {
+  color: var(--wtg-text);
+}
+
+.trip-details__notes-attach-label--inline {
+  margin-left: auto;
+}
+
+.trip-details__notes-attach-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.trip-details__notes-day-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.trip-details__notes-day-item {
+  padding: 1rem;
+  background: var(--wtg-hover);
+  border-radius: 10px;
+  border: 1px solid var(--wtg-border);
+}
+
+.trip-details__notes-day-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.trip-details__notes-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--wtg-primary-contrast);
+  background: var(--wtg-text);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.trip-details__notes-day-name {
+  font-weight: 600;
+  color: var(--wtg-text);
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-details__notes-empty {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--wtg-text-muted);
+  line-height: 1.5;
+}
+
+.trip-details__notes-attach-list {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.trip-details__notes-attach-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}

@@ -1,0 +1,177 @@
+/* When (date) modal – unified range picker */
+.trip-details__when-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 70;
+  width: 100%;
+  max-width: 600px;
+  padding: 1.5rem;
+  background: var(--wtg-surface);
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12);
+}
+
+.trip-details__when-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.trip-details__when-modal-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__when-modal-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__when-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.trip-details__when-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--wtg-text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__when-nav-btn:hover {
+  background: var(--wtg-hover);
+  color: var(--wtg-text);
+}
+
+.trip-details__when-nav-months {
+  display: flex;
+  gap: 2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--wtg-text);
+}
+
+.trip-details__when-calendars {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.trip-details__when-calendar {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-details__when-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  margin-bottom: 0.5rem;
+}
+
+.trip-details__when-weekday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wtg-text-muted);
+  text-align: center;
+}
+
+.trip-details__when-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.trip-details__when-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__when-cell:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__when-cell--other {
+  color: var(--wtg-text-muted);
+}
+
+.trip-details__when-cell--range {
+  background: #fecaca;
+  color: var(--wtg-text);
+}
+
+.trip-details__when-cell--range:hover {
+  background: #fca5a5;
+}
+
+.trip-details__when-cell--end {
+  background: #dc2626;
+  color: var(--wtg-primary-contrast);
+}
+
+.trip-details__when-cell--end:hover {
+  background: #b91c1c;
+  color: var(--wtg-primary-contrast);
+}
+
+.trip-details__when-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.trip-details__when-clear {
+  padding: 0.5rem 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--wtg-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.trip-details__when-clear:hover {
+  color: var(--wtg-text);
+}
+
+.trip-details__when-done {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--wtg-primary-contrast);
+  background: var(--wtg-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.trip-details__when-done:hover {
+  background: #6b5344;
+}

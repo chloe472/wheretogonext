@@ -1,6 +1,6 @@
-import countriesData from '../../data/countries.json';
-import { CITIES } from '../../data/cities';
-import { getCoordinatesForLocation } from '../../data/cityCoordinates';
+import countriesData from '../../../data/countries.json';
+import { CITIES } from '../../../data/cities';
+import { getCoordinatesForLocation } from '../../../data/cityCoordinates';
 
 const WHERE_LOCATIONS = [
   ...countriesData.map((country) => ({ ...country, country: undefined })),

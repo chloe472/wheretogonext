@@ -3,7 +3,7 @@ import { placeKeySocialImport } from './socialImportUtils';
 
 /**
  * Multi-step modal: paste social URL / upload screenshots → analyzing → pick places.
- * Styles: `trip-details__social-import-*` in TripDetailsPage/TripDetailsPage.css (loaded by the page).
+ * Styles: `trip-details__social-import-*` in TripDetailsPage/styles/trip-details-social-import-modal.css (via TripDetailsPage.css).
  */
 export default function SocialImportModal({
   isOpen,

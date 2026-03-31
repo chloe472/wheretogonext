@@ -1,0 +1,21 @@
+/* Trip Details (Kanban) page */
+.trip-details {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--wtg-bg);
+}
+
+.trip-details--missing {
+  padding: 2rem;
+  text-align: center;
+}
+
+.trip-details--missing a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: none;
+}
+
+.trip-details--missing a:hover {
+  text-decoration: underline;
+}

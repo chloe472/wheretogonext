@@ -142,6 +142,40 @@ export const CITY_COORDINATES = {
   'Quito': [-0.1807, -78.4678],
 };
 
+const COUNTRY_COORDINATES = {
+  'Cambodia': [12.5657, 104.9910],
+  'Vietnam': [14.0583, 108.2772],
+  'Thailand': [15.8700, 100.9925],
+  'Singapore': [1.3521, 103.8198],
+  'Malaysia': [4.2105, 101.9758],
+  'Indonesia': [-2.5489, 118.0149],
+  'Japan': [36.2048, 138.2529],
+  'South Korea': [35.9078, 127.7669],
+  'China': [35.8617, 104.1954],
+  'India': [20.5937, 78.9629],
+  'France': [46.2276, 2.2137],
+  'United Kingdom': [55.3781, -3.4360],
+  'Italy': [41.8719, 12.5674],
+  'Spain': [40.4637, -3.7492],
+  'Germany': [51.1657, 10.4515],
+  'Netherlands': [52.1326, 5.2913],
+  'Switzerland': [46.8182, 8.2275],
+  'Portugal': [39.3999, -8.2245],
+  'Greece': [39.0742, 21.8243],
+  'Turkey': [38.9637, 35.2433],
+  'United States': [37.0902, -95.7129],
+  'Canada': [56.1304, -106.3468],
+  'Mexico': [23.6345, -102.5528],
+  'Brazil': [-14.2350, -51.9253],
+  'Argentina': [-38.4161, -63.6167],
+  'Peru': [-9.1900, -75.0152],
+  'Morocco': [31.7917, -7.0926],
+  'Egypt': [26.8206, 30.8025],
+  'Australia': [-25.2744, 133.7751],
+  'New Zealand': [-40.9006, 174.8860],
+  'United Arab Emirates': [23.4241, 53.8478],
+};
+
 /**
  * Get coordinates for a city/location name.
  * Returns [lat, lng] or a default center if not found.
@@ -155,11 +189,19 @@ export function getCoordinatesForLocation(locationName) {
   if (CITY_COORDINATES[name]) {
     return CITY_COORDINATES[name];
   }
+  if (COUNTRY_COORDINATES[name]) {
+    return COUNTRY_COORDINATES[name];
+  }
   
   // Try to find a city name within the location string
   // e.g., "Trip to Munich, Germany" or "Munich, Germany"
   for (const [city, coords] of Object.entries(CITY_COORDINATES)) {
     if (name.toLowerCase().includes(city.toLowerCase())) {
+      return coords;
+    }
+  }
+  for (const [country, coords] of Object.entries(COUNTRY_COORDINATES)) {
+    if (name.toLowerCase().includes(country.toLowerCase())) {
       return coords;
     }
   }
