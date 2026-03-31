@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   Pencil,
   Share2,
@@ -29,7 +29,14 @@ import {
 import './ProfilePage.css';
 
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const initialTab = (() => {
+    const tab = String(searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'friends') return 'friends';
+    if (tab === 'trips') return 'trips';
+    return 'overview';
+  })();
+  const [activeTab, setActiveTab] = useState(initialTab);
   const { id: profileId } = useParams();
   const [profileData, setProfileData] = useState(null);
   const [stats, setStats] = useState({ countries: 0, trips: 0, friends: 0 });
@@ -134,8 +141,13 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   }, [profileId, user]);
 
   useEffect(() => {
+    const tab = String(searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'friends' || tab === 'trips' || tab === 'overview') {
+      setActiveTab(tab || 'overview');
+      return;
+    }
     setActiveTab('overview');
-  }, [profileId]);
+  }, [profileId, searchParams]);
 
   useEffect(() => {
     if (!isSelf) return;

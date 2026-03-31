@@ -189,6 +189,134 @@
   position: relative;
 }
 
+.dashboard__notifications-wrap {
+  position: relative;
+}
+
+.dashboard__notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard__notifications-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, 88vw);
+  max-height: 70vh;
+  overflow: auto;
+  z-index: 1100;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(61, 52, 40, 0.2);
+}
+
+.dashboard__notifications-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--wtg-border);
+  background: var(--wtg-surface);
+}
+
+.dashboard__notifications-readall {
+  border: none;
+  background: transparent;
+  color: var(--wtg-accent);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.dashboard__notifications-readall:disabled {
+  color: var(--wtg-text-muted);
+  cursor: default;
+}
+
+.dashboard__notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0;
+}
+
+.dashboard__notification-item {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--wtg-border);
+}
+
+.dashboard__notification-item:last-child {
+  border-bottom: none;
+}
+
+.dashboard__notification-item--unread {
+  background: rgba(125, 107, 90, 0.08);
+}
+
+.dashboard__notification-copy {
+  min-width: 0;
+}
+
+.dashboard__notification-title {
+  margin: 0;
+  color: var(--wtg-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dashboard__notification-message {
+  margin: 0.2rem 0 0;
+  color: var(--wtg-text-muted);
+  font-size: 0.84rem;
+}
+
+.dashboard__notification-time {
+  display: inline-block;
+  margin-top: 0.35rem;
+  color: var(--wtg-text-muted);
+  font-size: 0.76rem;
+}
+
+.dashboard__notification-view {
+  border: 1px solid var(--wtg-border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--wtg-text);
+  white-space: nowrap;
+}
+
+.dashboard__notification-view:hover {
+  background: var(--wtg-hover);
+}
+
+.dashboard__notifications-empty {
+  margin: 0;
+  padding: 0.9rem;
+  color: var(--wtg-text-muted);
+  font-size: 0.88rem;
+}
+
 .dashboard__profile-backdrop {
   position: fixed;
   inset: 0;

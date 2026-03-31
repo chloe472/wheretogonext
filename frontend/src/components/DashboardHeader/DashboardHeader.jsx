@@ -2,6 +2,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Bell, User, Search } from 'lucide-react';
 import { searchLocations } from '../../data/mockLocations';
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '../../api/notificationsApi';
 import './DashboardHeader.css';
 
 /**
@@ -13,7 +18,14 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const searchRef = useRef(null);
+  const notificationsRef = useRef(null);
+  const userId = String(user?.id || user?._id || '').trim();
 
   const searchSuggestions = searchLocations(searchQuery);
 
@@ -22,10 +34,120 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setNotificationsOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function loadLatest() {
+      try {
+        const payload = await fetchNotifications({ limit: 20 }, ac.signal);
+        if (cancelled) return;
+        setNotifications(payload.notifications);
+        setUnreadCount(payload.unreadCount);
+        setNotificationsError('');
+      } catch {
+        if (!cancelled) {
+          setNotificationsError('Could not load notifications.');
+        }
+      }
+    }
+
+    loadLatest();
+    const intervalId = window.setInterval(loadLatest, 60000);
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+      window.clearInterval(intervalId);
+    };
+  }, [userId]);
+
+  const refreshNotifications = async () => {
+    setNotificationsLoading(true);
+    setNotificationsError('');
+    try {
+      const payload = await fetchNotifications({ limit: 20 });
+      setNotifications(payload.notifications);
+      setUnreadCount(payload.unreadCount);
+    } catch (err) {
+      setNotificationsError(err?.message || 'Failed to load notifications');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  const formatNotificationTime = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const getNotificationLink = (n) => {
+    const direct = String(n?.link || '').trim();
+    if (direct) return direct;
+    const type = String(n?.type || '');
+    if (type === 'friend_request_received') return '/profile?tab=friends&section=requests';
+    if (type === 'friend_request_accepted') return '/profile?tab=friends&section=friends';
+    if (type === 'itinerary_commented' && n?.meta?.itineraryId) {
+      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}?tab=comments`;
+    }
+    if ((type === 'itinerary_added' || type === 'itinerary_updated') && n?.meta?.itineraryId) {
+      return `/trip/${encodeURIComponent(String(n.meta.itineraryId))}`;
+    }
+    return '/';
+  };
+
+  const handleOpenNotifications = async () => {
+    const nextOpen = !notificationsOpen;
+    setNotificationsOpen(nextOpen);
+    if (nextOpen) {
+      setProfileOpen(false);
+      await refreshNotifications();
+    }
+  };
+
+  const handleViewNotification = async (n) => {
+    const link = getNotificationLink(n);
+    setNotifications((prev) => prev.map((it) => (it.id === n.id ? { ...it, isRead: true } : it)));
+    if (!n?.isRead) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+    try {
+      if (!n?.isRead) {
+        const payload = await markNotificationRead(n.id);
+        setUnreadCount(payload.unreadCount);
+      }
+    } catch {
+      // best effort
+    }
+    setNotificationsOpen(false);
+    navigate(link);
+  };
+
+  const handleMarkAllRead = async () => {
+    setNotifications((prev) => prev.map((it) => ({ ...it, isRead: true })));
+    setUnreadCount(0);
+    try {
+      await markAllNotificationsRead();
+    } catch {
+      // best effort
+    }
+  };
 
   return (
     <header className="dashboard__header">
@@ -109,9 +231,62 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
         >
           Explore
         </Link>
-        <button type="button" className="dashboard__icon-btn" aria-label="Notifications">
-          <Bell size={20} aria-hidden />
-        </button>
+        <div className="dashboard__notifications-wrap" ref={notificationsRef}>
+          <button
+            type="button"
+            className="dashboard__icon-btn"
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+            onClick={handleOpenNotifications}
+          >
+            <Bell size={20} aria-hidden />
+            {unreadCount > 0 && <span className="dashboard__notif-badge">{Math.min(99, unreadCount)}</span>}
+          </button>
+          {notificationsOpen && (
+            <div className="dashboard__notifications-menu" role="dialog" aria-label="Notifications">
+              <div className="dashboard__notifications-head">
+                <strong>Notifications</strong>
+                <button
+                  type="button"
+                  className="dashboard__notifications-readall"
+                  onClick={handleMarkAllRead}
+                  disabled={unreadCount === 0}
+                >
+                  Mark all read
+                </button>
+              </div>
+
+              {notificationsLoading && <p className="dashboard__notifications-empty">Loading...</p>}
+              {!notificationsLoading && notificationsError && (
+                <p className="dashboard__notifications-empty">{notificationsError}</p>
+              )}
+              {!notificationsLoading && !notificationsError && notifications.length === 0 && (
+                <p className="dashboard__notifications-empty">No notifications yet.</p>
+              )}
+
+              {!notificationsLoading && !notificationsError && notifications.length > 0 && (
+                <ul className="dashboard__notifications-list">
+                  {notifications.map((n) => (
+                    <li key={n.id} className={`dashboard__notification-item ${n.isRead ? '' : 'dashboard__notification-item--unread'}`}>
+                      <div className="dashboard__notification-copy">
+                        <p className="dashboard__notification-title">{n.title || 'Notification'}</p>
+                        {n.message && <p className="dashboard__notification-message">{n.message}</p>}
+                        <span className="dashboard__notification-time">{formatNotificationTime(n.createdAt)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="dashboard__notification-view"
+                        onClick={() => handleViewNotification(n)}
+                      >
+                        View
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
         <div className="dashboard__profile-wrap">
           <button
             type="button"

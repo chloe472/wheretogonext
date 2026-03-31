@@ -15,6 +15,7 @@ import {
   createItinerary,
   updateItinerary,
 } from '../../api/itinerariesApi';
+import { fetchDiscoveryData } from '../../api/discoveryApi';
 import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
@@ -50,7 +51,7 @@ function mapItineraryToTripRow(raw) {
   };
 }
 
-function resolveDashboardTripImage(trip) {
+function resolveDashboardTripImage(trip, destinationCover = '') {
   const primary = String(trip?.image || '').trim();
   const cover0 = String(trip?.raw?.coverImages?.[0] || '').trim();
   const destFallback = getCoverImageForDestination(trip?.raw?.destination, trip?.raw?.locations);
@@ -62,7 +63,38 @@ function resolveDashboardTripImage(trip) {
     const resolvedCover = resolveImageUrl(cover0, trip?.title || 'Trip cover', 'trip');
     if (resolvedCover && !resolvedCover.startsWith('data:image/')) return resolvedCover;
   }
+  if (destinationCover) return destinationCover;
   return destFallback;
+}
+
+function getTripDestinationQuery(rawTrip = {}) {
+  const direct = String(rawTrip?.destination || '').trim();
+  if (direct) return direct;
+  const locations = String(rawTrip?.locations || '').trim();
+  if (!locations) return '';
+  const first = locations.split(';')[0] || locations;
+  return String(first).trim();
+}
+
+function pickDiscoveryCoverImage(data = {}) {
+  const buckets = [
+    Array.isArray(data?.places) ? data.places : [],
+    Array.isArray(data?.stays) ? data.stays : [],
+    Array.isArray(data?.foods) ? data.foods : [],
+    Array.isArray(data?.experiences) ? data.experiences : [],
+  ];
+
+  for (const bucket of buckets) {
+    for (const item of bucket) {
+      const direct = String(item?.image || '').trim();
+      if (direct) return direct;
+      if (Array.isArray(item?.images) && item.images.length > 0) {
+        const first = String(item.images[0] || '').trim();
+        if (first) return first;
+      }
+    }
+  }
+  return '';
 }
 
 const TRIP_FILTERS = ['All', 'Upcoming', 'Past'];
@@ -182,6 +214,7 @@ export default function Dashboard({ user, onLogout }) {
   const statusDropdownRef = useRef(null);
   const [openOwnerMenuId, setOpenOwnerMenuId] = useState(null);
   const ownerMenuRef = useRef(null);
+  const [destinationCoverByQuery, setDestinationCoverByQuery] = useState({});
 
   const [myTrips, setMyTrips] = useState([]);
   const [myTripsLoading, setMyTripsLoading] = useState(true);
@@ -202,6 +235,45 @@ export default function Dashboard({ user, onLogout }) {
       return next;
     });
   }, [tripRows]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const neededQueries = Array.from(
+      new Set(
+        (Array.isArray(myTrips) ? myTrips : [])
+          .map((trip) => getTripDestinationQuery(trip))
+          .map((q) => q.trim())
+          .filter((q) => q && !destinationCoverByQuery[q])
+      )
+    );
+
+    if (neededQueries.length === 0) return undefined;
+
+    async function loadCovers() {
+      const updates = {};
+      await Promise.all(
+        neededQueries.map(async (query) => {
+          try {
+            const data = await fetchDiscoveryData(query, 8);
+            const cover = pickDiscoveryCoverImage(data);
+            if (cover) updates[query] = cover;
+          } catch {
+            // ignore cover lookup failures; destination fallback image remains in use
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setDestinationCoverByQuery((prev) => ({ ...prev, ...updates }));
+      }
+    }
+
+    loadCovers();
+    return () => {
+      cancelled = true;
+    };
+  }, [myTrips, destinationCoverByQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -569,7 +641,7 @@ export default function Dashboard({ user, onLogout }) {
                   <div className="trip-card__image-wrap">
                     <div className="trip-card__image-crop">
                       <img
-                        src={resolveDashboardTripImage(trip)}
+                        src={resolveDashboardTripImage(trip, destinationCoverByQuery[getTripDestinationQuery(trip.raw)] || '')}
                         alt=""
                         className="trip-card__image"
                       />

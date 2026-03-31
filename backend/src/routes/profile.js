@@ -8,6 +8,7 @@ import Itinerary from '../models/Itinerary.js';
 import Friendship from '../models/Friendship.js';
 import FriendRequest from '../models/FriendRequest.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -284,11 +285,24 @@ router.post('/:id/friends', requireAuth, async (req, res) => {
     const existingFriend = await Friendship.findOne({ userA, userB }).lean();
     if (existingFriend) return res.status(200).json({ ok: true });
 
-    await FriendRequest.updateOne(
+    const upsertResult = await FriendRequest.updateOne(
       { from: req.userId, to: id },
       { $setOnInsert: { from: req.userId, to: id, status: 'pending' } },
       { upsert: true }
     );
+
+    if (Number(upsertResult?.upsertedCount || 0) > 0) {
+      await createNotification({
+        recipientId: id,
+        actorId: req.userId,
+        type: 'friend_request_received',
+        title: 'New friend request',
+        message: `${req.user?.name || req.user?.username || req.user?.email || 'Someone'} sent you a friend request.`,
+        link: '/profile?tab=friends&section=requests',
+        meta: { fromUserId: String(req.userId) },
+      });
+    }
+
     return res.status(201).json({ ok: true, status: 'pending' });
   } catch (err) {
     console.error('Add friend error:', err);
@@ -382,6 +396,18 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       { $setOnInsert: { userA, userB } },
       { upsert: true }
     );
+
+    const accepter = await User.findById(req.userId).select('name username email').lean();
+    await createNotification({
+      recipientId: String(reqDoc.from),
+      actorId: req.userId,
+      type: 'friend_request_accepted',
+      title: 'Friend request accepted',
+      message: `${accepter?.name || accepter?.username || accepter?.email || 'Someone'} accepted your friend request.`,
+      link: '/profile?tab=friends&section=friends',
+      meta: { acceptedByUserId: String(req.userId) },
+    });
+
     await FriendRequest.deleteOne({ _id: id });
     return res.json({ ok: true });
   } catch (err) {

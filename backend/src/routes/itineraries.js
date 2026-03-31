@@ -7,6 +7,7 @@ import Itinerary from '../models/Itinerary.js';
 import ItineraryComment from '../models/ItineraryComment.js';
 import User from '../models/User.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { createNotification, createNotifications } from '../services/notifications.js';
 
 const router = Router();
 
@@ -275,6 +276,41 @@ function normalizeCollaborators(raw) {
   return normalized;
 }
 
+function collaboratorUserIdStrings(collaborators) {
+  const set = new Set();
+  (Array.isArray(collaborators) ? collaborators : []).forEach((c) => {
+    const id = c?.userId != null ? String(c.userId) : '';
+    if (mongoose.isValidObjectId(id)) set.add(id);
+  });
+  return Array.from(set);
+}
+
+async function collaboratorRecipientIds(collaborators, excludeUserId = '') {
+  const ids = new Set(collaboratorUserIdStrings(collaborators));
+
+  const emailCandidates = Array.from(
+    new Set(
+      (Array.isArray(collaborators) ? collaborators : [])
+        .map((c) => String(c?.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (emailCandidates.length > 0) {
+    const usersByEmail = await User.find({ email: { $in: emailCandidates } })
+      .select('_id')
+      .lean();
+    usersByEmail.forEach((u) => {
+      const id = String(u?._id || '');
+      if (id) ids.add(id);
+    });
+  }
+
+  const excluded = String(excludeUserId || '');
+  if (excluded) ids.delete(excluded);
+  return Array.from(ids);
+}
+
 async function attachCollaboratorUserIds(collaborators) {
   if (!Array.isArray(collaborators) || collaborators.length === 0) return [];
 
@@ -539,7 +575,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'Invalid itinerary id' });
     }
-    const itinerary = await Itinerary.findById(id).select('_id').lean();
+    const itinerary = await Itinerary.findById(id).select('_id creator title').lean();
     if (!itinerary) {
       return res.status(404).json({ error: 'Itinerary not found' });
     }
@@ -571,6 +607,23 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     });
 
     const populated = await ItineraryComment.findById(doc._id).populate('userId', 'picture name').lean();
+
+    const creatorId = String(itinerary?.creator || '');
+    if (creatorId && creatorId !== String(req.userId)) {
+      await createNotification({
+        recipientId: creatorId,
+        actorId: req.userId,
+        type: 'itinerary_commented',
+        title: 'New comment on your itinerary',
+        message: `${req.user?.name || req.user?.username || 'Someone'} commented on "${itinerary?.title || 'your itinerary'}".`,
+        link: `/itineraries/${id}?tab=comments`,
+        meta: {
+          itineraryId: String(id),
+          commentId: String(doc._id),
+        },
+      });
+    }
+
     return res.status(201).json({ comment: serializeComment(populated, req.userId) });
   } catch (err) {
     console.error('POST /itineraries/:id/comments error:', err);
@@ -854,6 +907,8 @@ router.post('/', requireAuth, async (req, res) => {
       normalizeCollaborators(req.body?.collaborators)
     );
 
+    const collaboratorIds = await collaboratorRecipientIds(collaborators, String(req.userId));
+
     const doc = await Itinerary.create({
       title,
       overview: req.body?.overview != null ? String(req.body.overview) : '',
@@ -898,6 +953,20 @@ router.post('/', requireAuth, async (req, res) => {
       .populate('creator', 'name email picture username')
       .lean();
 
+    if (collaboratorIds.length > 0) {
+      await createNotifications(
+        collaboratorIds.map((recipientId) => ({
+          recipientId,
+          actorId: req.userId,
+          type: 'itinerary_added',
+          title: 'You were added to a travel planner',
+          message: `${req.user?.name || req.user?.username || 'Someone'} added you to "${doc.title}".`,
+          link: `/trip/${String(doc._id)}`,
+          meta: { itineraryId: String(doc._id) },
+        }))
+      );
+    }
+
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
     return res.status(201).json({ itinerary: enrichedOne });
   } catch (err) {
@@ -931,6 +1000,8 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (String(existing.creator) !== req.userId) {
       return res.status(403).json({ error: 'Not allowed to edit this itinerary' });
     }
+
+    const previousCollaboratorIds = await collaboratorRecipientIds(existing.collaborators, String(req.userId));
 
     const body = req.body || {};
     if (body.title != null) existing.title = String(body.title).trim();
@@ -989,6 +1060,40 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     await existing.save();
+
+    const currentCollaboratorIds = await collaboratorRecipientIds(existing.collaborators, String(req.userId));
+    const newlyAddedCollaboratorIds = currentCollaboratorIds
+      .filter((uid) => !previousCollaboratorIds.includes(uid));
+    const existingCollaboratorIds = currentCollaboratorIds
+      .filter((uid) => previousCollaboratorIds.includes(uid));
+
+    if (newlyAddedCollaboratorIds.length > 0) {
+      await createNotifications(
+        newlyAddedCollaboratorIds.map((recipientId) => ({
+          recipientId,
+          actorId: req.userId,
+          type: 'itinerary_added',
+          title: 'You were added to a travel planner',
+          message: `${req.user?.name || req.user?.username || 'Someone'} added you to "${existing.title}".`,
+          link: `/trip/${String(existing._id)}`,
+          meta: { itineraryId: String(existing._id) },
+        }))
+      );
+    }
+
+    if (existingCollaboratorIds.length > 0) {
+      await createNotifications(
+        existingCollaboratorIds.map((recipientId) => ({
+          recipientId,
+          actorId: req.userId,
+          type: 'itinerary_updated',
+          title: 'Travel planner updated',
+          message: `${req.user?.name || req.user?.username || 'Someone'} made changes to "${existing.title}".`,
+          link: `/trip/${String(existing._id)}`,
+          meta: { itineraryId: String(existing._id) },
+        }))
+      );
+    }
 
     const populated = await Itinerary.findById(existing._id)
       .populate('creator', 'name email picture username')

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Share2,
   Eye,
@@ -231,6 +231,7 @@ function CommentBranch({
 export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [itinerary, setItinerary] = useState(null);
   const [comments, setComments] = useState([]);
   const [similar, setSimilar] = useState([]);
@@ -248,6 +249,13 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   const [customizeBusy, setCustomizeBusy] = useState(false);
   const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
+
+  useEffect(() => {
+    const tab = String(searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'overview' || tab === 'map' || tab === 'itinerary' || tab === 'comments') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const loadComments = useCallback(async () => {
     if (!id) return;
