@@ -897,6 +897,9 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
             <h3 className="itinerary-detail__creator-name">
               {itinerary.creator?.name || itinerary.creator?.username || 'Creator'}
             </h3>
+            {itinerary.creator?.intro ? (
+              <p className="itinerary-detail__creator-bio">{itinerary.creator.intro}</p>
+            ) : null}
             {itinerary.destination ? (
               <p className="itinerary-detail__creator-meta">{itinerary.destination}</p>
             ) : null}
