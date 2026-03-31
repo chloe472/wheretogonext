@@ -8,6 +8,56 @@ function toObjectIdOrNull(value) {
   return new mongoose.Types.ObjectId(s);
 }
 
+function dedupeFilterFromPayload(payload) {
+  const itineraryId = String(payload?.meta?.itineraryId || '').trim();
+  const recipient = payload?.recipient;
+  const actor = payload?.actor || null;
+  const type = String(payload?.type || '').trim();
+  if (!recipient || !type) return null;
+
+  // Prevent noisy duplicates for event-style notifications.
+  if ((type === 'itinerary_added' || type === 'itinerary_updated') && itineraryId) {
+    return {
+      recipient,
+      type,
+      readAt: null,
+      actor,
+      'meta.itineraryId': itineraryId,
+    };
+  }
+
+  if (type === 'friend_request_received' && payload?.meta?.fromUserId) {
+    return {
+      recipient,
+      type,
+      readAt: null,
+      actor,
+      'meta.fromUserId': String(payload.meta.fromUserId),
+    };
+  }
+
+  if (type === 'friend_request_accepted' && payload?.meta?.acceptedByUserId) {
+    return {
+      recipient,
+      type,
+      readAt: null,
+      actor,
+      'meta.acceptedByUserId': String(payload.meta.acceptedByUserId),
+    };
+  }
+
+  return null;
+}
+
+async function createNotificationDeduped(payload) {
+  const filter = dedupeFilterFromPayload(payload);
+  if (filter) {
+    const exists = await Notification.findOne(filter).select('_id').lean();
+    if (exists?._id) return null;
+  }
+  return Notification.create(payload);
+}
+
 export async function createNotification({ recipientId, actorId = null, type, title, message = '', link = '', meta = {} }) {
   const recipient = toObjectIdOrNull(recipientId);
   if (!recipient) return null;
@@ -24,7 +74,7 @@ export async function createNotification({ recipientId, actorId = null, type, ti
   };
 
   if (!payload.type || !payload.title) return null;
-  return Notification.create(payload);
+  return createNotificationDeduped(payload);
 }
 
 export async function createNotifications(list = []) {
@@ -48,7 +98,14 @@ export async function createNotifications(list = []) {
     .filter(Boolean);
 
   if (docs.length === 0) return [];
-  return Notification.insertMany(docs, { ordered: false });
+
+  const created = [];
+  for (const payload of docs) {
+    // Keep dedupe logic identical to single-create API.
+    const inserted = await createNotificationDeduped(payload);
+    if (inserted) created.push(inserted);
+  }
+  return created;
 }
 
 export function serializeNotification(doc) {
