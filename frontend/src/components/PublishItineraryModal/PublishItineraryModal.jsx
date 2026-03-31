@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
 import { publishItinerary, uploadItineraryImage } from '../../api/itinerariesApi';
 import { PUBLISH_CATEGORY_OPTIONS } from '../../data/communitySearchConstants';
+import { resolveImageUrl } from '../../lib/imageFallback';
 import './PublishItineraryModal.css';
 
 export { PUBLISH_CATEGORY_OPTIONS };
@@ -15,7 +16,6 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const PUBLISH_STEPS = [
   { id: 1, label: 'Details' },
   { id: 2, label: 'Photos' },
-  { id: 3, label: 'Visibility' },
 ];
 
 const ALLOWED_TYPES = new Set([
@@ -55,7 +55,6 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
   const [overview, setOverview] = useState('');
   const [categories, setCategories] = useState([]);
   const [images, setImages] = useState([]);
-  const [visibility, setVisibility] = useState('private');
   const [photoError, setPhotoError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +72,6 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
     setTitle(String(itinerary.title || '').trim());
     setOverview(String(itinerary.overview || '').slice(0, MAX_OVERVIEW));
     setCategories(Array.isArray(itinerary.categories) ? [...itinerary.categories] : []);
-    setVisibility('private');
     setPhotoError('');
     setSubmitError('');
     revokeUrls.current.forEach((u) => URL.revokeObjectURL(u));
@@ -183,13 +181,11 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         return;
       }
       setPhotoError('');
-      setFarthestStep((f) => Math.max(f, 3));
-      setStep(3);
     }
   };
 
   const goToStep = (n) => {
-    if (n < 1 || n > 3 || n > farthestStep) return;
+    if (n < 1 || n > 2 || n > farthestStep) return;
     setSubmitError('');
     setPhotoError('');
     setOpenKebab(null);
@@ -204,6 +200,10 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
 
   const handlePublish = async () => {
     if (!itinerary?._id) return;
+    if (images.length < MIN_IMAGES) {
+      setPhotoError(`Add at least ${MIN_IMAGES} images to continue.`);
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -217,7 +217,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         }
       }
       await publishItinerary(String(itinerary._id), {
-        visibility,
+        visibility: 'public',
         title: title.trim(),
         overview: overview.slice(0, MAX_OVERVIEW),
         categories,
@@ -242,7 +242,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
       <div className="publish-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="publish-modal-title">
         <div className="publish-modal__head">
           <h2 id="publish-modal-title" className="publish-modal__title">
-            {success ? 'Published' : 'Publish itinerary'}
+            {success ? 'Published' : 'Publish To Community'}
           </h2>
           <button type="button" className="publish-modal__close" onClick={onClose} aria-label="Close">
             <X size={22} />
@@ -372,7 +372,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
                       <div className="publish-modal__tile-img-wrap">
                         <div className="publish-modal__tile-img-crop">
                           <img
-                            src={img.kind === 'remote' ? img.url : img.preview}
+                            src={img.kind === 'remote' ? resolveImageUrl(img.url, title || itinerary?.title || 'Itinerary', 'itinerary') : img.preview}
                             alt=""
                             className="publish-modal__tile-img"
                           />
@@ -417,31 +417,6 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
               </div>
             )}
 
-            {step === 3 && (
-              <div className="publish-modal__body">
-                <p className="publish-modal__label">Who can see this itinerary?</p>
-                <label className="publish-modal__radio">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === 'private'}
-                    onChange={() => setVisibility('private')}
-                  />
-                  <span>Private — only you</span>
-                </label>
-                <label className="publish-modal__radio">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === 'public'}
-                    onChange={() => setVisibility('public')}
-                  />
-                  <span>Public — anyone on Explore</span>
-                </label>
-                {submitError && <p className="publish-modal__error" role="alert">{submitError}</p>}
-              </div>
-            )}
-
             <div className="publish-modal__footer">
               {step > 1 && (
                 <button type="button" className="publish-modal__btn publish-modal__btn--ghost" onClick={goBack}>
@@ -449,7 +424,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
                 </button>
               )}
               <div className="publish-modal__footer-spacer" />
-              {step < 3 ? (
+              {step < 2 ? (
                 <button type="button" className="publish-modal__btn publish-modal__btn--primary" onClick={goNext}>
                   Next
                 </button>

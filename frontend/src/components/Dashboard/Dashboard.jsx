@@ -46,6 +46,7 @@ function mapItineraryToTripRow(raw) {
     endDate: raw.endDate || '',
     startDate: raw.startDate || '',
     isSharedWithMe: Boolean(raw?.__sharedWithMe),
+    isPublishedToCommunity: Boolean(raw?.published && raw?.visibility === 'public'),
   };
 }
 
@@ -622,7 +623,7 @@ export default function Dashboard({ user, onLogout }) {
                               handleItineraryOwnerMenu(trip.raw, 'publish');
                             }}
                           >
-                            Publish to Explore
+                            {trip.isPublishedToCommunity ? 'Republish to Explore' : 'Publish to Explore'}
                           </button>
                           <button
                             type="button"
@@ -704,6 +705,9 @@ export default function Dashboard({ user, onLogout }) {
                     <h3 className="trip-card__title">{trip.title}</h3>
                     {trip.isSharedWithMe ? (
                       <span className="trip-card__shared-badge">Shared with me</span>
+                    ) : null}
+                    {trip.isPublishedToCommunity ? (
+                      <span className="trip-card__published-badge">Published</span>
                     ) : null}
                     <p className="trip-card__dates">{trip.dateLabel}</p>
                   </div>

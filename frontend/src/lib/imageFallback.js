@@ -17,6 +17,19 @@ function escapeSvgText(value = '') {
   return String(value || '').replace(/[<>&"']/g, '');
 }
 
+function getBackendAssetOrigin() {
+  const envBase = String(import.meta?.env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+  if (envBase) return envBase;
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '3000') {
+      return `${protocol}//${hostname}:5000`;
+    }
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+  }
+  return '';
+}
+
 export function buildInlinePlaceholderUrl(hint = '', topic = 'travel') {
   const title = escapeSvgText(normalizeHint(hint) || 'Image unavailable');
   const subtitle = escapeSvgText(normalizeHint(topic) || 'travel');
@@ -33,7 +46,14 @@ export function resolveImageUrl(imageUrl, hint = '', topic = 'travel') {
   if (raw && raw.startsWith('data:image/')) {
     return raw;
   }
-  // Accept absolute URLs, blob URLs, or root-relative paths.
+  // Route uploaded asset paths through backend origin when needed.
+  if (rootRelative && rootRelative.startsWith('/uploads/')) {
+    const assetOrigin = getBackendAssetOrigin();
+    if (assetOrigin) return `${assetOrigin}${rootRelative}`;
+    return rootRelative;
+  }
+
+  // Accept absolute URLs, blob URLs, or other root-relative paths.
   if (
     rootRelative
     && (/^(https?:)?\/\//i.test(rootRelative) || rootRelative.startsWith('/') || rootRelative.startsWith('blob:'))

@@ -623,6 +623,20 @@
   background: #dbeafe;
 }
 
+.trip-card__published-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: -0.1rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #065f46;
+  background: #d1fae5;
+}
+
 /* Sidebar */
 .sidebar-block {
   background: var(--dash-surface);

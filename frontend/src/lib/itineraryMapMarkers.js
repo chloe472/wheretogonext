@@ -69,7 +69,12 @@ export function buildItineraryMapMarkers(itinerary) {
       lng: coords.lng,
       dayNum,
       address: String(i.detail != null ? i.detail : i.address || '').trim(),
+      rating: Number.isFinite(Number(i.rating)) ? Number(i.rating) : null,
+      reviewCount: Number.isFinite(Number(i.reviewCount)) ? Number(i.reviewCount) : null,
+      website: String(i.externalLink || i.website || '').trim(),
+      overview: String(i.notes || '').trim(),
       markerType: 'trip',
+      originalData: i,
     });
   });
 
@@ -88,7 +93,12 @@ export function buildItineraryMapMarkers(itinerary) {
       lng: coords.lng,
       dayNum,
       address: String(p.address || '').trim(),
+      rating: Number.isFinite(Number(p.rating)) ? Number(p.rating) : null,
+      reviewCount: Number.isFinite(Number(p.reviewCount)) ? Number(p.reviewCount) : null,
+      website: String(p.website || '').trim(),
+      overview: String(p.notes || '').trim(),
       markerType: 'trip',
+      originalData: p,
     });
   });
 

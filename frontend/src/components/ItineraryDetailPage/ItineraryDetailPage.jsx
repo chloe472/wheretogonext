@@ -483,6 +483,24 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
     }
   };
 
+  const openPublishedMapPlaceDetails = useCallback((marker) => {
+    if (!marker) return;
+    const explicitUrl = String(marker.website || marker.originalData?.website || '').trim();
+    if (explicitUrl) {
+      window.open(explicitUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const lat = Number(marker.lat);
+    const lng = Number(marker.lng);
+    const name = String(marker.name || '').trim();
+    const address = String(marker.address || '').trim();
+    const query = [name, address].filter(Boolean).join(', ');
+    const targetUrl = Number.isFinite(lat) && Number.isFinite(lng)
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || `${lat},${lng}`)}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || name || 'place')}`;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+  }, []);
+
   const handlePostComment = async () => {
     const t = newComment.trim();
     if (!t || !user || !id) return;
@@ -672,17 +690,6 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                     <p className="itinerary-detail__muted">No overview yet.</p>
                   )}
                 </div>
-                <h3 className="itinerary-detail__h3">Map</h3>
-                <div className="itinerary-detail__map-embed itinerary-detail__map-wrap" style={{ height: 300 }}>
-                  <TripMap
-                    className="itinerary-detail__trip-map"
-                    center={mapCenter}
-                    zoom={11}
-                    markers={mapMarkers}
-                    fitBounds={mapMarkers.length > 0}
-                    popupMode="basic"
-                  />
-                </div>
               </section>
             )}
 
@@ -695,7 +702,9 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                     zoom={11}
                     markers={mapMarkers}
                     fitBounds={mapMarkers.length > 0}
-                    popupMode="basic"
+                    popupMode="hover-preview"
+                    onMarkerAddClick={openPublishedMapPlaceDetails}
+                    onMarkerViewDetails={openPublishedMapPlaceDetails}
                   />
                 </div>
                 {mapMarkers.length === 0 && (

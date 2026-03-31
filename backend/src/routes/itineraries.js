@@ -39,6 +39,40 @@ const uploadMw = multer({
   },
 });
 
+// Prevent accidental double-counts from rapid duplicate requests (e.g., StrictMode/dev double-fetch).
+const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
+const recentViewHits = new Map();
+
+function shouldCountView(req, itineraryId) {
+  const ip = String(
+    req.headers['x-forwarded-for']
+      || req.socket?.remoteAddress
+      || req.ip
+      || ''
+  ).split(',')[0].trim();
+  const ua = String(req.headers['user-agent'] || '').trim();
+  const viewerKey = req.userId ? `u:${req.userId}` : `a:${ip}|${ua}`;
+  const key = `${String(itineraryId)}::${viewerKey}`;
+  const now = Date.now();
+  const last = recentViewHits.get(key) || 0;
+
+  // Opportunistic cleanup to keep memory bounded.
+  if (recentViewHits.size > 5000) {
+    for (const [hitKey, ts] of recentViewHits.entries()) {
+      if (now - ts > VIEW_DEDUPE_WINDOW_MS) {
+        recentViewHits.delete(hitKey);
+      }
+    }
+  }
+
+  if (now - last < VIEW_DEDUPE_WINDOW_MS) {
+    return false;
+  }
+
+  recentViewHits.set(key, now);
+  return true;
+}
+
 function isDbReady() {
   return mongoose.connection.readyState === 1;
 }
@@ -227,9 +261,11 @@ function normalizeCollaborators(raw) {
     }
 
     email = email.trim().toLowerCase();
-    if (!email) continue;
+    if (!email && !userId) continue;
 
-    const key = `${email}::${role.toLowerCase()}`;
+    const idKey = userId ? `uid:${String(userId)}` : '';
+    const emailKey = email ? `em:${email}` : '';
+    const key = `${idKey || emailKey}::${role.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -420,14 +456,16 @@ router.get('/shared-with-me', requireAuth, async (req, res) => {
 
     const me = await User.findById(req.userId).select('email').lean();
     const myEmail = String(me?.email || '').trim().toLowerCase();
-    if (!myEmail) {
-      return res.json({ itineraries: [] });
+
+    const collaboratorMatch = [{ userId: new mongoose.Types.ObjectId(req.userId) }];
+    if (myEmail) {
+      const escaped = escapeRegex(myEmail);
+      collaboratorMatch.push({ email: { $regex: `^${escaped}$`, $options: 'i' } });
     }
 
-    const escaped = escapeRegex(myEmail);
     const docs = await Itinerary.find({
       collaborators: {
-        $elemMatch: { email: { $regex: `^${escaped}$`, $options: 'i' } },
+        $elemMatch: { $or: collaboratorMatch },
       },
     })
       .sort({ updatedAt: -1 })
@@ -714,9 +752,9 @@ router.get('/:id/customized-copy', requireAuth, async (req, res) => {
 
 /**
  * GET /api/itineraries/:id
- * Atomically increments viewCount by 1.
+ * Increments viewCount only for public itineraries viewed by non-owners.
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
       return res.status(503).json({ error: 'Database unavailable' });
@@ -727,16 +765,27 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid itinerary id' });
     }
 
-    const itinerary = await Itinerary.findOneAndUpdate(
-      { _id: id },
-      { $inc: { viewCount: 1 } },
-      { new: true }
-    )
+    let itinerary = await Itinerary.findById(id)
       .populate('creator', 'name email picture username')
       .lean();
 
     if (!itinerary) {
       return res.status(404).json({ error: 'Itinerary not found' });
+    }
+
+    const creatorId = String(itinerary?.creator?._id || itinerary?.creator || '');
+    const isOwner = Boolean(req.userId && creatorId && req.userId === creatorId);
+    const isPublicPublished = Boolean(itinerary.published && itinerary.visibility === 'public');
+    const shouldIncrementViewCount = isPublicPublished && !isOwner && shouldCountView(req, id);
+
+    if (shouldIncrementViewCount) {
+      itinerary = await Itinerary.findOneAndUpdate(
+        { _id: id },
+        { $inc: { viewCount: 1 } },
+        { new: true }
+      )
+        .populate('creator', 'name email picture username')
+        .lean();
     }
 
     const commentCount = await ItineraryComment.countDocuments({ itineraryId: id });
@@ -1014,9 +1063,14 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not allowed to publish this itinerary' });
     }
 
+    const wasPublic = Boolean(existing.published && existing.visibility === 'public');
+
     existing.published = true;
     existing.visibility = visibility;
     existing.publishedAt = new Date();
+    if (visibility === 'public' && !wasPublic) {
+      existing.viewCount = 0;
+    }
 
     if (req.body?.title != null) {
       const t = String(req.body.title).trim();
