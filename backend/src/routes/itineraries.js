@@ -131,6 +131,21 @@ function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
 /** Kanban categories that represent mappable / publishable stops (not transport-only rows). */
 const EXPENSE_ITEM_CATEGORIES_FOR_PLACES = new Set(['places', 'food', 'experiences', 'stays']);
 
+function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
+  const start = String(startTime || '').trim();
+  if (!start) return '';
+
+  const [hours, minutes] = start.split(':').map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return start;
+
+  const totalMinutes = (hours * 60) + minutes + (Number(durationHrs || 0) * 60) + Number(durationMins || 0);
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const endHours = Math.floor(normalized / 60);
+  const endMinutes = normalized % 60;
+  const end = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  return end !== start ? `${start} - ${end}` : start;
+}
+
 /**
  * Build Itinerary.places[] from tripExpenseItems for Explore / public views.
  */
@@ -151,7 +166,7 @@ function placesFromTripExpenseItems(items, startDateStr) {
       name,
       category: String(it?.category != null ? it.category : it?.categoryId || ''),
       address: String(it?.detail != null ? it.detail : it?.address || ''),
-      timeSlot: String(it?.startTime != null ? it.startTime : ''),
+      timeSlot: formatTimeRange(it?.startTime, it?.durationHrs, it?.durationMins),
       notes: String(it?.notes != null ? it.notes : ''),
       image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''),
       rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null,

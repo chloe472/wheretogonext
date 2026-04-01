@@ -7,6 +7,8 @@ import {
   MessageCircle,
   Heart,
   Plus,
+  MapPin,
+  Clock3,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
@@ -582,6 +584,16 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       <div className="itinerary-detail__layout">
         <main className="itinerary-detail__main">
           <section className="itinerary-detail__hero">
+            <button
+              type="button"
+              className="itinerary-detail__btn itinerary-detail__back-btn"
+              onClick={() => {
+                if (window.history.length > 1) navigate(-1);
+                else navigate('/search');
+              }}
+            >
+              Back
+            </button>
             <h1 className="itinerary-detail__title">{itinerary.title}</h1>
             <div className="itinerary-detail__meta-row">
               <span className="itinerary-detail__meta">Published {formatPublished(published)}</span>
@@ -749,39 +761,53 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                               <li key={`${day}-${n}-${p.name}`} className="itinerary-detail__stop">
                                 <div className="itinerary-detail__stop-badge">{n}</div>
                                 <div className="itinerary-detail__stop-body">
-                                  <div className="itinerary-detail__stop-top">
-                                    <h4 className="itinerary-detail__stop-name">{p.name || 'Place'}</h4>
-                                    <div className="itinerary-detail__stop-actions">
-                                      <button type="button" className="itinerary-detail__icon-btn" aria-label="Save place">
-                                        <Heart size={18} />
-                                      </button>
-                                      <button type="button" className="itinerary-detail__icon-btn" aria-label="Add to trip">
-                                        <Plus size={18} />
-                                      </button>
+                                  <div className="itinerary-detail__stop-main">
+                                    <div className="itinerary-detail__stop-copy">
+                                      <div className="itinerary-detail__stop-top">
+                                        <h4 className="itinerary-detail__stop-name">{p.name || 'Place'}</h4>
+                                        <div className="itinerary-detail__stop-actions">
+                                          <button type="button" className="itinerary-detail__icon-btn" aria-label="Save place">
+                                            <Heart size={18} />
+                                          </button>
+                                          <button type="button" className="itinerary-detail__icon-btn" aria-label="Add to trip">
+                                            <Plus size={18} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {p.category && (
+                                        <span className="itinerary-detail__stop-cat">{p.category}</span>
+                                      )}
+                                      {p.rating != null && (
+                                        <p className="itinerary-detail__stop-rating">
+                                          ★ {p.rating}
+                                          {p.reviewCount != null ? ` (${p.reviewCount} reviews)` : ''}
+                                        </p>
+                                      )}
+                                      {p.address && (
+                                        <p className="itinerary-detail__stop-addr">
+                                          <MapPin size={16} aria-hidden />
+                                          <span>{p.address}</span>
+                                        </p>
+                                      )}
+                                      {p.timeSlot && (
+                                        <p className="itinerary-detail__stop-time">
+                                          <Clock3 size={16} aria-hidden />
+                                          <span>{p.timeSlot}</span>
+                                        </p>
+                                      )}
+                                      {p.notes && <p className="itinerary-detail__stop-notes">{p.notes}</p>}
                                     </div>
+                                    {p.image ? (
+                                      <div className="itinerary-detail__stop-media">
+                                        <img
+                                          className="itinerary-detail__stop-thumb"
+                                          src={resolveImageUrl(p.image, p.name, 'landmark')}
+                                          alt=""
+                                          onError={(e) => applyImageFallback(e)}
+                                        />
+                                      </div>
+                                    ) : null}
                                   </div>
-                                  {p.category && (
-                                    <span className="itinerary-detail__stop-cat">{p.category}</span>
-                                  )}
-                                  {p.rating != null && (
-                                    <p className="itinerary-detail__stop-rating">
-                                      ★ {p.rating}
-                                      {p.reviewCount != null ? ` (${p.reviewCount} reviews)` : ''}
-                                    </p>
-                                  )}
-                                  {p.address && <p className="itinerary-detail__stop-addr">{p.address}</p>}
-                                  {p.timeSlot && (
-                                    <p className="itinerary-detail__stop-time">{p.timeSlot}</p>
-                                  )}
-                                  {p.notes && <p className="itinerary-detail__stop-notes">{p.notes}</p>}
-                                  {p.image && (
-                                    <img
-                                      className="itinerary-detail__stop-thumb"
-                                      src={resolveImageUrl(p.image, p.name, 'landmark')}
-                                      alt=""
-                                      onError={(e) => applyImageFallback(e)}
-                                    />
-                                  )}
                                 </div>
                               </li>
                             );
