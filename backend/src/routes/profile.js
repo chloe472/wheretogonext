@@ -184,6 +184,106 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
+router.get('/requests', requireAuth, async (req, res) => {
+  try {
+    const rows = await FriendRequest.find({ to: req.userId, status: 'pending' })
+      .populate('from', 'name username picture')
+      .sort({ createdAt: -1 })
+      .lean();
+    const requests = rows.map((r) => ({
+      id: String(r._id),
+      from: {
+        id: String(r.from?._id || ''),
+        name: r.from?.name || '',
+        username: r.from?.username || '',
+        picture: r.from?.picture || '',
+      },
+      createdAt: r.createdAt,
+    }));
+    return res.json({ requests });
+  } catch (err) {
+    console.error('List requests error:', err);
+    return res.status(500).json({ error: 'Failed to load friend requests' });
+  }
+});
+
+router.get('/requests/outgoing', requireAuth, async (req, res) => {
+  try {
+    const rows = await FriendRequest.find({ from: req.userId, status: 'pending' })
+      .populate('to', 'name username picture')
+      .sort({ createdAt: -1 })
+      .lean();
+    const requests = rows.map((r) => ({
+      id: String(r._id),
+      to: {
+        id: String(r.to?._id || ''),
+        name: r.to?.name || '',
+        username: r.to?.username || '',
+        picture: r.to?.picture || '',
+      },
+      createdAt: r.createdAt,
+    }));
+    return res.json({ requests });
+  } catch (err) {
+    console.error('Outgoing requests error:', err);
+    return res.status(500).json({ error: 'Failed to load outgoing requests' });
+  }
+});
+
+router.post('/requests/:id/accept', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid request id' });
+    }
+    const reqDoc = await FriendRequest.findById(id).lean();
+    if (!reqDoc || String(reqDoc.to) !== String(req.userId)) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    const [userA, userB] = sortFriendPair(reqDoc.from, reqDoc.to);
+    await Friendship.updateOne(
+      { userA, userB },
+      { $setOnInsert: { userA, userB } },
+      { upsert: true }
+    );
+
+    const accepter = await User.findById(req.userId).select('name username email').lean();
+    await createNotification({
+      recipientId: String(reqDoc.from),
+      actorId: req.userId,
+      type: 'friend_request_accepted',
+      title: 'Friend request accepted',
+      message: `${accepter?.name || accepter?.username || accepter?.email || 'Someone'} accepted your friend request.`,
+      link: '/profile?tab=friends&section=friends',
+      meta: { acceptedByUserId: String(req.userId) },
+    });
+
+    await FriendRequest.deleteOne({ _id: id });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Accept request error:', err);
+    return res.status(500).json({ error: 'Failed to accept request' });
+  }
+});
+
+router.delete('/requests/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid request id' });
+    }
+    const reqDoc = await FriendRequest.findById(id).lean();
+    if (!reqDoc || (String(reqDoc.to) !== String(req.userId) && String(reqDoc.from) !== String(req.userId))) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    await FriendRequest.deleteOne({ _id: id });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete request error:', err);
+    return res.status(500).json({ error: 'Failed to remove request' });
+  }
+});
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -332,106 +432,6 @@ router.delete('/:id/friends', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Remove friend error:', err);
     return res.status(500).json({ error: 'Failed to remove friend' });
-  }
-});
-
-router.get('/requests', requireAuth, async (req, res) => {
-  try {
-    const rows = await FriendRequest.find({ to: req.userId, status: 'pending' })
-      .populate('from', 'name username picture')
-      .sort({ createdAt: -1 })
-      .lean();
-    const requests = rows.map((r) => ({
-      id: String(r._id),
-      from: {
-        id: String(r.from?._id || ''),
-        name: r.from?.name || '',
-        username: r.from?.username || '',
-        picture: r.from?.picture || '',
-      },
-      createdAt: r.createdAt,
-    }));
-    return res.json({ requests });
-  } catch (err) {
-    console.error('List requests error:', err);
-    return res.status(500).json({ error: 'Failed to load friend requests' });
-  }
-});
-
-router.get('/requests/outgoing', requireAuth, async (req, res) => {
-  try {
-    const rows = await FriendRequest.find({ from: req.userId, status: 'pending' })
-      .populate('to', 'name username picture')
-      .sort({ createdAt: -1 })
-      .lean();
-    const requests = rows.map((r) => ({
-      id: String(r._id),
-      to: {
-        id: String(r.to?._id || ''),
-        name: r.to?.name || '',
-        username: r.to?.username || '',
-        picture: r.to?.picture || '',
-      },
-      createdAt: r.createdAt,
-    }));
-    return res.json({ requests });
-  } catch (err) {
-    console.error('Outgoing requests error:', err);
-    return res.status(500).json({ error: 'Failed to load outgoing requests' });
-  }
-});
-
-router.post('/requests/:id/accept', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid request id' });
-    }
-    const reqDoc = await FriendRequest.findById(id).lean();
-    if (!reqDoc || String(reqDoc.to) !== String(req.userId)) {
-      return res.status(404).json({ error: 'Request not found' });
-    }
-    const [userA, userB] = sortFriendPair(reqDoc.from, reqDoc.to);
-    await Friendship.updateOne(
-      { userA, userB },
-      { $setOnInsert: { userA, userB } },
-      { upsert: true }
-    );
-
-    const accepter = await User.findById(req.userId).select('name username email').lean();
-    await createNotification({
-      recipientId: String(reqDoc.from),
-      actorId: req.userId,
-      type: 'friend_request_accepted',
-      title: 'Friend request accepted',
-      message: `${accepter?.name || accepter?.username || accepter?.email || 'Someone'} accepted your friend request.`,
-      link: '/profile?tab=friends&section=friends',
-      meta: { acceptedByUserId: String(req.userId) },
-    });
-
-    await FriendRequest.deleteOne({ _id: id });
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('Accept request error:', err);
-    return res.status(500).json({ error: 'Failed to accept request' });
-  }
-});
-
-router.delete('/requests/:id', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid request id' });
-    }
-    const reqDoc = await FriendRequest.findById(id).lean();
-    if (!reqDoc || (String(reqDoc.to) !== String(req.userId) && String(reqDoc.from) !== String(req.userId))) {
-      return res.status(404).json({ error: 'Request not found' });
-    }
-    await FriendRequest.deleteOne({ _id: id });
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('Delete request error:', err);
-    return res.status(500).json({ error: 'Failed to remove request' });
   }
 });
 

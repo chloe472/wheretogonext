@@ -1,5 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { MapContainer, TileLayer, GeoJSON, Marker, Tooltip } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   Pencil,
   Share2,
@@ -13,7 +17,15 @@ import {
   Globe,
   Music,
   AtSign,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  resolveTripCardCoverImage,
+  getFlagImageForDestination,
+  formatTripCardDateRange,
+} from '../../data/tripDestinationMeta';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { fetchItineraryById, updateItinerary } from '../../api/itinerariesApi';
 import {
   fetchMyProfile,
   fetchProfile,
@@ -26,7 +38,37 @@ import {
   acceptFriendRequest,
   declineFriendRequest,
 } from '../../api/profileApi';
+import DashboardHeader from '../DashboardHeader/DashboardHeader';
+import countriesData from '../../data/countries.json';
+import { CITIES } from '../../data/cities';
 import './ProfilePage.css';
+
+const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
+const MAP_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+const MAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const redFlagIcon = L.divIcon({
+  className: 'profile-page__leaflet-marker',
+  html: '<span class="profile-page__leaflet-pin"></span>',
+  iconSize: [30, 36],
+  iconAnchor: [15, 34],
+  tooltipAnchor: [0, -20],
+});
+
+const COUNTRY_ALIAS_LOOKUP = {
+  usa: 'United States',
+  'u.s.a.': 'United States',
+  'u.s.': 'United States',
+  us: 'United States',
+  uk: 'United Kingdom',
+  'u.k.': 'United Kingdom',
+  uae: 'United Arab Emirates',
+  'u.a.e.': 'United Arab Emirates',
+  korea: 'South Korea',
+  'south korea': 'South Korea',
+  'north korea': 'North Korea',
+  'czech republic': 'Czechia',
+  'ivory coast': "Cote d'Ivoire",
+};
 
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   const [searchParams] = useSearchParams();
@@ -51,6 +93,9 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   const [outgoingLoading, setOutgoingLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [geoData, setGeoData] = useState(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editDraft, setEditDraft] = useState({
     name: '',
@@ -65,8 +110,37 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [socialDraft, setSocialDraft] = useState({ platform: '', value: '' });
+  const [acceptSuccess, setAcceptSuccess] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTrip, setShareTrip] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareEmail, setShareEmail] = useState('');
 
   const isSelf = !profileId || (user?.id && String(profileId) === String(user.id));
+
+  const countryNameMap = useMemo(() => {
+    const map = new Map();
+    countriesData.forEach((c) => {
+      if (c?.name) map.set(String(c.name).toLowerCase(), c.name);
+    });
+    return map;
+  }, []);
+
+  const countryNameList = useMemo(
+    () => countriesData.map((c) => c.name).filter(Boolean).sort((a, b) => b.length - a.length),
+    []
+  );
+
+  const cityCountryMap = useMemo(() => {
+    const map = new Map();
+    CITIES.forEach((city) => {
+      if (city?.name && city?.country) {
+        map.set(String(city.name).toLowerCase(), city.country);
+      }
+    });
+    return map;
+  }, []);
 
   const normalizeSocials = (list) => {
     if (!Array.isArray(list)) return [];
@@ -79,6 +153,171 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
       }))
       .filter((s) => s.platform || s.url || s.handle);
   };
+
+  const normalizeCountryName = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    const alias = COUNTRY_ALIAS_LOOKUP[lower];
+    const candidate = alias || raw;
+    return countryNameMap.get(candidate.toLowerCase()) || '';
+  };
+
+  const extractCountryFromString = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const segments = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (segments.length > 1) {
+      const last = normalizeCountryName(segments[segments.length - 1]);
+      if (last) return last;
+    }
+    const direct = normalizeCountryName(raw);
+    if (direct) return direct;
+    const firstSegment = segments[0] || raw;
+    return cityCountryMap.get(firstSegment.toLowerCase()) || '';
+  };
+
+  const findCountryInText = (value) => {
+    const raw = String(value || '').toLowerCase();
+    if (!raw) return '';
+    for (const name of countryNameList) {
+      if (raw.includes(name.toLowerCase())) return name;
+    }
+    return '';
+  };
+
+  const extractCountryFromTrip = (trip) => {
+    if (!trip) return '';
+    const candidates = [
+      trip.destinationCountry,
+      trip.destination,
+      trip.locations,
+      trip.overview,
+      trip.title,
+      trip.dates,
+      ...(Array.isArray(trip.citySegments)
+        ? trip.citySegments.map((seg) => seg.locationLabel || seg.city).filter(Boolean)
+        : []),
+      ...(Array.isArray(trip.places)
+        ? trip.places.flatMap((p) => [p.address, p.name]).filter(Boolean)
+        : []),
+    ];
+    for (const value of candidates) {
+      const country = extractCountryFromString(value);
+      if (country) return country;
+    }
+    for (const value of candidates) {
+      const country = findCountryInText(value);
+      if (country) return country;
+    }
+    return '';
+  };
+
+  const isPastTrip = (trip) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = trip?.endDate ? new Date(trip.endDate) : null;
+    const start = trip?.startDate ? new Date(trip.startDate) : null;
+    if (end && !Number.isNaN(end.getTime())) return end < today;
+    if (start && !Number.isNaN(start.getTime())) return start < today;
+    const datesText = String(trip?.dates || '').trim();
+    if (datesText) {
+      const monthMap = {
+        jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+        jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+      };
+      const matches = [...datesText.matchAll(/(\d{1,2})\s([A-Za-z]{3,})[^\d]*(\d{4})/g)];
+      if (matches.length > 0) {
+        const last = matches[matches.length - 1];
+        const day = Number(last[1]);
+        const monthKey = String(last[2]).slice(0, 3).toLowerCase();
+        const year = Number(last[3]);
+        const month = monthMap[monthKey];
+        if (Number.isFinite(day) && Number.isFinite(year) && Number.isFinite(month)) {
+          const parsedEnd = new Date(year, month, day);
+          if (!Number.isNaN(parsedEnd.getTime())) return parsedEnd < today;
+        }
+      }
+    }
+    const status = String(trip?.status || '').toLowerCase();
+    if (status.includes('complete') || status.includes('completed') || status.includes('done') || status.includes('past')) {
+      return true;
+    }
+    return false;
+  };
+
+  const visitedCountries = useMemo(() => {
+    const set = new Set();
+    trips.forEach((trip) => {
+      if (!isPastTrip(trip)) return;
+      const country = extractCountryFromTrip(trip);
+      if (country) set.add(country);
+    });
+    return Array.from(set);
+  }, [trips]);
+
+  const mapFlags = useMemo(() => {
+    if (!geoData || !Array.isArray(geoData.features)) return [];
+    const featureByName = new Map();
+    geoData.features.forEach((feature) => {
+      const name = feature?.properties?.name || feature?.properties?.ADMIN || feature?.properties?.admin;
+      if (!name) return;
+      const key = String(name).toLowerCase();
+      featureByName.set(key, feature);
+      if (key === 'united states of america') {
+        featureByName.set('united states', feature);
+        featureByName.set('usa', feature);
+        featureByName.set('us', feature);
+      }
+    });
+
+    const findFeatureForCountry = (country) => {
+      const key = String(country || '').toLowerCase();
+      if (!key) return null;
+      if (featureByName.has(key)) return featureByName.get(key);
+      return geoData.features.find((feature) => {
+        const name = feature?.properties?.name || feature?.properties?.ADMIN || feature?.properties?.admin;
+        if (!name) return false;
+        const lname = String(name).toLowerCase();
+        return lname.includes(key) || key.includes(lname);
+      }) || null;
+    };
+
+    return visitedCountries
+      .map((country) => {
+        const feature = findFeatureForCountry(country);
+        if (!feature) return null;
+        const bounds = L.geoJSON(feature).getBounds();
+        if (!bounds.isValid()) return null;
+        const center = bounds.getCenter();
+        return { name: country, position: [center.lat, center.lng] };
+      })
+      .filter(Boolean);
+  }, [geoData, visitedCountries]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const loadGeo = async () => {
+      setGeoLoading(true);
+      setGeoError('');
+      try {
+        const res = await fetch(WORLD_GEOJSON_URL, { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to load map data.');
+        const data = await res.json();
+        if (!cancelled) setGeoData(data);
+      } catch (err) {
+        if (!cancelled) setGeoError(err?.message || 'Failed to load map data.');
+      } finally {
+        if (!cancelled) setGeoLoading(false);
+      }
+    };
+    loadGeo();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
 
   const commitSocialDraft = () => {
     const platform = socialDraft.platform.trim();
@@ -97,6 +336,32 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     setSocialDraft({ platform: '', value: '' });
   };
 
+  const applyProfilePayload = (payload) => {
+    const nextTrips = Array.isArray(payload?.trips) ? payload.trips : [];
+    const nextFriends = Array.isArray(payload?.friends) ? payload.friends : [];
+    setProfileData(payload?.profile || null);
+    setStats({
+      countries: payload?.stats?.countries ?? 0,
+      trips: payload?.stats?.trips ?? nextTrips.length,
+      friends: payload?.stats?.friends ?? nextFriends.length,
+    });
+    setTrips(nextTrips);
+    setFriendsList(nextFriends);
+    setIsFriend(Boolean(payload?.viewer?.isFriend));
+    setRequestStatus(payload?.viewer?.requestStatus || 'none');
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const payload = profileId
+        ? await fetchProfile(profileId)
+        : await fetchMyProfile();
+      applyProfilePayload(payload);
+    } catch (err) {
+      setErrorMsg(err?.message || 'Could not load profile.');
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -108,18 +373,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
           ? await fetchProfile(profileId, { signal: controller.signal })
           : await fetchMyProfile({ signal: controller.signal });
         if (cancelled) return;
-        const nextTrips = Array.isArray(payload?.trips) ? payload.trips : [];
-        const nextFriends = Array.isArray(payload?.friends) ? payload.friends : [];
-        setProfileData(payload?.profile || null);
-        setStats({
-          countries: payload?.stats?.countries ?? 0,
-          trips: payload?.stats?.trips ?? nextTrips.length,
-          friends: payload?.stats?.friends ?? nextFriends.length,
-        });
-        setTrips(nextTrips);
-        setFriendsList(nextFriends);
-        setIsFriend(Boolean(payload?.viewer?.isFriend));
-        setRequestStatus(payload?.viewer?.requestStatus || 'none');
+        applyProfilePayload(payload);
       } catch (err) {
         if (cancelled) return;
         setErrorMsg(err?.message || 'Could not load profile.');
@@ -150,7 +404,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   }, [profileId, searchParams]);
 
   useEffect(() => {
-    if (!isSelf) return;
+    if (!user?.id) return;
     let cancelled = false;
     const loadRequests = async () => {
       setRequestsLoading(true);
@@ -168,10 +422,10 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     return () => {
       cancelled = true;
     };
-  }, [isSelf]);
+  }, [user?.id]);
 
   useEffect(() => {
-    if (!isSelf) return;
+    if (!user?.id) return;
     let cancelled = false;
     const loadOutgoing = async () => {
       setOutgoingLoading(true);
@@ -189,7 +443,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     return () => {
       cancelled = true;
     };
-  }, [isSelf]);
+  }, [user?.id]);
 
   const profile = profileData || user || {};
   const displayName = profile?.name || 'Traveler';
@@ -199,6 +453,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
       ? `@${profile.email.split('@')[0]}`
       : '@traveler';
   const picture = profile?.picture;
+  const incomingRequestId = profileData?.viewer?.requestId || null;
   const shareUrl = profile?.id || profileId
     ? `${window.location.origin}/profile/${profile?.id || profileId}`
     : `${window.location.origin}/profile`;
@@ -274,16 +529,13 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     try {
       if (isFriend) {
         await removeFriend(profile.id);
-        setIsFriend(false);
-        setStats((prev) => ({ ...prev, friends: Math.max(0, prev.friends - 1) }));
-        setFriendsList((prev) => prev.filter((f) => String(f.id) !== String(profile.id)));
-        setRequestStatus('none');
+        await refreshProfile();
       } else if (requestStatus === 'outgoing') {
         await removeFriend(profile.id);
-        setRequestStatus('none');
+        await refreshProfile();
       } else {
         await addFriend(profile.id);
-        setRequestStatus('outgoing');
+        await refreshProfile();
       }
     } catch (err) {
       setErrorMsg(err?.message || 'Could not update friend status.');
@@ -293,11 +545,19 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   };
 
   const acceptRequest = async (requestId) => {
-    if (!requestId) return;
+    const resolvedId = requestId
+      || requests.find((r) => String(r.from?.id || '') === String(profile?.id || profileId || ''))?.id
+      || null;
+    if (!resolvedId) {
+      setErrorMsg('Could not find that friend request.');
+      return;
+    }
     try {
-      await acceptFriendRequest(requestId);
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
-      setStats((prev) => ({ ...prev, friends: prev.friends + 1 }));
+      await acceptFriendRequest(resolvedId);
+      setAcceptSuccess(true);
+      const friendName = profile?.name || 'this traveler';
+      toast.success(`You're now friends with ${friendName}.`);
+      await refreshProfile();
     } catch (err) {
       setErrorMsg(err?.message || 'Could not accept request.');
     }
@@ -307,8 +567,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     if (!requestId) return;
     try {
       await declineFriendRequest(requestId);
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
-      setOutgoingRequests((prev) => prev.filter((r) => r.id !== requestId));
+      await refreshProfile();
     } catch (err) {
       setErrorMsg(err?.message || 'Could not decline request.');
     }
@@ -318,10 +577,84 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     if (!friendId) return;
     try {
       await removeFriend(friendId);
-      setFriendsList((prev) => prev.filter((f) => String(f.id) !== String(friendId)));
-      setStats((prev) => ({ ...prev, friends: Math.max(0, prev.friends - 1) }));
+      await refreshProfile();
     } catch (err) {
       setErrorMsg(err?.message || 'Could not remove friend.');
+    }
+  };
+
+  const openShareTrip = async (trip) => {
+    if (!trip?.id) return;
+    setShareOpen(true);
+    setShareLoading(true);
+    setShareError('');
+    setShareTrip({ ...trip });
+    try {
+      const full = await fetchItineraryById(trip.id);
+      setShareTrip((prev) => ({
+        ...prev,
+        ...(full || {}),
+        id: trip.id,
+      }));
+    } catch (err) {
+      setShareError(err?.message || 'Failed to load collaborators.');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const closeShareTrip = () => {
+    setShareOpen(false);
+    setShareTrip(null);
+    setShareEmail('');
+    setShareError('');
+  };
+
+  const saveCollaborators = async (nextCollaborators) => {
+    if (!shareTrip?.id) return;
+    setShareLoading(true);
+    setShareError('');
+    try {
+      const updated = await updateItinerary(shareTrip.id, { collaborators: nextCollaborators });
+      setShareTrip((prev) => ({
+        ...prev,
+        collaborators: updated?.collaborators || nextCollaborators,
+      }));
+    } catch (err) {
+      setShareError(err?.message || 'Failed to update collaborators.');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleInviteCollaborator = async () => {
+    const email = shareEmail.trim().toLowerCase();
+    if (!email) return;
+    const existing = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+    if (existing.some((c) => String(c.email || '').toLowerCase() === email)) {
+      setShareError('This collaborator is already invited.');
+      return;
+    }
+    const next = [...existing, { email, role: 'viewer' }];
+    await saveCollaborators(next);
+    setShareEmail('');
+  };
+
+  const handleRemoveCollaborator = async (email) => {
+    if (!email) return;
+    const existing = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+    const next = existing.filter((c) => String(c.email || '').toLowerCase() !== String(email).toLowerCase());
+    await saveCollaborators(next);
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!shareTrip?.id) return;
+    const shareLink = `${window.location.origin}${getTripLink(shareTrip)}`;
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast.success('Link copied.');
+    } catch {
+      // ignore
     }
   };
 
@@ -390,28 +723,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
 
   return (
     <div className="profile-page">
-      <header className="profile-page__app-header">
-        <Link to="/" className="profile-page__brand-link">
-          <div className="profile-page__logo">@</div>
-          <div className="profile-page__app-meta">
-            <span className="profile-page__app-name">where to go next</span>
-            <span className="profile-page__app-tagline">Your travel companion</span>
-          </div>
-        </Link>
-        <div className="profile-page__header-right">
-          <button type="button" className="profile-page__icon-pill" aria-label="Notifications">
-            🔔
-          </button>
-          <button type="button" className="profile-page__icon-pill" aria-label="Theme">
-            ☀️
-          </button>
-          {user && (
-            <button type="button" className="profile-page__logout" onClick={onLogout}>
-              Log out
-            </button>
-          )}
-        </div>
-      </header>
+      <DashboardHeader user={user} onLogout={onLogout} activeNav="dashboard" />
 
       <main className="profile-page__main">
         <section className="profile-page__cover" />
@@ -478,7 +790,18 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                     <span>Edit profile</span>
                   </button>
                 )}
-                {!isSelf && (
+                {!isSelf && requestStatus === 'incoming' && (
+                  <div className="profile-page__incoming-actions">
+                    <button
+                      type="button"
+                      className="profile-page__btn profile-page__btn--primary"
+                      onClick={() => acceptRequest(incomingRequestId)}
+                    >
+                      Accept
+                    </button>
+                  </div>
+                )}
+                {!isSelf && requestStatus !== 'incoming' && (
                   <button
                     type="button"
                     className={`profile-page__btn ${isFriend ? 'profile-page__btn--ghost' : 'profile-page__btn--primary'}`}
@@ -492,7 +815,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                     )}
                     <span>
                       {isFriend
-                        ? 'Remove friend'
+                        ? 'Unfriend'
                         : requestStatus === 'outgoing'
                           ? 'Request sent'
                           : 'Add friend'}
@@ -552,9 +875,44 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                 <>
                   <h2 className="profile-page__section-title">{isSelf ? 'My World Map' : 'World Map'}</h2>
                   <div className="profile-page__map-card">
-                    <span className="profile-page__map-pin profile-page__map-pin--one" />
-                    <span className="profile-page__map-pin profile-page__map-pin--two" />
-                    <span className="profile-page__map-pin profile-page__map-pin--three" />
+                    {geoLoading && (
+                      <div className="profile-page__map-empty">Loading map…</div>
+                    )}
+                    {geoError && !geoLoading && (
+                      <div className="profile-page__map-empty">{geoError}</div>
+                    )}
+                    {!geoLoading && !geoError && (
+                      <MapContainer
+                        center={[20, 0]}
+                        zoom={2}
+                        minZoom={1}
+                        scrollWheelZoom
+                        className="profile-page__map"
+                      >
+                        <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} />
+                        {geoData && (
+                          <GeoJSON
+                            data={geoData}
+                            style={{
+                              color: '#d9c7b5',
+                              weight: 1,
+                              fillColor: '#f8f3ee',
+                              fillOpacity: 0.7,
+                            }}
+                          />
+                        )}
+                        {mapFlags.map((flag) => (
+                          <Marker key={flag.name} position={flag.position} icon={redFlagIcon}>
+                            <Tooltip>{flag.name}</Tooltip>
+                          </Marker>
+                        ))}
+                      </MapContainer>
+                    )}
+                    {!geoLoading && !geoError && mapFlags.length === 0 && (
+                      <div className="profile-page__map-empty profile-page__map-empty--overlay">
+                        No trips yet — your travel flags will appear here.
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -566,22 +924,76 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                       {isSelf ? 'No trips yet.' : 'No trips yet for this traveler.'}
                     </p>
                   ) : (
-                    <ul className="profile-page__trip-list">
-                      {trips.map((trip) => (
-                        <li key={trip.id}>
-                          <Link to={getTripLink(trip)} className="profile-page__trip-card">
-                            <div className="profile-page__trip-info">
-                              <span className="profile-page__trip-title">{trip.title || 'Untitled trip'}</span>
-                              <span className="profile-page__trip-subtitle">
-                                {trip.destination || trip.locations || 'Destination TBD'}
-                              </span>
+                    <ul className="dashboard__trip-list profile-page__trip-grid">
+                      {trips.map((trip) => {
+                        const tripDestination = trip.destination || trip.locations || '';
+                        const coverImage = resolveTripCardCoverImage(trip, tripDestination);
+                        const flagImage = getFlagImageForDestination(tripDestination);
+                        const dateLabel = formatTripCardDateRange(trip?.startDate, trip?.endDate, trip?.dates);
+                        return (
+                          <li
+                            key={trip.id}
+                            className="trip-card"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              window.location.href = getTripLink(trip);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                window.location.href = getTripLink(trip);
+                              }
+                            }}
+                          >
+                            <div className="trip-card__image-wrap">
+                              <div className="trip-card__image-crop">
+                                <img
+                                  src={resolveImageUrl(coverImage)}
+                                  alt=""
+                                  className="trip-card__image"
+                                  onError={(e) => applyImageFallback(e, coverImage)}
+                                />
+                              </div>
+                              {flagImage?.url ? (
+                                <img
+                                  src={flagImage.url}
+                                  alt={`${flagImage.countryName} flag`}
+                                  className="trip-card__flag"
+                                  loading="lazy"
+                                  decoding="async"
+                                />
+                              ) : null}
+                              <div className="trip-card__status-wrap">
+                                <div className="trip-card__status-btn trip-card__status--planning">
+                                  <span className="trip-card__status-btn-text">{trip.status || 'Planning'}</span>
+                                  <ChevronDown size={14} className="trip-card__status-chevron" aria-hidden />
+                                </div>
+                              </div>
+                              {isSelf && (
+                                <button
+                                  type="button"
+                                  className="trip-card__share-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openShareTrip(trip);
+                                  }}
+                                >
+                                  <Share2 size={16} aria-hidden />
+                                  Share
+                                </button>
+                              )}
                             </div>
-                            <span className="profile-page__trip-status">
-                              {trip.published && trip.visibility === 'public' ? 'Public' : 'Private'}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
+                            <div className="trip-card__body">
+                              <h3 className="trip-card__title">{trip.title || 'Untitled trip'}</h3>
+                              {trip.published && trip.visibility === 'public' ? (
+                                <span className="trip-card__published-badge">Published</span>
+                              ) : null}
+                              <p className="trip-card__dates">{dateLabel}</p>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </>
@@ -914,6 +1326,77 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                 disabled={editSaving || photoUploading}
               >
                 {editSaving || photoUploading ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareOpen && (
+        <div className="profile-page__modal" role="dialog" aria-modal="true" aria-labelledby="share-trip-title">
+          <button
+            type="button"
+            className="profile-page__modal-backdrop"
+            aria-label="Close"
+            onClick={closeShareTrip}
+          />
+          <div className="profile-page__share-card">
+            <div className="profile-page__modal-head">
+              <h2 id="share-trip-title" className="profile-page__modal-title">Share with people</h2>
+              <button type="button" className="profile-page__modal-close" onClick={closeShareTrip}>
+                ✕
+              </button>
+            </div>
+            <div className="profile-page__modal-body">
+              <label className="profile-page__modal-label" htmlFor="share-email">Invite by email</label>
+              <div className="profile-page__share-row">
+                <input
+                  id="share-email"
+                  className="profile-page__modal-input"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                  placeholder="name@email.com"
+                />
+                <button
+                  type="button"
+                  className="profile-page__btn profile-page__btn--primary"
+                  onClick={handleInviteCollaborator}
+                  disabled={shareLoading}
+                >
+                  Send invite
+                </button>
+              </div>
+              {shareError && <p className="profile-page__modal-error">{shareError}</p>}
+              <div className="profile-page__share-list">
+                {shareLoading && <p className="profile-page__empty">Loading collaborators…</p>}
+                {!shareLoading && (shareTrip?.collaborators?.length || 0) === 0 && (
+                  <p className="profile-page__empty">No collaborators yet.</p>
+                )}
+                {!shareLoading && (shareTrip?.collaborators?.length || 0) > 0 && (
+                  <ul className="profile-page__collab-list">
+                    {shareTrip.collaborators.map((c) => (
+                      <li key={c.email} className="profile-page__collab-item">
+                        <span className="profile-page__collab-email">{c.email}</span>
+                        <span className="profile-page__collab-role">Can view</span>
+                        <button
+                          type="button"
+                          className="profile-page__collab-remove"
+                          onClick={() => handleRemoveCollaborator(c.email)}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="profile-page__modal-actions">
+              <button type="button" className="profile-page__modal-btn profile-page__modal-btn--ghost" onClick={closeShareTrip}>
+                Close
+              </button>
+              <button type="button" className="profile-page__modal-btn profile-page__modal-btn--primary" onClick={handleCopyShareLink}>
+                Copy planner link
               </button>
             </div>
           </div>
