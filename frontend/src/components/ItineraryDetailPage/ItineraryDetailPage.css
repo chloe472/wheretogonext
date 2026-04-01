@@ -46,7 +46,21 @@
   min-width: 0;
 }
 
+.itinerary-detail__back-btn {
+  position: absolute;
+  top: 0;
+  left: -92px;
+  display: inline-flex;
+  margin: 0;
+  z-index: 2;
+}
+
+.itinerary-detail__back-btn:hover {
+  background: #4f3d34;
+}
+
 .itinerary-detail__hero {
+  position: relative;
   margin-bottom: 1.5rem;
 }
 
@@ -56,6 +70,13 @@
   font-weight: 700;
   line-height: 1.25;
   color: var(--wtg-primary, #44403c);
+}
+
+@media (max-width: 640px) {
+  .itinerary-detail__back-btn {
+    position: static;
+    margin: 0 0 0.9rem;
+  }
 }
 
 .itinerary-detail__meta-row {
@@ -363,6 +384,17 @@
   gap: 0.5rem;
 }
 
+.itinerary-detail__stop-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.itinerary-detail__stop-copy {
+  min-width: 0;
+}
+
 .itinerary-detail__stop-name {
   margin: 0;
   font-size: 1rem;
@@ -396,7 +428,7 @@
   margin-top: 0.25rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #78716c;
+  color: #16a34a;
 }
 
 .itinerary-detail__stop-rating,
@@ -404,16 +436,49 @@
 .itinerary-detail__stop-time,
 .itinerary-detail__stop-notes {
   margin: 0.35rem 0 0;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   color: #57534e;
 }
 
+.itinerary-detail__stop-addr,
+.itinerary-detail__stop-time {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.itinerary-detail__stop-addr svg,
+.itinerary-detail__stop-time svg {
+  flex-shrink: 0;
+  color: #57534e;
+}
+
+.itinerary-detail__stop-notes {
+  max-width: 60ch;
+  line-height: 1.55;
+}
+
+.itinerary-detail__stop-media {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .itinerary-detail__stop-thumb {
-  margin-top: 0.5rem;
-  max-width: 200px;
-  max-height: 120px;
-  border-radius: 8px;
+  width: 100%;
+  max-width: 292px;
+  aspect-ratio: 16 / 10;
+  border-radius: 14px;
   object-fit: cover;
+}
+
+@media (max-width: 900px) {
+  .itinerary-detail__stop-main {
+    grid-template-columns: 1fr;
+  }
+
+  .itinerary-detail__stop-media {
+    justify-content: flex-start;
+  }
 }
 
 .itinerary-detail__composer {

@@ -154,7 +154,6 @@ export default function SearchResultsPage({ user, onLogout }) {
               </ul>
             )}
           </form>
-          <p className="search-results__hero-hint">Search by your most recent destination</p>
           <div className="search-results__tags">
             {RECENT_DESTINATIONS.map((dest) => {
               const isActive = q.trim().toLowerCase() === dest.toLowerCase();

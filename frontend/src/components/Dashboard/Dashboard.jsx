@@ -17,6 +17,7 @@ import {
 } from '../../api/itinerariesApi';
 import { fetchDiscoveryData } from '../../api/discoveryApi';
 import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
+import SetCoverImageModal from './SetCoverImageModal';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import {
@@ -52,16 +53,16 @@ function mapItineraryToTripRow(raw) {
 }
 
 function resolveDashboardTripImage(trip, destinationCover = '') {
-  const primary = String(trip?.image || '').trim();
   const cover0 = String(trip?.raw?.coverImages?.[0] || '').trim();
+  const primary = String(trip?.image || '').trim();
   const destFallback = getCoverImageForDestination(trip?.raw?.destination, trip?.raw?.locations);
-  if (primary) {
-    const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
-    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
-  }
   if (cover0) {
     const resolvedCover = resolveImageUrl(cover0, trip?.title || 'Trip cover', 'trip');
     if (resolvedCover && !resolvedCover.startsWith('data:image/')) return resolvedCover;
+  }
+  if (primary) {
+    const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
+    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
   }
   if (destinationCover) return destinationCover;
   return destFallback;
@@ -219,6 +220,7 @@ export default function Dashboard({ user, onLogout }) {
   const [myTrips, setMyTrips] = useState([]);
   const [myTripsLoading, setMyTripsLoading] = useState(true);
   const [publishTarget, setPublishTarget] = useState(null);
+  const [coverImageTarget, setCoverImageTarget] = useState(null);
   /** Raw itinerary doc while rename modal is open */
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
@@ -294,7 +296,6 @@ export default function Dashboard({ user, onLogout }) {
           __sharedWithMe: true,
         }));
 
-        // Merge by id so "mine" wins if a trip appears in both sets.
         const mergedById = new Map();
         [...shared, ...mine].forEach((row) => {
           const key = String(row?._id ?? row?.id ?? '');
@@ -317,6 +318,27 @@ export default function Dashboard({ user, onLogout }) {
       cancelled = true;
     };
   }, []);
+
+  const refreshTrips = async () => {
+    const [mineRows, sharedRows] = await Promise.all([
+      fetchMyItineraries(),
+      fetchSharedWithMeItineraries(),
+    ]);
+    const mine = Array.isArray(mineRows) ? mineRows : [];
+    const shared = (Array.isArray(sharedRows) ? sharedRows : []).map((row) => ({
+      ...row,
+      __sharedWithMe: true,
+    }));
+    const mergedById = new Map();
+    [...shared, ...mine].forEach((row) => {
+      const key = String(row?._id ?? row?.id ?? '');
+      if (key) mergedById.set(key, row);
+    });
+    const merged = Array.from(mergedById.values()).sort(
+      (a, b) => new Date(b?.updatedAt || b?.createdAt || 0) - new Date(a?.updatedAt || a?.createdAt || 0),
+    );
+    setMyTrips(merged);
+  };
 
   const applyRenameFromModal = async () => {
     const title = renameTitleDraft.trim();
@@ -372,7 +394,36 @@ export default function Dashboard({ user, onLogout }) {
       return;
     }
     if (action === 'publish') {
-      setPublishTarget(rawItinerary);
+      if (rawItinerary?.published && rawItinerary?.visibility === 'public') {
+        (async () => {
+          try {
+            const updated = await updateItinerary(String(rawItinerary?._id ?? rawItinerary?.id ?? ''), {
+              published: false,
+              visibility: 'private',
+              publishedAt: null,
+            });
+            const updatedId = String(updated?._id ?? updated?.id ?? rawItinerary?._id ?? rawItinerary?.id);
+            setMyTrips((prev) => prev.map((trip) => (
+              String(trip?._id ?? trip?.id ?? '') === updatedId
+                ? { ...trip, ...updated }
+                : trip
+            )));
+            toast.success('Trip moved to private');
+          } catch (e) {
+            toast.error(e?.message || 'Could not make this trip private.');
+          }
+        })();
+        return;
+      }
+      setPublishTarget({ itinerary: rawItinerary, initialStep: 1, mode: 'publish' });
+      return;
+    }
+    if (action === 'edit-published-content') {
+      setPublishTarget({ itinerary: rawItinerary, initialStep: 1, mode: 'edit' });
+      return;
+    }
+    if (action === 'set-cover-page') {
+      setCoverImageTarget(rawItinerary);
       return;
     }
     if (action === 'rename') {
@@ -650,6 +701,11 @@ export default function Dashboard({ user, onLogout }) {
                         src={resolveDashboardTripImage(trip, destinationCoverByQuery[getTripDestinationQuery(trip.raw)] || '')}
                         alt=""
                         className="trip-card__image"
+                        onError={(e) => {
+                          const fallbackSrc = getCoverImageForDestination(trip.raw?.destination, trip.raw?.locations);
+                          if (!fallbackSrc || e.currentTarget.src === fallbackSrc) return;
+                          e.currentTarget.src = fallbackSrc;
+                        }}
                       />
                     </div>
                     {trip.flagImage?.url ? (
@@ -701,8 +757,34 @@ export default function Dashboard({ user, onLogout }) {
                               handleItineraryOwnerMenu(trip.raw, 'publish');
                             }}
                           >
-                            {trip.isPublishedToCommunity ? 'Republish to Explore' : 'Publish to Explore'}
+                            {trip.isPublishedToCommunity ? 'Make private' : 'Publish to Explore'}
                           </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="trip-card__owner-option"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenOwnerMenuId(null);
+                              handleItineraryOwnerMenu(trip.raw, 'set-cover-page');
+                            }}
+                          >
+                            Set cover page
+                          </button>
+                          {trip.isPublishedToCommunity ? (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="trip-card__owner-option"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenOwnerMenuId(null);
+                                handleItineraryOwnerMenu(trip.raw, 'edit-published-content');
+                              }}
+                            >
+                              Edit published content
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             role="menuitem"
@@ -978,24 +1060,30 @@ export default function Dashboard({ user, onLogout }) {
       <PublishItineraryModal
         open={Boolean(publishTarget)}
         onClose={() => setPublishTarget(null)}
-        itinerary={publishTarget}
+        itinerary={publishTarget?.itinerary || null}
+        initialStep={publishTarget?.initialStep || 1}
+        mode={publishTarget?.mode || 'publish'}
         onPublished={async () => {
           try {
-            const [mineRows, sharedRows] = await Promise.all([
-              fetchMyItineraries(),
-              fetchSharedWithMeItineraries(),
-            ]);
-            const mine = Array.isArray(mineRows) ? mineRows : [];
-            const shared = (Array.isArray(sharedRows) ? sharedRows : []).map((row) => ({
-              ...row,
-              __sharedWithMe: true,
-            }));
-            const mergedById = new Map();
-            [...shared, ...mine].forEach((row) => {
-              const key = String(row?._id ?? row?.id ?? '');
-              if (key) mergedById.set(key, row);
-            });
-            setMyTrips(Array.from(mergedById.values()));
+            await refreshTrips();
+          } catch {
+            /* ignore */
+          }
+        }}
+      />
+      <SetCoverImageModal
+        open={Boolean(coverImageTarget)}
+        itinerary={coverImageTarget}
+        onClose={() => setCoverImageTarget(null)}
+        onSaved={async (updated) => {
+          const updatedId = String(updated?._id ?? updated?.id ?? coverImageTarget?._id ?? coverImageTarget?.id ?? '');
+          setMyTrips((prev) => prev.map((trip) => (
+            String(trip?._id ?? trip?.id ?? '') === updatedId
+              ? { ...trip, ...updated }
+              : trip
+          )));
+          try {
+            await refreshTrips();
           } catch {
             /* ignore */
           }
