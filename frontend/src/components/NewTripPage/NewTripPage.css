@@ -10,15 +10,24 @@
 }
 
 .new-trip__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  padding: 0.68rem 1.1rem;
   font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--wtg-text);
+  font-weight: 600;
+  color: #faf8f5;
+  background: var(--wtg-primary);
+  border-radius: 10px;
   text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .new-trip__back:hover {
-  color: var(--wtg-primary);
-  text-decoration: underline;
+  color: #faf8f5;
+  background: #6b5344;
+  text-decoration: none;
 }
 
 .new-trip__main {
