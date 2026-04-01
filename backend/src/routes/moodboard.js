@@ -80,7 +80,9 @@ router.post('/trip/:tripId/folder/:folderId/image', requireAuth, async (req, res
       { $push: { 'folders.$.images': { url } } },
       { new: true }
     );
-    res.json(moodboard.folders.find(f => f._id.toString() === folderId).images);
+    const folder = moodboard.folders.find(f => f._id.toString() === folderId);
+    const newImage = folder.images[folder.images.length - 1];
+    res.status(201).json(newImage);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to add image' });
