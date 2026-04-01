@@ -353,6 +353,12 @@
   gap: 0.5rem;
 }
 
+
+.profile-page__incoming-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .profile-page__btn {
   display: inline-flex;
   align-items: center;
@@ -451,6 +457,89 @@
 
 .profile-page__trip-grid .trip-card__status-btn {
   pointer-events: none;
+}
+
+.profile-page__trip-grid .trip-card__share-btn {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  cursor: pointer;
+  z-index: 5;
+}
+
+.profile-page__trip-grid .trip-card__share-btn:hover {
+  background: #fff;
+}
+
+.profile-page__share-card {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  background: var(--wtg-surface);
+  border-radius: 18px;
+  padding: 1.25rem 1.5rem;
+  z-index: 31;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(61, 52, 40, 0.35);
+}
+
+.profile-page__share-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-page__share-list {
+  margin-top: 1rem;
+}
+
+.profile-page__collab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.profile-page__collab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  background: var(--wtg-surface);
+}
+
+.profile-page__collab-email {
+  font-weight: 600;
+  color: var(--wtg-text);
+}
+
+.profile-page__collab-role {
+  font-size: 0.8rem;
+  color: var(--wtg-text-muted);
+  margin-left: auto;
+}
+
+.profile-page__collab-remove {
+  border: none;
+  background: none;
+  color: #a04535;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 
