@@ -127,7 +127,7 @@ async function findRequestStatus(userId, viewerId) {
     .lean();
   if (!req) return { status: 'none' };
   if (String(req.from) === String(viewerId)) return { status: 'outgoing' };
-  return { status: 'incoming' };
+  return { status: 'incoming', requestId: String(req._id) };
 }
 
 async function buildProfile({ userId, includePrivateTrips, includeEmail, viewerId }) {
@@ -163,6 +163,7 @@ async function buildProfile({ userId, includePrivateTrips, includeEmail, viewerI
     viewer: {
       isFriend,
       requestStatus: requestStatus.status,
+      requestId: requestStatus.requestId || null,
     },
   };
 }
