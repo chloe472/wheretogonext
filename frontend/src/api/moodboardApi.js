@@ -80,6 +80,7 @@ export async function addMoodboardImage(tripId, folderId, url) {
     body: JSON.stringify({ url }),
   });
   const data = await parseResponse(res);
+  if (Array.isArray(data)) return normalizeImage(data[data.length - 1]);
   return normalizeImage(data);
 }
 

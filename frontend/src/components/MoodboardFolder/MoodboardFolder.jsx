@@ -1,172 +1,45 @@
-import './MoodboardFolder.css';
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from 'react-router-dom';
-import {
-  fetchMoodboardFolder,
-  addMoodboardImage,
-  deleteMoodboardImage,
-  reactToMoodboardImage
-} from '../../api/moodboardApi';
-import { fetchItineraryById } from '../../api/itinerariesApi';
+import './styles/moodboard-folder-shell.css';
 import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
+import { useMoodboardFolder } from './hooks';
+import {
+  MoodboardPin,
+  MoodboardFolderHeader,
+  MoodboardAiModal,
+  MoodboardUrlModal,
+  MoodboardDeleteImageModal,
+} from './components';
 
 export default function MoodboardFolder({ user }) {
-  const { tripId, folderId } = useParams();
-  const navigate = useNavigate();
+  const {
+    tripId,
+    folderId,
+    trip,
+    folder,
+    images,
+    reactions,
+    loading,
+    error,
+    urlInput,
+    setUrlInput,
+    showUrlModal,
+    setShowUrlModal,
+    showDeleteModal,
+    setShowDeleteModal,
+    currentImageIdx,
+    setCurrentImageIdx,
+    aiResult,
+    showAiModal,
+    setShowAiModal,
+    aiLoading,
+    handleEmojiClick,
+    handleDeleteImage,
+    handleAddUrl,
+    handleFileUpload,
+    handleAnalyzeMoodboard,
+    addToItinerary,
+    navigate,
+  } = useMoodboardFolder(user);
 
-  const [trip, setTrip] = useState(null);
-  const [folder, setFolder] = useState(null);
-  const [images, setImages] = useState([]);
-  const [reactions, setReactions] = useState({});
-  const [urlInput, setUrlInput] = useState("");
-  const [showUrlModal, setShowUrlModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [currentImageIdx, setCurrentImageIdx] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  // Load folder and trip
-  useEffect(() => {
-    const loadFolder = async () => {
-      setLoading(true);
-      try {
-        const [folderData, tripData] = await Promise.all([
-          fetchMoodboardFolder(tripId, folderId),
-          fetchItineraryById(tripId)
-        ]);
-
-        setFolder(folderData);
-        setImages(folderData.images || []);
-        setTrip(tripData);
-
-        // Initialize reactions
-        const initReactions = {};
-        (folderData.images || []).forEach((img, idx) => {
-          const pinId = folderId + "-" + idx;
-          initReactions[pinId] = { ...img.reactions };
-        });
-        setReactions(initReactions);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load folder");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (tripId && folderId) loadFolder();
-  }, [tripId, folderId]);
-
-  // Emoji click
-  const handleEmojiClick = async (pinId, emoji, imageId) => {
-    if (!user?.name) return;
-
-    setReactions(prev => {
-      const current = prev[pinId] || {};
-      const reactedUsers = Array.isArray(current[emoji]) ? current[emoji] : [];
-      const alreadyReacted = reactedUsers.includes(user.name);
-      const updatedUsers = alreadyReacted
-        ? reactedUsers.filter(u => u !== user.name)
-        : [...reactedUsers, user.name];
-
-      return { ...prev, [pinId]: { ...current, [emoji]: updatedUsers } };
-    });
-
-    try {
-      await reactToMoodboardImage(tripId, folderId, imageId, emoji, user.name);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to update reaction on server.");
-    }
-  };
-
-  // Delete image
-  const handleDeleteImage = async () => {
-    if (currentImageIdx === null) return;
-    const imageToDelete = images[currentImageIdx];
-    try {
-      const updatedImages = await deleteMoodboardImage(tripId, folderId, imageToDelete.id);
-      setImages(updatedImages);
-      setCurrentImageIdx(null);
-      setShowDeleteModal(false);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete image.");
-    }
-  };
-
-  // Add from URL
-  const handleAddUrl = async () => {
-    if (!urlInput.trim()) return;
-    try {
-      const newImage = await addMoodboardImage(tripId, folderId, urlInput.trim());
-      setImages(prev => [...prev, newImage]);
-      setUrlInput("");
-      setShowUrlModal(false);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to add image.");
-    }
-  };
-
-  // Upload files
-  const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    for (let file of files) {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        try {
-          const newImage = await addMoodboardImage(tripId, folderId, ev.target.result);
-          setImages(prev => [...prev, newImage]);
-        } catch (err) {
-          console.error(err);
-          alert("Failed to upload image.");
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Analyze Moodboard
-  const [aiResult, setAiResult] = useState(null);
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-
-  const HandleAnalyzeMoodboard = async () => {
-    if (images.length === 0) return alert("No images to analyze!");
-      setAiLoading(true);
-      setAiResult(null);
-      setShowAiModal(true);
-
-    try {
-      const res = await fetch("/api/moodboard-analysis/analyze-moodboard", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ images }),
-      });
-
-      const data = await res.json();
-
-      setAiResult(data);
-      setShowAiModal(true);
-
-    } catch (err) {
-      console.error(err);
-      alert("AI failed");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  // Add to itinerary
-  const addToItinerary = (place) => {
-    navigate(`/trip/${tripId}`, {
-      state: { aiPlaces: [place] },
-    });
-  };
-    
   if (loading) return <div className="moodboard-loading">Loading folder…</div>;
   if (error) return <div className="moodboard-error">{error}</div>;
 
@@ -181,141 +54,69 @@ export default function MoodboardFolder({ user }) {
         />
       )}
 
-      {showAiModal && (
-        <div className="ai-modal-overlay" onClick={() => !aiLoading && setShowAiModal(false)}>
-          <div className="ai-modal-content" onClick={e => e.stopPropagation()}>
-            <button
-              className="close-btn"
-              onClick={() => !aiLoading && setShowAiModal(false)}
-              title={aiLoading ? "Wait for analysis..." : "Close"}
-            >
-              ✖
-            </button>
-
-            {aiLoading ? (
-              <div className="ai-loading">
-                <div className="ai-loading-spinner" aria-hidden="true" />
-                <p>Analyzing Moodboard...</p>
-              </div>
-            ) : (
-              aiResult && (
-                <>
-                  <h2>Theme: {aiResult.theme}</h2>
-                  {aiResult.places.map((place, i) => (
-                    <div key={i} className="ai-place-card">
-                      {place.image ? (
-                        <img
-                          src={place.image}
-                          alt={place.name}
-                          style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px' }}
-                          loading="lazy"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      ) : null}
-                      <h3>{place.name}</h3>
-                      <p>{place.description}</p>
-                      <p><em>{place.location}</em></p>
-                      <button onClick={() => addToItinerary(place)}>Add to Trip</button>
-                    </div>
-                  ))}
-                </>
-              )
-            )}
-          </div>
-        </div>
-      )}
+      <MoodboardAiModal
+        show={showAiModal}
+        aiLoading={aiLoading}
+        aiResult={aiResult}
+        onClose={() => setShowAiModal(false)}
+        onAddToItinerary={addToItinerary}
+      />
 
       <div className="container">
-        <div className="folder-header-row">
-          <div className="folder-left">
-            <button className="back-btn" onClick={() => navigate(`/trip/${tripId}/moodboard`)}>&lt;</button>
-            <div className="folder-title">
-              <h1>{folder?.name}</h1>
-              <p>{images.length} images</p>
-            </div>
-          </div>
+        <MoodboardFolderHeader
+          folder={folder}
+          images={images}
+          tripId={tripId}
+          onAnalyze={handleAnalyzeMoodboard}
+          onAddUrl={() => setShowUrlModal(true)}
+          navigate={navigate}
+        />
 
-          <div className="folder-right">
-            <button onClick={HandleAnalyzeMoodboard} className="analyze-btn">
-              ✨ AI Analyze
-            </button>
-
-            <div className="dropdown">
-              <button className="upload-dropdown-btn">Add Image ▾</button>
-              <div className="dropdown-content">
-                <button onClick={() => document.getElementById("file-input").click()}>Upload from Device</button>
-                <button onClick={() => setShowUrlModal(true)}>Add from URL</button>
-              </div>
-            </div>
-            <input type="file" id="file-input" accept="image/*" multiple hidden onChange={handleFileUpload} />
-          </div>
-        </div>
+        <input
+          type="file"
+          id="file-input"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={handleFileUpload}
+        />
 
         <div className="pinterest">
           {images.map((img, idx) => {
-            const pinId = folderId + "-" + idx;
+            const pinId = folderId + '-' + idx;
             return (
-              <div className="pin" key={pinId}>
-                <img src={img.url} alt={`img-${idx}`} />
-                <div className="emoji-delete-row">
-                  <div className="emoji-popup">
-                    {["❤️","😍","🔥"].map(emoji => (
-                      <span
-                        key={emoji}
-                        onClick={() => handleEmojiClick(pinId, emoji, img.id)}
-                        title={(reactions[pinId]?.[emoji] || []).join(", ")}
-                        style={{
-                          cursor: "pointer",
-                          fontWeight: (reactions[pinId]?.[emoji] || []).includes(user?.name) ? "bold" : "normal"
-                        }}
-                      >{emoji}</span>
-                    ))}
-                  </div>
-                  <button
-                    className="pin-delete-btn"
-                    onClick={() => { setCurrentImageIdx(idx); setShowDeleteModal(true); }}
-                    title="Delete image"
-                  >✕</button>
-                </div>
-
-                <div className="pin-reactions">
-                  {Object.entries(reactions[pinId] || {})
-                    .filter(([emoji, users]) => users.length > 0)
-                    .map(([emoji, users]) => <span key={emoji} title={users.join(", ")}>{emoji} {users.length}</span>)}
-                </div>
-              </div>
+              <MoodboardPin
+                key={pinId}
+                img={img}
+                idx={idx}
+                pinId={pinId}
+                reactions={reactions}
+                user={user}
+                onEmojiClick={handleEmojiClick}
+                onDeleteClick={() => {
+                  setCurrentImageIdx(idx);
+                  setShowDeleteModal(true);
+                }}
+              />
             );
           })}
         </div>
 
-        {showUrlModal && (
-          <div className="url">
-            <div className="create-folder">
-              <h2>Add from URL</h2>
-              <input type="text" value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://example.com/image.jpg" />
-              <div className="folder-actions">
-                <button onClick={() => setShowUrlModal(false)}>Cancel</button>
-                <button onClick={handleAddUrl}>Add URL</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <MoodboardUrlModal
+          show={showUrlModal}
+          urlInput={urlInput}
+          onChange={setUrlInput}
+          onCancel={() => setShowUrlModal(false)}
+          onAdd={handleAddUrl}
+        />
 
-        {showDeleteModal && currentImageIdx !== null && (
-          <div className="url">
-            <div className="create-folder">
-              <h2>Delete Image?</h2>
-              <p>Are you sure you want to delete this image?</p>
-              <div className="folder-actions">
-                <button onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button onClick={handleDeleteImage}>Delete</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <MoodboardDeleteImageModal
+          show={showDeleteModal && currentImageIdx !== null}
+          onCancel={() => setShowDeleteModal(false)}
+          onDelete={handleDeleteImage}
+        />
       </div>
     </div>
   );
 }
+
