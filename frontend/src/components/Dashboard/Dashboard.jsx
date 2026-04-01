@@ -223,6 +223,7 @@ export default function Dashboard({ user, onLogout }) {
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const [dialog, setDialog] = useState(DIALOG_CLOSED);
+  const [sidebarModalType, setSidebarModalType] = useState(null);
 
   const tripRows = useMemo(() => myTrips.map(mapItineraryToTripRow), [myTrips]);
 
@@ -499,7 +500,7 @@ export default function Dashboard({ user, onLogout }) {
     return tripRows;
   }, [tripRows, tripFilter, todayStr]);
 
-  const comingUpTrips = useMemo(() => {
+  const allComingUpTrips = useMemo(() => {
     const todayDate = new Date(`${todayStr}T00:00:00`);
     return tripRows
       .map((trip) => {
@@ -521,10 +522,11 @@ export default function Dashboard({ user, onLogout }) {
       })
       .filter(Boolean)
       .sort((a, b) => a.ts - b.ts)
-      .slice(0, 3);
   }, [tripRows, todayStr]);
 
-  const recentActivity = useMemo(() => {
+  const comingUpTrips = allComingUpTrips.slice(0, 3);
+
+  const allRecentActivity = useMemo(() => {
     const now = new Date();
     return tripRows
       .map((trip) => {
@@ -550,8 +552,12 @@ export default function Dashboard({ user, onLogout }) {
       })
       .filter(Boolean)
       .sort((a, b) => b.ts - a.ts)
-      .slice(0, 5);
   }, [tripRows]);
+
+  const recentActivity = allRecentActivity.slice(0, 5);
+  const isSidebarModalOpen = sidebarModalType === 'coming-up' || sidebarModalType === 'recent-activity';
+  const sidebarModalTitle = sidebarModalType === 'recent-activity' ? 'Recent Activity' : 'Coming Up';
+  const sidebarModalItems = sidebarModalType === 'recent-activity' ? allRecentActivity : allComingUpTrips;
 
   return (
     <div className="dashboard">
@@ -798,22 +804,34 @@ export default function Dashboard({ user, onLogout }) {
             {comingUpTrips.length === 0 ? (
               <p className="dashboard__trips-empty">No upcoming trips yet.</p>
             ) : (
-              <ul className="sidebar-block__list">
-                {comingUpTrips.map((item) => (
-                  <li key={item.id} className="coming-up-item">
-                    <div className="coming-up-item__date">
-                      <span className="coming-up-item__day">{item.day}</span>
-                      <span className="coming-up-item__month">{item.month}</span>
-                    </div>
-                    <div className="coming-up-item__info">
-                      <span className="coming-up-item__name">{item.name}</span>
-                      <span className="coming-up-item__label">
-                        {item.departureDateLabel} · {item.departureDistanceLabel}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="sidebar-block__list">
+                  {comingUpTrips.map((item) => (
+                    <li key={item.id} className="coming-up-item">
+                      <div className="coming-up-item__date">
+                        <span className="coming-up-item__day">{item.day}</span>
+                        <span className="coming-up-item__month">{item.month}</span>
+                      </div>
+                      <div className="coming-up-item__info">
+                        <span className="coming-up-item__name">{item.name}</span>
+                        <span className="coming-up-item__label">
+                          {item.departureDateLabel} · {item.departureDistanceLabel}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                {allComingUpTrips.length > 3 && (
+                  <button
+                    type="button"
+                    className="dashboard__trips-show-more"
+                    onClick={() => setSidebarModalType('coming-up')}
+                  >
+                    View all {allComingUpTrips.length} trips →
+                  </button>
+                )}
+              </>
             )}
           </section>
           <section className="sidebar-block">
@@ -824,18 +842,77 @@ export default function Dashboard({ user, onLogout }) {
             {recentActivity.length === 0 ? (
               <p className="dashboard__trips-empty">No recent activity yet.</p>
             ) : (
-              <ul className="sidebar-block__list">
-                {recentActivity.map((item) => (
-                  <li key={item.id} className="activity-item">
-                    <span className="activity-item__text">{item.text}</span>
-                    <span className="activity-item__time">{item.timeLabel}</span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="sidebar-block__list">
+                  {recentActivity.map((item) => (
+                    <li key={item.id} className="activity-item">
+                      <span className="activity-item__text">{item.text}</span>
+                      <span className="activity-item__time">{item.timeLabel}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {allRecentActivity.length > 5 && (
+                  <button
+                    type="button"
+                    className="dashboard__trips-show-more"
+                    onClick={() => setSidebarModalType('recent-activity')}
+                  >
+                    View all {allRecentActivity.length} activities →
+                  </button>
+                )}
+              </>
             )}
           </section>
         </aside>
       </div>
+
+      {isSidebarModalOpen && (
+        <>
+          <button
+            type="button"
+            className="dashboard__rename-backdrop"
+            aria-label="Close list dialog"
+            onClick={() => setSidebarModalType(null)}
+          />
+          <div
+            className="dashboard__sidebar-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-sidebar-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dashboard__sidebar-modal-header">
+              <h3 id="dashboard-sidebar-modal-title" className="sidebar-block__title">
+                {sidebarModalType === 'recent-activity' ? <FileText size={18} aria-hidden /> : <Clock size={18} aria-hidden />}
+                {sidebarModalTitle}
+              </h3>
+              <button
+                type="button"
+                className="dashboard__sidebar-modal-close"
+                onClick={() => setSidebarModalType(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <ul className="sidebar-block__list dashboard__sidebar-modal-list">
+              {sidebarModalItems.map((item) => (
+                <li key={item.id} className="dashboard__sidebar-modal-item">
+                  <span className="dashboard__sidebar-modal-item-title">
+                    {sidebarModalType === 'recent-activity' ? item.text : item.name}
+                  </span>
+                  <span className="dashboard__sidebar-modal-item-meta">
+                    {sidebarModalType === 'recent-activity'
+                      ? item.timeLabel
+                      : `${item.departureDateLabel} · ${item.departureDistanceLabel}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
 
       {renameTarget && (
         <>
