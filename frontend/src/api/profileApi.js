@@ -86,6 +86,17 @@ export async function fetchOutgoingFriendRequests() {
   return handleJsonResponse(res);
 }
 
+export async function lookupUserByEmail(email, { signal } = {}) {
+  const query = new URLSearchParams();
+  query.set('email', String(email || '').trim());
+  const res = await fetch(`${apiUrl('/api/profile/lookup')}?${query.toString()}`, {
+    method: 'GET',
+    headers: getBearerAuthHeaders(),
+    signal,
+  });
+  return handleJsonResponse(res);
+}
+
 export async function acceptFriendRequest(requestId) {
   const res = await fetch(`${apiUrl('/api/profile/requests')}/${encodeURIComponent(requestId)}/accept`, {
     method: 'POST',

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../api/itinerariesApi';
 import { fetchCitySuggestions } from '../../api/locationsApi';
+import { lookupUserByEmail } from '../../api/profileApi';
 import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
@@ -124,9 +125,13 @@ export default function NewTripPage({ user, onLogout }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitedEmails, setInvitedEmails] = useState([]);
+  const [inviteError, setInviteError] = useState('');
+  const [validatingInvite, setValidatingInvite] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const whereRef = useRef(null);
+
+  const myEmail = String(user?.email || '').trim().toLowerCase();
 
   const totalTripDays = getTripDayCount(startDate, endDate);
   const defaultCityDayRanges = buildDefaultCityDayRanges(selectedLocations, totalTripDays || 1);
@@ -292,6 +297,33 @@ export default function NewTripPage({ user, onLogout }) {
     }, 220);
   };
 
+  const handleAddInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) {
+      setInviteError('');
+      return;
+    }
+    if (email === myEmail) {
+      setInviteError('You cannot add your own email as a tripmate.');
+      return;
+    }
+    if (invitedEmails.includes(email)) {
+      setInviteError('That tripmate has already been added.');
+      return;
+    }
+    setValidatingInvite(true);
+    setInviteError('');
+    try {
+      await lookupUserByEmail(email);
+      setInvitedEmails((prev) => [...prev, email]);
+      setInviteEmail('');
+    } catch (err) {
+      setInviteError(err?.message || 'Could not add that tripmate.');
+    } finally {
+      setValidatingInvite(false);
+    }
+  };
+
   const handleStartPlanning = async (e) => {
     e.preventDefault();
     setDatesError('');
@@ -422,7 +454,7 @@ export default function NewTripPage({ user, onLogout }) {
     <div className="new-trip">
       <header className="new-trip__header">
         <Link to="/" className="new-trip__back" aria-label="Back to My Trips" onClick={handleBackToTrips}>
-          ← My Trips
+          Back
         </Link>
       </header>
 
@@ -651,15 +683,14 @@ export default function NewTripPage({ user, onLogout }) {
                     className="new-trip__input"
                     placeholder="e.g. friend@example.com"
                     value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value);
+                      if (inviteError) setInviteError('');
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        const email = inviteEmail.trim().toLowerCase();
-                        if (email && !invitedEmails.includes(email)) {
-                          setInvitedEmails((prev) => [...prev, email]);
-                          setInviteEmail('');
-                        }
+                        handleAddInvite();
                       }
                     }}
                     autoComplete="email"
@@ -667,17 +698,15 @@ export default function NewTripPage({ user, onLogout }) {
                   <button
                     type="button"
                     className="new-trip__invite-add-btn"
-                    onClick={() => {
-                      const email = inviteEmail.trim().toLowerCase();
-                      if (email && !invitedEmails.includes(email)) {
-                        setInvitedEmails((prev) => [...prev, email]);
-                        setInviteEmail('');
-                      }
-                    }}
+                    onClick={handleAddInvite}
+                    disabled={validatingInvite}
                   >
-                    Add
+                    {validatingInvite ? 'Adding...' : 'Add'}
                   </button>
                 </div>
+                {inviteError ? (
+                  <p className="new-trip__error" role="alert">{inviteError}</p>
+                ) : null}
                 {invitedEmails.length > 0 && (
                   <ul className="new-trip__invited-list">
                     {invitedEmails.map((email) => (

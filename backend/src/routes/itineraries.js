@@ -353,6 +353,50 @@ async function attachCollaboratorUserIds(collaborators) {
   });
 }
 
+async function validateCollaborators(collaborators, creatorEmail = '', creatorUserId = '') {
+  const list = Array.isArray(collaborators) ? collaborators : [];
+  if (list.length === 0) return { ok: true };
+
+  const normalizedCreatorEmail = String(creatorEmail || '').trim().toLowerCase();
+  const normalizedCreatorUserId = String(creatorUserId || '').trim();
+
+  const lookupEmails = Array.from(
+    new Set(
+      list
+        .map((c) => String(c?.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  const matchedUsers = lookupEmails.length > 0
+    ? await User.find({ email: { $in: lookupEmails } }).select('_id email').lean()
+    : [];
+  const byEmail = new Map(matchedUsers.map((u) => [String(u.email || '').trim().toLowerCase(), String(u._id)]));
+
+  for (const collaborator of list) {
+    const email = String(collaborator?.email || '').trim().toLowerCase();
+    const userId = collaborator?.userId != null ? String(collaborator.userId) : '';
+
+    if (email && normalizedCreatorEmail && email === normalizedCreatorEmail) {
+      return { ok: false, error: 'You cannot invite your own email as a tripmate.' };
+    }
+    if (userId && normalizedCreatorUserId && userId === normalizedCreatorUserId) {
+      return { ok: false, error: 'You cannot invite yourself as a tripmate.' };
+    }
+    if (email && !byEmail.has(email) && !userId) {
+      return { ok: false, error: `No account exists for ${email}.` };
+    }
+    if (email) {
+      const matchedId = byEmail.get(email);
+      if (matchedId && normalizedCreatorUserId && matchedId === normalizedCreatorUserId) {
+        return { ok: false, error: 'You cannot invite your own email as a tripmate.' };
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
 async function enrichCollaboratorsInItineraries(docs) {
   const list = Array.isArray(docs) ? docs : docs ? [docs] : [];
   if (list.length === 0) return Array.isArray(docs) ? [] : docs;
@@ -918,9 +962,17 @@ router.post('/', requireAuth, async (req, res) => {
       daysFinal = computeDaysFromPlaces(placesFinal);
     }
 
-    const collaborators = await attachCollaboratorUserIds(
-      normalizeCollaborators(req.body?.collaborators)
+    const creator = await User.findById(req.userId).select('email').lean();
+    const collaboratorsNormalized = normalizeCollaborators(req.body?.collaborators);
+    const collaboratorValidation = await validateCollaborators(
+      collaboratorsNormalized,
+      creator?.email || '',
+      String(req.userId)
     );
+    if (!collaboratorValidation.ok) {
+      return res.status(400).json({ error: collaboratorValidation.error });
+    }
+    const collaborators = await attachCollaboratorUserIds(collaboratorsNormalized);
 
     const collaboratorIds = await collaboratorRecipientIds(collaborators, String(req.userId));
 
@@ -1035,9 +1087,17 @@ router.put('/:id', requireAuth, async (req, res) => {
       existing.travelers = Math.max(1, Number(body.travelers) || 1);
     }
     if (body.collaborators != null) {
-      existing.collaborators = await attachCollaboratorUserIds(
-        normalizeCollaborators(body.collaborators)
+      const collaboratorsNormalized = normalizeCollaborators(body.collaborators);
+      const creator = await User.findById(req.userId).select('email').lean();
+      const collaboratorValidation = await validateCollaborators(
+        collaboratorsNormalized,
+        creator?.email || '',
+        String(req.userId)
       );
+      if (!collaboratorValidation.ok) {
+        return res.status(400).json({ error: collaboratorValidation.error });
+      }
+      existing.collaborators = await attachCollaboratorUserIds(collaboratorsNormalized);
     }
     if (body.status != null) existing.status = String(body.status);
     if (body.statusClass != null) existing.statusClass = String(body.statusClass);
