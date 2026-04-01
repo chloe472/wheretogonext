@@ -1,3 +1,5 @@
+import '../styles/moodboard-pin.css';
+
 const EMOJIS = ['❤️', '😍', '🔥'];
 
 export default function MoodboardPin({

@@ -1,4 +1,4 @@
-import './MoodboardFolder.css';
+import './styles/moodboard-folder-shell.css';
 import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 import { useMoodboardFolder } from './hooks';
 import {

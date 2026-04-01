@@ -1,0 +1,30 @@
+/* ── Moodboard page shell ───────────────────────────────────── */
+.moodboard-page {
+  font-family: 'Inter', sans-serif;
+  background: var(--wtg-bg, #faf8f5);
+  color: var(--wtg-text, #1c1917);
+  min-height: 100vh;
+  padding-bottom: 2rem;
+}
+
+.moodboard-page .container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.moodboard-loading,
+.moodboard-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.moodboard-error {
+  color: red;
+}

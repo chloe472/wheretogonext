@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import '../styles/moodboard-folder-grid.css';
+import '../styles/moodboard-folder-menu.css';
 import { getCoverImageForDestination } from '../../../data/tripDestinationMeta';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 

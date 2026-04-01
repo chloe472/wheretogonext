@@ -1,3 +1,5 @@
+import '../styles/moodboard-image-modal.css';
+
 export default function MoodboardUrlModal({ show, urlInput, onChange, onCancel, onAdd }) {
   if (!show) return null;
 

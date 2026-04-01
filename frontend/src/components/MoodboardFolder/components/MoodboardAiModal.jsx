@@ -1,3 +1,5 @@
+import '../styles/moodboard-ai-modal.css';
+
 export default function MoodboardAiModal({ show, aiLoading, aiResult, onClose, onAddToItinerary }) {
   if (!show) return null;
 

@@ -1,0 +1,63 @@
+/* ── Add from URL + Delete image modals ─────────────────────── */
+.url {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.create-folder {
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  width: 400px;
+  display: flex;
+  z-index: 9999;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.create-folder h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.create-folder p {
+  font-size: 0.95rem;
+  color: #6b5d4f;
+  margin-top: 0.5rem;
+}
+
+.create-folder input {
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: none;
+  background: #f5f3f0;
+  font-size: 1rem;
+}
+
+.folder-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.folder-actions button {
+  padding: 0.5rem 1.2rem;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+}
+
+.folder-actions button:first-child {
+  background: #e5e5e5;
+}
+
+.folder-actions button:last-child {
+  background: #5c4a3d;
+  color: white;
+}

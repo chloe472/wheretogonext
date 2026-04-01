@@ -1,3 +1,5 @@
+import '../styles/moodboard-image-modal.css';
+
 export default function MoodboardDeleteImageModal({ show, onCancel, onDelete }) {
   if (!show) return null;
 

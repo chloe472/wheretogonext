@@ -1,0 +1,94 @@
+/* ── Folder detail page header ──────────────────────────────── */
+.folder-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 2rem;
+}
+
+.folder-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-btn {
+  font-size: 1.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  color: #5c4a3d;
+}
+
+.folder-title h1 {
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: #5c4a3d;
+  margin-bottom: 0;
+}
+
+.folder-title p {
+  font-size: 0.95rem;
+  color: #6b5d4f;
+}
+
+.folder-right {
+  display: flex;
+  gap: 12px;
+}
+
+/* ── Add Image dropdown ─────────────────────────────────────── */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.upload-dropdown-btn,
+.analyze-btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: #5c4a3d;
+  color: #fff;
+  transition: all 0.15s ease;
+}
+
+.upload-dropdown-btn:hover,
+.analyze-btn:hover {
+  opacity: 0.8;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 40px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 180px;
+  flex-direction: column;
+  z-index: 999;
+}
+
+.dropdown-content button {
+  padding: 0.6rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.dropdown-content button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dropdown:hover .dropdown-content {
+  display: flex;
+}

@@ -1,0 +1,41 @@
+/* ── Folder context menu (three-dot) ────────────────────────── */
+.folder-menu {
+  position: relative;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.menu-btn:hover {
+  color: var(--wtg-primary, #362b24);
+}
+
+.menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.menu-item {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

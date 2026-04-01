@@ -1,3 +1,5 @@
+import '../styles/moodboard-folder-header.css';
+
 export default function MoodboardFolderHeader({
   folder,
   images,
