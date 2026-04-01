@@ -348,6 +348,11 @@
   gap: 0.5rem;
 }
 
+.profile-page__incoming-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .profile-page__btn {
   display: inline-flex;
   align-items: center;
@@ -434,6 +439,18 @@
 
 .profile-page__content {
   padding-top: 1.25rem;
+}
+
+.profile-page__trip-grid {
+  margin-top: 0.5rem;
+}
+
+.profile-page__trip-grid .trip-card {
+  cursor: pointer;
+}
+
+.profile-page__trip-grid .trip-card__status-btn {
+  pointer-events: none;
 }
 
 
@@ -818,38 +835,90 @@
 
 .profile-page__map-card {
   position: relative;
-  min-height: 280px;
+  min-height: 320px;
   border-radius: 18px;
   border: 1px solid var(--wtg-border);
   background: linear-gradient(180deg, #f4eee6 0%, #f8f3ee 60%);
   overflow: hidden;
 }
 
-.profile-page__map-pin {
+.profile-page__map {
+  height: 320px;
+  width: 100%;
+}
+
+.profile-page__map-card .leaflet-container {
+  height: 320px;
+  width: 100%;
+}
+
+.profile-page__map-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--wtg-text-muted);
+  font-size: 0.95rem;
+}
+
+.profile-page__map-empty--overlay {
   position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0;
+}
+
+.profile-page__map-empty--overlay::before {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.profile-page__map-empty--overlay {
+  font-size: 0.95rem;
+  color: var(--wtg-text);
+}
+
+.profile-page__map-empty--overlay > * {
+  position: relative;
+  padding: 0.9rem 1.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--wtg-border);
+  box-shadow: 0 6px 16px rgba(61, 52, 40, 0.08);
+}
+
+.profile-page__leaflet-marker {
+  background: transparent;
+  border: none;
+  z-index: 600;
+}
+
+.profile-page__leaflet-pin {
+  display: block;
   width: 18px;
   height: 18px;
+  background: #d0433c;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 6px 10px rgba(61, 52, 40, 0.3);
+  position: relative;
+}
+
+.profile-page__leaflet-pin::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
   border-radius: 50%;
-  border: 3px solid var(--wtg-surface);
-  box-shadow: 0 4px 12px rgba(61, 52, 40, 0.2);
-}
-
-.profile-page__map-pin--one {
-  top: 40%;
-  left: 30%;
-  background: var(--wtg-primary);
-}
-
-.profile-page__map-pin--two {
-  top: 58%;
-  left: 54%;
-  background: var(--wtg-accent);
-}
-
-.profile-page__map-pin--three {
-  top: 32%;
-  left: 68%;
-  background: #b08968;
+  top: 4px;
+  left: 4px;
 }
 
 .profile-page__friends-list {

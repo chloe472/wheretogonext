@@ -5,7 +5,6 @@ import {
   X,
   Mail,
   Lock,
-  User,
   Eye,
   EyeOff,
   ArrowRight,
@@ -19,10 +18,9 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [loginEmailOrUsername, setLoginEmailOrUsername] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
-  const [signupUsername, setSignupUsername] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
 
@@ -45,8 +43,8 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!loginEmailOrUsername.trim()) {
-      setError('Enter your email or username.');
+    if (!loginEmail.trim()) {
+      setError('Enter your email.');
       return;
     }
     if (!loginPassword) {
@@ -59,7 +57,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          emailOrUsername: loginEmailOrUsername.trim(),
+          email: loginEmail.trim(),
           password: loginPassword,
         }),
       });
@@ -108,7 +106,6 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
           email: signupEmail.trim(),
           password: signupPassword,
           name: signupName.trim() || undefined,
-          username: signupUsername.trim() || undefined,
         }),
       });
       const data = await parseRes(res);
@@ -221,12 +218,12 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
                 <span className="auth-modal__input-wrap">
                   <Mail size={18} className="auth-modal__input-icon" aria-hidden />
                   <input
-                    type="text"
-                    placeholder="Enter your email or username"
+                    type="email"
+                    placeholder="Enter your email"
                     className="auth-modal__input"
-                    value={loginEmailOrUsername}
-                    onChange={(e) => setLoginEmailOrUsername(e.target.value)}
-                    autoComplete="username"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    autoComplete="email"
                   />
                 </span>
               </label>
@@ -295,19 +292,6 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
                     value={signupName}
                     onChange={(e) => setSignupName(e.target.value)}
                     autoComplete="name"
-                  />
-                </span>
-              </label>
-              <label className="auth-modal__label">
-                <span className="auth-modal__input-wrap">
-                  <User size={18} className="auth-modal__input-icon" aria-hidden />
-                  <input
-                    type="text"
-                    placeholder="Enter your username"
-                    className="auth-modal__input"
-                    value={signupUsername}
-                    onChange={(e) => setSignupUsername(e.target.value)}
-                    autoComplete="username"
                   />
                 </span>
               </label>

@@ -98,11 +98,19 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
   };
 
   const getNotificationLink = (n) => {
+    const type = String(n?.type || '');
+    if (type === 'friend_request_received') {
+      const fromId = String(n?.meta?.fromUserId || '').trim();
+      if (fromId) return `/profile/${encodeURIComponent(fromId)}`;
+      return '/profile?tab=friends&section=requests';
+    }
+    if (type === 'friend_request_accepted') {
+      const accepterId = String(n?.meta?.acceptedByUserId || '').trim();
+      if (accepterId) return `/profile/${encodeURIComponent(accepterId)}`;
+      return '/profile?tab=friends&section=friends';
+    }
     const direct = String(n?.link || '').trim();
     if (direct) return direct;
-    const type = String(n?.type || '');
-    if (type === 'friend_request_received') return '/profile?tab=friends&section=requests';
-    if (type === 'friend_request_accepted') return '/profile?tab=friends&section=friends';
     if (type === 'itinerary_commented' && n?.meta?.itineraryId) {
       return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}?tab=comments`;
     }
