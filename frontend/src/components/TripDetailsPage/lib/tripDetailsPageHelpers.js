@@ -155,7 +155,7 @@ export function buildTripRouteSummary(destination = '', locations = '') {
   return {
     routeLocations: uniqueLocations,
     title: `Trip to ${routeName}`,
-    displayLocations: uniqueLocations.join('; '),
+    displayLocations: uniqueCities.join('; '),
   };
 }
 

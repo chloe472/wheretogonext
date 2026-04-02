@@ -1,6 +1,5 @@
 import {
   resolveTripCardCoverImage,
-  getCoverImageForDestination,
   getFlagImageForDestination,
   formatTripCardDateRange,
 } from '../../../data/tripDestinationMeta';
@@ -32,7 +31,6 @@ export function mapItineraryToTripRow(raw) {
 export function resolveDashboardTripImage(trip, destinationCover = '') {
   const cover0 = String(trip?.raw?.coverImages?.[0] || '').trim();
   const primary = String(trip?.image || '').trim();
-  const destFallback = getCoverImageForDestination(trip?.raw?.destination, trip?.raw?.locations);
   if (cover0) {
     const resolvedCover = resolveImageUrl(cover0, trip?.title || 'Trip cover', 'trip');
     if (resolvedCover && !resolvedCover.startsWith('data:image/')) return resolvedCover;
@@ -41,8 +39,11 @@ export function resolveDashboardTripImage(trip, destinationCover = '') {
     const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
     if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
   }
-  if (destinationCover) return destinationCover;
-  return destFallback;
+  if (destinationCover) {
+    const resolvedDiscovery = resolveImageUrl(destinationCover, trip?.title || 'Trip cover', 'trip');
+    if (resolvedDiscovery && !resolvedDiscovery.startsWith('data:image/')) return resolvedDiscovery;
+  }
+  return resolveImageUrl('', trip?.title || 'Trip cover', 'trip');
 }
 
 export function getTripDestinationQuery(rawTrip = {}) {

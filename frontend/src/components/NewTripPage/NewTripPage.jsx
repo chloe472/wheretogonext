@@ -4,7 +4,6 @@ import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../api/itinerariesApi';
 import { fetchCitySuggestions } from '../../api/locationsApi';
 import { lookupUserByEmail } from '../../api/profileApi';
-import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
 
@@ -246,6 +245,7 @@ export default function NewTripPage({ user, onLogout }) {
     const raw = String(value);
     const sanitized = raw.replace(/[^0-9]/g, '');
     const draftKey = getCityDayDraftKey(row.id, field);
+    if (cityRangeError) setCityRangeError('');
     setCityDayDrafts((prev) => ({ ...prev, [draftKey]: sanitized }));
   };
 
@@ -263,6 +263,15 @@ export default function NewTripPage({ user, onLogout }) {
       });
       return;
     }
+
+    const maxDay = Math.max(1, totalTripDays || 1);
+    const parsed = Number.parseInt(String(raw), 10);
+    if (Number.isFinite(parsed) && parsed > maxDay) {
+      setCityRangeError(`Day cannot exceed Day ${maxDay}.`);
+      return;
+    }
+
+    if (cityRangeError) setCityRangeError('');
 
     updateCityRange(row.id, row.locationKey, field, raw);
     setCityDayDrafts((prev) => {
@@ -458,7 +467,6 @@ export default function NewTripPage({ user, onLogout }) {
     const primaryLocation = allLocations[0];
     const title = getLocationLabel(primaryLocation);
     const locations = citySegments.map((seg) => seg.locationLabel).join('; ');
-    const coverUrl = getCoverImageForDestination(primaryLocation.name, locations);
     const payload = {
       title: `Trip to ${title}`,
       overview: '',
@@ -474,8 +482,6 @@ export default function NewTripPage({ user, onLogout }) {
       collaborators: invitedEmails,
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
-      image: coverUrl,
-      coverImages: [coverUrl],
       published: false,
       visibility: 'private',
       citySegments,

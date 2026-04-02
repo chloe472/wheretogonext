@@ -1,5 +1,5 @@
 import { ChevronDown, MoreVertical } from 'lucide-react';
-import { getCoverImageForDestination } from '../../../data/tripDestinationMeta';
+import { applyImageFallback } from '../../../lib/imageFallback';
 import { resolveDashboardTripImage, getTripDestinationQuery, getStatusClass, TRIP_STATUS_OPTIONS } from '../lib/dashboardTripUtils';
 import './DashboardTripCard.css';
 
@@ -38,11 +38,7 @@ export default function DashboardTripCard({
             src={resolveDashboardTripImage(trip, destinationCoverByQuery[getTripDestinationQuery(trip.raw)] || '')}
             alt=""
             className="trip-card__image"
-            onError={(e) => {
-              const fallbackSrc = getCoverImageForDestination(trip.raw?.destination, trip.raw?.locations);
-              if (!fallbackSrc || e.currentTarget.src === fallbackSrc) return;
-              e.currentTarget.src = fallbackSrc;
-            }}
+            onError={(event) => applyImageFallback(event, trip.title || 'Trip cover', 'trip')}
           />
         </div>
         {trip.flagImage?.url ? (

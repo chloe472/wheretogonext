@@ -255,6 +255,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     setWhereCityPlanRows,
     setWhereCityDayRanges,
     setWhereCityDayDrafts,
+    setWhereCityRangeError,
   });
 
   useTripDetailsWhereSuggestions({

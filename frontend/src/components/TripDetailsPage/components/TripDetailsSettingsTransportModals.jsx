@@ -176,6 +176,7 @@ export default function TripDetailsSettingsTransportModals({
             setTripExpenseItems((prev) => prev.filter((it) => it.id !== pendingDeleteItemId));
             setPendingDeleteItemId(null);
             setEditPlaceItem(null);
+            showInAppNotice('Itinerary spot deleted.', 'success');
           }}
         />
       )}

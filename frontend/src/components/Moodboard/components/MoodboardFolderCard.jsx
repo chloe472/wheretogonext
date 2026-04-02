@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import '../styles/moodboard-folder-grid.css';
 import '../styles/moodboard-folder-menu.css';
-import { getCoverImageForDestination } from '../../../data/tripDestinationMeta';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 
 export default function MoodboardFolderCard({
@@ -15,7 +14,7 @@ export default function MoodboardFolderCard({
 }) {
   const navigate = useNavigate();
   const fallbackHint = trip?.destination || trip?.locations || 'Trip destination';
-  const placeholderUrl = getCoverImageForDestination(trip?.destination, trip?.locations);
+  const placeholderUrl = '';
 
   return (
     <div

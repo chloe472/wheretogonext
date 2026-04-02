@@ -15,6 +15,7 @@ export function useTripDetailsWhereCityRanges({
   setWhereCityPlanRows,
   setWhereCityDayRanges,
   setWhereCityDayDrafts,
+  setWhereCityRangeError,
 }) {
   const whereTotalTripDays = useMemo(
     () => Math.max(1, getTripDayCount(whereModalDisplayStart, whereModalDisplayEnd) || 1),
@@ -106,8 +107,9 @@ export function useTripDetailsWhereCityRanges({
     const raw = String(value);
     const sanitized = raw.replace(/[^0-9]/g, '');
     const draftKey = getWhereCityDraftKey(row, field);
+    if (setWhereCityRangeError) setWhereCityRangeError('');
     setWhereCityDayDrafts((prev) => ({ ...prev, [draftKey]: sanitized }));
-  }, [getWhereCityDraftKey, setWhereCityDayDrafts]);
+  }, [getWhereCityDraftKey, setWhereCityDayDrafts, setWhereCityRangeError]);
 
   const commitWhereCityRangeInput = useCallback((row, field) => {
     const draftKey = getWhereCityDraftKey(row, field);
@@ -123,6 +125,17 @@ export function useTripDetailsWhereCityRanges({
       return;
     }
 
+    const maxDay = Math.max(1, whereTotalTripDays || 1);
+    const parsed = Number.parseInt(String(raw), 10);
+    if (Number.isFinite(parsed) && parsed > maxDay) {
+      if (setWhereCityRangeError) {
+        setWhereCityRangeError(`Day cannot exceed Day ${maxDay}.`);
+      }
+      return;
+    }
+
+    if (setWhereCityRangeError) setWhereCityRangeError('');
+
     updateWhereCityRange(row, field, raw);
     setWhereCityDayDrafts((prev) => {
       const next = { ...prev };
@@ -132,8 +145,10 @@ export function useTripDetailsWhereCityRanges({
   }, [
     getWhereCityDraftKey,
     whereCityDayDrafts,
+    whereTotalTripDays,
     updateWhereCityRange,
     setWhereCityDayDrafts,
+    setWhereCityRangeError,
   ]);
 
   const addWhereCityPlanRow = useCallback((locationKey) => {
