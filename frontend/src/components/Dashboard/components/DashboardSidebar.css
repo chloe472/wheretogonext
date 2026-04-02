@@ -179,3 +179,35 @@
   font-size: 0.78rem;
   color: var(--dash-text-muted);
 }
+
+.dashboard__sidebar-modal-pagination {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.dashboard__sidebar-modal-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dash-text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dashboard__sidebar-modal-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dashboard__sidebar-modal-pagination-meta {
+  font-size: 0.78rem;
+  color: var(--dash-text-muted);
+}
