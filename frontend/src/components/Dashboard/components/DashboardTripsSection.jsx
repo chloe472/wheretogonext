@@ -1,7 +1,10 @@
-import { ChevronDown } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TRIP_FILTERS } from '../lib/dashboardTripUtils';
 import DashboardTripCard from './DashboardTripCard';
 import './DashboardTripsSection.css';
+
+const TRIPS_PER_PAGE = 9;
 
 export default function DashboardTripsSection({
   tripFilter,
@@ -24,6 +27,32 @@ export default function DashboardTripsSection({
   handleItineraryOwnerMenu,
   onOpenTrip,
 }) {
+  const [tripListPage, setTripListPage] = useState(0);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredTrips.length / TRIPS_PER_PAGE)),
+    [filteredTrips.length],
+  );
+
+  const maxPageIndex = Math.max(0, totalPages - 1);
+  const safePage = Math.min(tripListPage, maxPageIndex);
+  const paginatedTrips = useMemo(() => {
+    const start = safePage * TRIPS_PER_PAGE;
+    return filteredTrips.slice(start, start + TRIPS_PER_PAGE);
+  }, [filteredTrips, safePage]);
+
+  useEffect(() => {
+    setTripListPage(0);
+  }, [tripFilter]);
+
+  useEffect(() => {
+    const maxP = Math.max(0, Math.ceil(filteredTrips.length / TRIPS_PER_PAGE) - 1);
+    setTripListPage((p) => Math.min(p, maxP));
+  }, [filteredTrips.length]);
+
+  const currentPageDisplay = safePage + 1;
+  const showPagination = !myTripsLoading && filteredTrips.length > TRIPS_PER_PAGE;
+
   return (
     <section className="dashboard__trips" id="my-trips">
       <h2 className="dashboard__section-title">Your Trips</h2>
@@ -75,7 +104,7 @@ export default function DashboardTripsSection({
       )}
 
       <ul className="dashboard__trip-list">
-        {!myTripsLoading && filteredTrips.map((trip) => (
+        {!myTripsLoading && paginatedTrips.map((trip) => (
           <DashboardTripCard
             key={trip.id}
             trip={trip}
@@ -93,6 +122,34 @@ export default function DashboardTripsSection({
           />
         ))}
       </ul>
+
+      {showPagination ? (
+        <nav className="dashboard__trip-pagination" aria-label="Trip list pages">
+          <button
+            type="button"
+            className="dashboard__trip-pagination-btn"
+            onClick={() => setTripListPage((p) => Math.max(0, p - 1))}
+            disabled={safePage <= 0}
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={18} aria-hidden />
+            Previous
+          </button>
+          <span className="dashboard__trip-pagination-meta">
+            Page {currentPageDisplay} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="dashboard__trip-pagination-btn"
+            onClick={() => setTripListPage((p) => Math.min(maxPageIndex, p + 1))}
+            disabled={safePage >= totalPages - 1}
+            aria-label="Next page"
+          >
+            Next
+            <ChevronRight size={18} aria-hidden />
+          </button>
+        </nav>
+      ) : null}
     </section>
   );
 }

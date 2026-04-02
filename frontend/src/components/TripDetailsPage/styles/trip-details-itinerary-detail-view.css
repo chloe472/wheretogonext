@@ -196,20 +196,6 @@
   cursor: pointer;
 }
 .trip-details__place-detail-close:hover { color: var(--place-primary, #5c4a3d); }
-.trip-details__place-detail-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.75rem;
-  padding: 0.35rem 0;
-  border: none;
-  background: none;
-  font-size: 0.9375rem;
-  color: var(--place-accent, #7d6b5a);
-  cursor: pointer;
-  font-family: inherit;
-}
-.trip-details__place-detail-back:hover { color: var(--place-primary, #5c4a3d); }
 .trip-details__place-detail-name {
   margin: 0 0 0.5rem;
   font-size: 1.5rem;
