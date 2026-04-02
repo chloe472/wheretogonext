@@ -93,6 +93,72 @@ export function getDestinationList(destination = '', locations = '') {
   return unique;
 }
 
+export function splitRouteLocationLabel(label = '') {
+  const parts = String(label || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const city = parts[0] || '';
+  const country = parts.length > 1 ? parts[parts.length - 1] : '';
+  return { city, country };
+}
+
+export function buildTripRouteSummary(destination = '', locations = '') {
+  const routeLocations = getDestinationList(destination, locations);
+  const uniqueLocations = [];
+  const seenLocationKeys = new Set();
+  routeLocations.forEach((entry) => {
+    const label = String(entry || '').trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seenLocationKeys.has(key)) return;
+    seenLocationKeys.add(key);
+    uniqueLocations.push(label);
+  });
+
+  const uniqueCities = [];
+  const seenCities = new Set();
+  const uniqueCountries = [];
+  const seenCountries = new Set();
+
+  uniqueLocations.forEach((label) => {
+    const { city, country } = splitRouteLocationLabel(label);
+    const cityKey = city.toLowerCase();
+    if (city && !seenCities.has(cityKey)) {
+      seenCities.add(cityKey);
+      uniqueCities.push(city);
+    }
+    const countryKey = country.toLowerCase();
+    if (country && !seenCountries.has(countryKey)) {
+      seenCountries.add(countryKey);
+      uniqueCountries.push(country);
+    }
+  });
+
+  if (uniqueCities.length === 0) {
+    return {
+      routeLocations: uniqueLocations,
+      title: destination ? `Trip to ${destination}` : 'Untitled trip',
+      displayLocations: uniqueLocations.join('; '),
+    };
+  }
+
+  const cityPart = uniqueCities.join(', ');
+  const countryPart = uniqueCountries.length === 1
+    ? uniqueCountries[0]
+    : uniqueCountries.length > 1
+      ? uniqueCountries.join(', ')
+      : '';
+
+  const routeName = countryPart ? `${cityPart}, ${countryPart}` : cityPart;
+
+  return {
+    routeLocations: uniqueLocations,
+    title: `Trip to ${routeName}`,
+    displayLocations: uniqueLocations.join('; '),
+  };
+}
+
 export function getTripDayCount(startDate, endDate) {
   if (!startDate || !endDate) return 0;
   const start = new Date(`${String(startDate).slice(0, 10)}T12:00:00`);

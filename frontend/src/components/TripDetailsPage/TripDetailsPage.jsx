@@ -22,7 +22,13 @@ import {
   Route,
   ExternalLink,
 } from 'lucide-react';
-import { updateItinerary } from '../../api/itinerariesApi';
+import {
+  duplicateItinerary,
+  fetchItineraryById,
+  updateItinerary,
+} from '../../api/itinerariesApi';
+import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
+import SetCoverImageModal from '../Dashboard/components/SetCoverImageModal';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { useSocialImport } from '../SocialImportModal/useSocialImport';
 import {
@@ -146,6 +152,8 @@ export default function TripDetailsPage({ user, onLogout }) {
     setModalCurrency,
   } = useTripDetailsTripCurrency(exchangeRates);
   const [friendlyDialog, setFriendlyDialog] = useTripDetailsFriendlyDialog();
+  const [publishTarget, setPublishTarget] = useState(null);
+  const [coverImageTarget, setCoverImageTarget] = useState(null);
   const [mapView, setMapView] = useState('Default');
   const [mapFilter, setMapFilter] = useState('Places');
   const [mapExpandOpen, setMapExpandOpen] = useState(false);
@@ -199,6 +207,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [whereSuggestionsLoading, setWhereSuggestionsLoading] = useState(false);
   const [whereSuggestionsOpen, setWhereSuggestionsOpen] = useState(false);
   const [whereSelectedLocations, setWhereSelectedLocations] = useState([]);
+  const [whereCityPlanRows, setWhereCityPlanRows] = useState([]);
   const [whereCityDayRanges, setWhereCityDayRanges] = useState({});
   const [whereCityDayDrafts, setWhereCityDayDrafts] = useState({});
   const [whereCityRangeError, setWhereCityRangeError] = useState('');
@@ -232,12 +241,17 @@ export default function TripDetailsPage({ user, onLogout }) {
     getWhereCityDraftKey,
     handleWhereCityRangeInputChange,
     commitWhereCityRangeInput,
+    addWhereCityPlanRow,
+    removeWhereCityPlanRow,
+    updateWhereCityPlanRowLocation,
   } = useTripDetailsWhereCityRanges({
     whereModalOpen,
     whereSelectedLocations,
+    whereCityPlanRows,
     whereModalDisplayStart,
     whereModalDisplayEnd,
     whereCityDayDrafts,
+    setWhereCityPlanRows,
     setWhereCityDayRanges,
     setWhereCityDayDrafts,
   });
@@ -340,6 +354,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     days,
     setWhereQuery,
     setWhereSelectedLocations,
+    setWhereCityPlanRows,
     setWhereCityDayRanges,
     setWhereCityDayDrafts,
     setWhereCityRangeError,
@@ -357,10 +372,97 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const openDateModal = () => setDateModalOpen(true);
 
+  const handleShareTrip = useCallback(async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    if (!url) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!ok) throw new Error('Copy command failed');
+      }
+      toast.success('Link copied to clipboard!');
+    } catch (error) {
+      toast.error(error?.message || 'Could not copy link. Try copying from the address bar.');
+    }
+  }, []);
+
+  const handlePublishTrip = useCallback(async () => {
+    if (!serverItinerary?._id) return;
+    if (serverItinerary?.published && serverItinerary?.visibility === 'public') {
+      try {
+        const updated = await updateItinerary(String(serverItinerary._id), {
+          published: false,
+          visibility: 'private',
+          publishedAt: null,
+        });
+        setServerItinerary(updated);
+        toast.success('Trip moved to private');
+      } catch (error) {
+        toast.error(error?.message || 'Could not make this trip private.');
+      }
+      return;
+    }
+
+    setPublishTarget({
+      itinerary: serverItinerary,
+      initialStep: 1,
+      mode: 'publish',
+    });
+  }, [serverItinerary, setServerItinerary]);
+
+  const handleEditPublishedContent = useCallback(() => {
+    if (!serverItinerary?._id) return;
+    setPublishTarget({
+      itinerary: serverItinerary,
+      initialStep: 1,
+      mode: 'edit',
+    });
+  }, [serverItinerary]);
+
+  const handleSetCoverPage = useCallback(() => {
+    if (!serverItinerary?._id) return;
+    setCoverImageTarget(serverItinerary);
+  }, [serverItinerary]);
+
+  const handleDuplicateTrip = useCallback(async () => {
+    if (!serverItinerary?._id) return;
+    try {
+      const copy = await duplicateItinerary(String(serverItinerary._id));
+      const newId = copy?._id ?? copy?.id;
+      if (!newId) throw new Error('Copy did not return an id.');
+      toast.success('Trip added to My Trips!');
+      navigate(`/trip/${newId}`);
+    } catch (error) {
+      toast.error(error?.message || 'Could not copy itinerary. Please try again.');
+    }
+  }, [navigate, serverItinerary]);
+
+  const handlePublishSaved = useCallback(async () => {
+    if (!serverItinerary?._id) return;
+    try {
+      const updated = await fetchItineraryById(String(serverItinerary._id));
+      setServerItinerary(updated);
+    } catch (error) {
+      toast.error(error?.message || 'Trip updated, but it could not be reloaded.');
+    }
+  }, [serverItinerary, setServerItinerary]);
+
   const handleWhereModalApply = useTripDetailsWhereApply({
     tripId,
     whereQuery,
     whereSelectedLocations,
+    whereCityPlanRows,
     whereCityDayRanges,
     whereCityDayDrafts,
     getWhereCityDraftKey,
@@ -700,6 +802,7 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const { mapCenter, mapMarkers } = useTripDetailsMapData({
     discoveryData,
+    discoveryLoading,
     tripExpenseItems,
     trip,
     days,
@@ -1000,6 +1103,11 @@ export default function TripDetailsPage({ user, onLogout }) {
         titleDropdownOpen={titleDropdownOpen}
         setTitleDropdownOpen={setTitleDropdownOpen}
         onCommitTripTitle={commitTripTitle}
+        onShareTrip={handleShareTrip}
+        onPublishTrip={handlePublishTrip}
+        onEditPublishedContent={handleEditPublishedContent}
+        onSetCoverPage={handleSetCoverPage}
+        onDuplicateTrip={handleDuplicateTrip}
         onRequestDeleteTrip={requestDeleteTrip}
         spent={spent}
         currency={currency}
@@ -1079,6 +1187,23 @@ export default function TripDetailsPage({ user, onLogout }) {
         dateModalOpen={dateModalOpen}
         applyDateRange={applyDateRange}
         setDateModalOpen={setDateModalOpen}
+      />
+
+      <PublishItineraryModal
+        open={Boolean(publishTarget)}
+        onClose={() => setPublishTarget(null)}
+        itinerary={publishTarget?.itinerary || null}
+        initialStep={publishTarget?.initialStep || 1}
+        mode={publishTarget?.mode || 'publish'}
+        onPublished={handlePublishSaved}
+      />
+      <SetCoverImageModal
+        open={Boolean(coverImageTarget)}
+        itinerary={coverImageTarget}
+        onClose={() => setCoverImageTarget(null)}
+        onSaved={(updated) => {
+          setServerItinerary(updated);
+        }}
       />
 
       <TripDetailsModalStack
@@ -1392,9 +1517,13 @@ export default function TripDetailsPage({ user, onLogout }) {
         tripExpenseItems={tripExpenseItems}
         userCountry={user?.country}
         whereCityDayDrafts={whereCityDayDrafts}
+        whereCityPlanRows={whereCityPlanRows}
         whereCityDayRanges={whereCityDayRanges}
         whereCityRangeError={whereCityRangeError}
         whereDefaultCityDayRanges={whereDefaultCityDayRanges}
+        addWhereCityPlanRow={addWhereCityPlanRow}
+        removeWhereCityPlanRow={removeWhereCityPlanRow}
+        updateWhereCityPlanRowLocation={updateWhereCityPlanRowLocation}
         whereLocationSuggestions={whereLocationSuggestions}
         whereModalOpen={whereModalOpen}
         whereModalRef={whereModalRef}

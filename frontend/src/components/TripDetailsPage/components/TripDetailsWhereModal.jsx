@@ -8,8 +8,8 @@ import {
   isCityWhereLocation,
 } from '../lib/tripDetailsPageHelpers';
 
-function whereCityDraftKey(loc, field) {
-  return `${getWhereLocationKey(loc)}::${field}`;
+function whereCityDraftKey(row, field) {
+  return `${row.id}::${field}`;
 }
 
 export default function TripDetailsWhereModal({
@@ -23,6 +23,7 @@ export default function TripDetailsWhereModal({
   whereLocationSuggestions,
   whereSelectedLocations,
   setWhereSelectedLocations,
+  whereCityPlanRows,
   whereCityDayRanges,
   whereDefaultCityDayRanges,
   whereTotalTripDays,
@@ -31,6 +32,9 @@ export default function TripDetailsWhereModal({
   setWhereCityRangeError,
   handleWhereCityRangeInputChange,
   commitWhereCityRangeInput,
+  addWhereCityPlanRow,
+  removeWhereCityPlanRow,
+  updateWhereCityPlanRowLocation,
   onApply,
 }) {
   return (
@@ -161,12 +165,26 @@ export default function TripDetailsWhereModal({
               <p className="trip-details__where-city-plan-hint">
                 Set day ranges for each city.
               </p>
-              {whereSelectedLocations.map((loc) => {
-                const key = getWhereLocationKey(loc);
-                const range = whereCityDayRanges[key] || whereDefaultCityDayRanges[key] || { startDay: 1, endDay: whereTotalTripDays };
+              {whereCityPlanRows.map((row) => {
+                const loc = whereSelectedLocations.find((item) => getWhereLocationKey(item) === row.locationKey) || whereSelectedLocations[0];
+                if (!loc) return null;
+                const range = whereCityDayRanges[row.id] || whereDefaultCityDayRanges[row.locationKey] || { startDay: 1, endDay: whereTotalTripDays };
+                const canRemove = whereCityPlanRows.length > whereSelectedLocations.length;
                 return (
-                  <div key={key} className="trip-details__where-city-plan-row">
-                    <span className="trip-details__where-city-plan-city">{getWhereLocationLabel(loc)}</span>
+                  <div key={row.id} className="trip-details__where-city-plan-row">
+                    <select
+                      className="trip-details__where-city-plan-select"
+                      value={row.locationKey}
+                      onChange={(e) => updateWhereCityPlanRowLocation(row.id, e.target.value)}
+                      aria-label="City"
+                    >
+                      {whereSelectedLocations.map((optionLoc) => {
+                        const optionKey = getWhereLocationKey(optionLoc);
+                        return (
+                          <option key={optionKey} value={optionKey}>{getWhereLocationLabel(optionLoc)}</option>
+                        );
+                      })}
+                    </select>
                     <div className="trip-details__where-city-plan-inputs">
                       <label className="trip-details__where-city-plan-label">
                         From
@@ -174,9 +192,9 @@ export default function TripDetailsWhereModal({
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          value={whereCityDayDrafts[whereCityDraftKey(loc, 'startDay')] ?? String(range.startDay)}
-                          onChange={(e) => handleWhereCityRangeInputChange(loc, 'startDay', e.target.value)}
-                          onBlur={() => commitWhereCityRangeInput(loc, 'startDay')}
+                          value={whereCityDayDrafts[whereCityDraftKey(row, 'startDay')] ?? String(range.startDay)}
+                          onChange={(e) => handleWhereCityRangeInputChange(row, 'startDay', e.target.value)}
+                          onBlur={() => commitWhereCityRangeInput(row, 'startDay')}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
@@ -192,9 +210,9 @@ export default function TripDetailsWhereModal({
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          value={whereCityDayDrafts[whereCityDraftKey(loc, 'endDay')] ?? String(range.endDay)}
-                          onChange={(e) => handleWhereCityRangeInputChange(loc, 'endDay', e.target.value)}
-                          onBlur={() => commitWhereCityRangeInput(loc, 'endDay')}
+                          value={whereCityDayDrafts[whereCityDraftKey(row, 'endDay')] ?? String(range.endDay)}
+                          onChange={(e) => handleWhereCityRangeInputChange(row, 'endDay', e.target.value)}
+                          onBlur={() => commitWhereCityRangeInput(row, 'endDay')}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
@@ -204,10 +222,27 @@ export default function TripDetailsWhereModal({
                           className="trip-details__where-city-plan-input"
                         />
                       </label>
+                      {canRemove ? (
+                        <button
+                          type="button"
+                          className="trip-details__where-city-plan-remove"
+                          onClick={() => removeWhereCityPlanRow(row.id)}
+                          aria-label="Remove row"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 );
               })}
+              <button
+                type="button"
+                className="trip-details__where-city-plan-add"
+                onClick={() => addWhereCityPlanRow(whereSelectedLocations[0] ? getWhereLocationKey(whereSelectedLocations[0]) : '')}
+              >
+                + Add another row
+              </button>
               <p className="trip-details__where-city-plan-foot">Total trip length: Day 1 to Day {whereTotalTripDays}.</p>
               {whereCityRangeError && <p className="trip-details__where-city-plan-error" role="alert">{whereCityRangeError}</p>}
             </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Bed,
   Camera,
@@ -88,6 +89,8 @@ export default function TripDetailsKanbanDayColumn({
   handleKanbanDayDragEnd,
   handleKanbanDayDrop,
 }) {
+  const NOTE_COLLAPSE_CHAR_LIMIT = 120;
+  const [expandedNotesByItem, setExpandedNotesByItem] = useState({});
 
   // Icon render break fix
   const isRenderableIcon = (candidate) => (
@@ -450,6 +453,11 @@ export default function TripDetailsKanbanDayColumn({
             ? `Dep ${transportTimes.dep} - Arr ${transportTimes.arr}`
             : (timeRange ? `Dep ${timeRange}` : 'Time not available');
           const itemNotes = String(item.notes || '').trim();
+          const isLongNote = itemNotes.length > NOTE_COLLAPSE_CHAR_LIMIT;
+          const isNoteExpanded = Boolean(expandedNotesByItem[item.id]);
+          const displayedNotes = isLongNote && !isNoteExpanded
+            ? `${itemNotes.slice(0, NOTE_COLLAPSE_CHAR_LIMIT).trimEnd()}...`
+            : itemNotes;
           const itemHasCost = Number(item.total || 0) > 0;
           const itemExternalLink = String(item.externalLink || '').trim();
           const itemAttachments = Array.isArray(item.attachments) ? item.attachments : [];
@@ -509,9 +517,27 @@ export default function TripDetailsKanbanDayColumn({
                   {hasMetaDetails ? (
                     <div className="trip-details__itinerary-meta">
                       {itemNotes ? (
-                        <p className="trip-details__itinerary-meta-line">
-                          <strong>Note:</strong> {itemNotes}
-                        </p>
+                        <>
+                          <p className="trip-details__itinerary-meta-line trip-details__itinerary-meta-line--note">
+                            <strong>Note:</strong>{' '}
+                            <span className="trip-details__itinerary-note-text">{displayedNotes}</span>
+                          </p>
+                          {isLongNote ? (
+                            <button
+                              type="button"
+                              className="trip-details__itinerary-note-toggle"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedNotesByItem((prev) => ({
+                                  ...prev,
+                                  [item.id]: !prev[item.id],
+                                }));
+                              }}
+                            >
+                              {isNoteExpanded ? 'Show less' : 'Show more'}
+                            </button>
+                          ) : null}
+                        </>
                       ) : null}
                       {itemHasCost ? (
                         <p className="trip-details__itinerary-meta-line">

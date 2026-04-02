@@ -8,7 +8,7 @@ import {
   Route,
   Share2,
 } from 'lucide-react';
-import { formatUsdAsCurrency } from '../lib/tripDetailsPageHelpers';
+import { buildTripRouteSummary, formatUsdAsCurrency } from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsHeader({
   trip,
@@ -24,6 +24,11 @@ export default function TripDetailsHeader({
   titleDropdownOpen,
   setTitleDropdownOpen,
   onCommitTripTitle,
+  onShareTrip,
+  onPublishTrip,
+  onEditPublishedContent,
+  onSetCoverPage,
+  onDuplicateTrip,
   onRequestDeleteTrip,
   spent,
   currency,
@@ -41,6 +46,7 @@ export default function TripDetailsHeader({
   setViewMode,
 }) {
   const navigate = useNavigate();
+  const routeSummary = buildTripRouteSummary(trip?.destination, trip?.locations);
 
   return (
     <header className="trip-details__header">
@@ -111,12 +117,69 @@ export default function TripDetailsHeader({
                     className="trip-details__title-dropdown-item"
                     role="menuitem"
                     onClick={() => {
+                      setTitleDropdownOpen(false);
+                      onShareTrip?.();
+                    }}
+                  >
+                    Share link
+                  </button>
+                  <button
+                    type="button"
+                    className="trip-details__title-dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setTitleDropdownOpen(false);
+                      onPublishTrip?.();
+                    }}
+                  >
+                    {trip?.published && trip?.visibility === 'public' ? 'Make private' : 'Publish to Explore'}
+                  </button>
+                  <button
+                    type="button"
+                    className="trip-details__title-dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setTitleDropdownOpen(false);
+                      onSetCoverPage?.();
+                    }}
+                  >
+                    Set cover page
+                  </button>
+                  {trip?.published && trip?.visibility === 'public' ? (
+                    <button
+                      type="button"
+                      className="trip-details__title-dropdown-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setTitleDropdownOpen(false);
+                        onEditPublishedContent?.();
+                      }}
+                    >
+                      Edit published content
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="trip-details__title-dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setTitleDropdownOpen(false);
+                      onDuplicateTrip?.();
+                    }}
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className="trip-details__title-dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
                       setTitleEditing(true);
                       setTitleEditValue(titleDisplay);
                       setTitleDropdownOpen(false);
                     }}
                   >
-                    Rename trip
+                    Rename
                   </button>
                   <button
                     type="button"
@@ -127,7 +190,7 @@ export default function TripDetailsHeader({
                       onRequestDeleteTrip();
                     }}
                   >
-                    Delete trip
+                    Delete
                   </button>
                 </div>
               )}
@@ -149,7 +212,7 @@ export default function TripDetailsHeader({
           onClick={onOpenWhereModal}
           aria-label="Change destination"
         >
-          {trip.locations || trip.destination}
+          {routeSummary.displayLocations || trip.locations || trip.destination}
           <ChevronDown size={14} aria-hidden />
         </button>
         <button

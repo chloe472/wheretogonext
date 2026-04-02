@@ -1,14 +1,19 @@
 import countriesData from '../../../data/countries.json';
 import { CITIES } from '../../../data/cities';
-import { getCoordinatesForLocation } from '../../../data/cityCoordinates';
+
+const SINGAPORE_CENTER = [1.3521, 103.8198];
+const DEFAULT_CENTER = [20, 0];
 
 const WHERE_LOCATIONS = [
   ...countriesData.map((country) => ({ ...country, country: undefined })),
   ...CITIES,
 ];
 
-export function getMapCenterForDestination(destinationOrLocations) {
-  return getCoordinatesForLocation(destinationOrLocations);
+export function getMapCenterForDestination(destinationOrLocations, options = {}) {
+  if (options.loading) {
+    return SINGAPORE_CENTER;
+  }
+  return DEFAULT_CENTER;
 }
 
 export function searchAddressSuggestions(destinationOrLocations, query, idPrefix = 'custom-location') {

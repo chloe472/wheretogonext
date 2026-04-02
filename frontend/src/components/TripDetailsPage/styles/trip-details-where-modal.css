@@ -235,11 +235,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.625rem;
 }
 
 .trip-details__where-city-plan-row + .trip-details__where-city-plan-row {
   margin-top: 0.625rem;
+}
+
+.trip-details__where-city-plan-select {
+  min-width: 10rem;
+  flex: 1 1 220px;
+  max-width: 100%;
+  padding: 0.3125rem 0.5rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
 }
 
 .trip-details__where-city-plan-city {
@@ -251,6 +264,8 @@
 .trip-details__where-city-plan-inputs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
 }
 
@@ -276,6 +291,49 @@
   outline: none;
   border-color: #dc2626;
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.12);
+}
+
+.trip-details__where-city-plan-remove {
+  padding: 0.3125rem 0.5rem;
+  border: 1px solid var(--wtg-border);
+  border-radius: 8px;
+  background: var(--wtg-surface);
+  color: var(--wtg-text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.trip-details__where-city-plan-remove:hover {
+  background: #fff5f5;
+  border-color: #f1b7b1;
+  color: #b42318;
+}
+
+.trip-details__where-city-plan-add {
+  margin-top: 0.625rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px dashed var(--wtg-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--wtg-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trip-details__where-city-plan-add:hover {
+  background: var(--wtg-surface);
+}
+
+@media (max-width: 900px) {
+  .trip-details__where-city-plan-row {
+    align-items: flex-start;
+  }
+
+  .trip-details__where-city-plan-inputs {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .trip-details__where-city-plan-foot {

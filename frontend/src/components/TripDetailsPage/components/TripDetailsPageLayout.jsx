@@ -16,6 +16,11 @@ export default function TripDetailsPageLayout({
   titleDropdownOpen,
   setTitleDropdownOpen,
   onCommitTripTitle,
+  onShareTrip,
+  onPublishTrip,
+  onEditPublishedContent,
+  onSetCoverPage,
+  onDuplicateTrip,
   onRequestDeleteTrip,
   spent,
   currency,
@@ -112,6 +117,11 @@ export default function TripDetailsPageLayout({
         titleDropdownOpen={titleDropdownOpen}
         setTitleDropdownOpen={setTitleDropdownOpen}
         onCommitTripTitle={onCommitTripTitle}
+        onShareTrip={onShareTrip}
+        onPublishTrip={onPublishTrip}
+        onEditPublishedContent={onEditPublishedContent}
+        onSetCoverPage={onSetCoverPage}
+        onDuplicateTrip={onDuplicateTrip}
         onRequestDeleteTrip={onRequestDeleteTrip}
         spent={spent}
         currency={currency}

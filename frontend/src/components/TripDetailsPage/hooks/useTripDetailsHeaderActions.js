@@ -20,6 +20,7 @@ export function useTripDetailsHeaderActions({
   days,
   setWhereQuery,
   setWhereSelectedLocations,
+  setWhereCityPlanRows,
   setWhereCityDayRanges,
   setWhereCityDayDrafts,
   setWhereCityRangeError,
@@ -89,33 +90,74 @@ export function useTripDetailsHeaderActions({
       return { id: `where-${i}-${locName}`, name: locName, country: locCountry };
     });
 
+    const resolvedUnique = [];
+    const seenLocationKeys = new Set();
+    resolved.forEach((loc) => {
+      const key = getWhereLocationKey(loc);
+      if (seenLocationKeys.has(key)) return;
+      seenLocationKeys.add(key);
+      resolvedUnique.push(loc);
+    });
+
     const totalDays = Math.max(1, getTripDayCount(displayStart, displayEnd) || days.length || 1);
-    const defaults = buildWhereDefaultCityDayRanges(resolved, totalDays);
-    const rangesFromTrip = {};
+    const defaults = buildWhereDefaultCityDayRanges(resolvedUnique, totalDays);
+    const nextRows = [];
+    const nextRanges = {};
     if (Array.isArray(trip.citySegments)) {
       trip.citySegments.forEach((seg, idx) => {
         const label = String(seg?.locationLabel || '').trim();
         const city = String(seg?.city || '').trim();
         const keySource = label || city;
         if (!keySource) return;
-        const key = keySource.toLowerCase();
-        const fallback = defaults[key] || { startDay: Math.min(totalDays, idx + 1), endDay: Math.min(totalDays, idx + 1) };
+        let matchLoc = resolvedUnique.find((loc) => getWhereLocationKey(loc) === keySource.toLowerCase());
+        if (!matchLoc) {
+          const [name, ...rest] = keySource.split(',').map((s) => s.trim());
+          matchLoc = {
+            id: `where-seg-${idx}-${name}`,
+            name: name || keySource,
+            country: rest.length > 0 ? rest.join(', ') : undefined,
+          };
+          resolvedUnique.push(matchLoc);
+        }
+        const locationKey = getWhereLocationKey(matchLoc);
+        const rowId = `where-row-${idx}-${locationKey}`;
+        const fallback = defaults[locationKey] || { startDay: Math.min(totalDays, idx + 1), endDay: Math.min(totalDays, idx + 1) };
         const startDay = Math.max(1, Math.min(totalDays, Number(seg?.startDay) || fallback.startDay));
         const endDay = Math.max(1, Math.min(totalDays, Number(seg?.endDay) || fallback.endDay));
-        rangesFromTrip[key] = {
+        nextRows.push({ id: rowId, locationKey });
+        nextRanges[rowId] = {
           startDay: Math.min(startDay, endDay),
           endDay: Math.max(startDay, endDay),
         };
       });
     }
 
-    const nextRanges = {};
-    resolved.forEach((loc) => {
-      const key = getWhereLocationKey(loc);
-      nextRanges[key] = rangesFromTrip[key] || defaults[key] || { startDay: 1, endDay: totalDays };
+    if (nextRows.length === 0) {
+      resolvedUnique.forEach((loc, idx) => {
+        const key = getWhereLocationKey(loc);
+        const rowId = `where-row-${idx}-${key}`;
+        nextRows.push({ id: rowId, locationKey: key });
+        nextRanges[rowId] = defaults[key] || { startDay: 1, endDay: totalDays };
+      });
+    } else {
+      resolvedUnique.forEach((loc) => {
+        const key = getWhereLocationKey(loc);
+        if (!nextRows.some((row) => row.locationKey === key)) {
+          const rowId = `where-row-${nextRows.length}-${key}`;
+          nextRows.push({ id: rowId, locationKey: key });
+          nextRanges[rowId] = defaults[key] || { startDay: 1, endDay: totalDays };
+        }
+      });
+    }
+
+    nextRows.forEach((row) => {
+      if (!nextRanges[row.id]) {
+        nextRanges[row.id] = defaults[row.locationKey] || { startDay: 1, endDay: totalDays };
+      }
     });
 
-    setWhereSelectedLocations(resolved);
+    setWhereSelectedLocations(resolvedUnique);
+    setWhereCityPlanRows(nextRows);
     setWhereCityDayRanges(nextRanges);
     setWhereCityDayDrafts({});
     setWhereCityRangeError('');
@@ -128,6 +170,7 @@ export function useTripDetailsHeaderActions({
     days,
     setWhereQuery,
     setWhereSelectedLocations,
+    setWhereCityPlanRows,
     setWhereCityDayRanges,
     setWhereCityDayDrafts,
     setWhereCityRangeError,
