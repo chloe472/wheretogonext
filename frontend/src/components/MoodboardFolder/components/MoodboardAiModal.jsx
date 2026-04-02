@@ -47,7 +47,7 @@ export default function MoodboardAiModal({ show, aiLoading, aiResult, onClose, o
                   <p>
                     <em>{place.location}</em>
                   </p>
-                  <button onClick={() => onAddToItinerary(place)}>Add to Trip</button>
+                  <button className="ai-add-btn" onClick={() => onAddToItinerary(place)}>Add to Trip</button>
                 </div>
               ))}
             </>

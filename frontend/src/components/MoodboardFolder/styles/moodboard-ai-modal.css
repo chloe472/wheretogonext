@@ -41,6 +41,22 @@
   border-radius: 8px;
 }
 
+.ai-add-btn {
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: #5c4a3d;
+  color: #fff;
+  transition: all 0.15s ease;
+}
+
+.ai-add-btn:hover {
+  opacity: 0.8;
+}
+
 /* ── Loading spinner ────────────────────────────────────────── */
 .ai-loading {
   display: flex;
