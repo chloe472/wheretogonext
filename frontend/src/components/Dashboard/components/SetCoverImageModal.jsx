@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ImagePlus, Loader2, X } from 'lucide-react';
-import { updateItinerary, uploadItineraryImage } from '../../api/itinerariesApi';
-import { resolveImageUrl } from '../../lib/imageFallback';
+import { updateItinerary, uploadItineraryImage } from '../../../api/itinerariesApi';
+import { resolveImageUrl } from '../../../lib/imageFallback';
 import './SetCoverImageModal.css';
 
 const MAX_BYTES = 5 * 1024 * 1024;

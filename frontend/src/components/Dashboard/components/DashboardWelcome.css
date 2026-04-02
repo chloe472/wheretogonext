@@ -1,0 +1,51 @@
+.dashboard__welcome {
+  margin-bottom: 2rem;
+}
+
+.dashboard__title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 700;
+  color: var(--dash-text);
+  letter-spacing: -0.02em;
+}
+
+.dashboard__title-highlight {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.08em;
+  background-image: linear-gradient(
+    to right,
+    rgba(255, 182, 193, 0.95),
+    rgba(255, 182, 193, 0.5)
+  );
+  background-size: 100% 55%;
+  background-repeat: no-repeat;
+  background-position: 0 92%;
+}
+
+.dashboard__greeting {
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+  color: var(--dash-text-muted);
+}
+
+.dashboard__new-trip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #faf8f5;
+  background: var(--dash-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-decoration: none;
+}
+
+.dashboard__new-trip:hover {
+  background: #6b5344;
+}
