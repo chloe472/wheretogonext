@@ -196,6 +196,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [experiencePriceRange, setExperiencePriceRange] = useState('All');
   const [experienceDurationFilter, setExperienceDurationFilter] = useState('All');
   const [experienceSortBy, setExperienceSortBy] = useState('Recently added');
+  const [addModalCityFilter, setAddModalCityFilter] = useState('All');
   const [tripExpenseItems, setTripExpenseItems] = useState([]);
   const [mapDayFilterOpen, setMapDayFilterOpen] = useState(false);
   const [mapDayFilterSelected, setMapDayFilterSelected] = useState([]);
@@ -686,6 +687,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   } = useTripDetailsDiscoveryFilters({
     discoveryData,
     cityQuery,
+    cityFilter: addModalCityFilter,
     placeSearchQuery,
     placeSortBy,
     foodSearchQuery,
@@ -706,6 +708,26 @@ export default function TripDetailsPage({ user, onLogout }) {
     () => (selectedDestinations.length > 0 ? selectedDestinations.join(', ') : cityQuery),
     [selectedDestinations, cityQuery],
   );
+
+  const addModalCityOptions = useMemo(() => {
+    const seen = new Set();
+    const cities = [];
+    selectedDestinations.forEach((destination) => {
+      const city = String(destination || '').split(',')[0].trim();
+      if (!city) return;
+      const key = city.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      cities.push(city);
+    });
+    return ['All', ...cities];
+  }, [selectedDestinations]);
+
+  useEffect(() => {
+    if (!addModalCityOptions.includes(addModalCityFilter)) {
+      setAddModalCityFilter('All');
+    }
+  }, [addModalCityFilter, addModalCityOptions]);
 
   const destinationCountry = useMemo(() => {
     const byCity = AIRPORTS_AND_CITIES.find(
@@ -1308,6 +1330,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         experienceSearchQuery={experienceSearchQuery}
         experienceSortBy={experienceSortBy}
         experienceTypeFilter={experienceTypeFilter}
+        addModalCityFilter={addModalCityFilter}
+        addModalCityOptions={addModalCityOptions}
         filteredExperiences={filteredExperiences}
         filteredFoods={filteredFoods}
         filteredPlaces={filteredPlaces}
@@ -1401,6 +1425,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         setAddToTripNotes={setAddToTripNotes}
         setAddToTripStartTime={setAddToTripStartTime}
         setAddToTripTravelDocs={setAddToTripTravelDocs}
+        setAddModalCityFilter={setAddModalCityFilter}
         setAddTransportOpen={setAddTransportOpen}
         setBookingDate={setBookingDate}
         setBookingExperience={setBookingExperience}

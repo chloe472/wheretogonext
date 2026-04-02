@@ -4,9 +4,46 @@ import {
   getStayStarLevel,
 } from '../lib/tripDetailsPageHelpers';
 
+function normalizeCityText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function getItemLocationText(item, cityQuery) {
+  return [
+    item?.address,
+    item?.location,
+    item?.city,
+    item?.name,
+    item?.description,
+    cityQuery,
+  ]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function matchesCityFilter(item, cityFilter, cityQuery) {
+  const normalizedFilter = normalizeCityText(cityFilter);
+  if (!normalizedFilter || normalizedFilter === 'all') return true;
+
+  const sourceDestination = normalizeCityText(String(item?._sourceDestination || '').split(',')[0]);
+  if (sourceDestination) {
+    return sourceDestination === normalizedFilter;
+  }
+
+  const haystack = normalizeCityText(getItemLocationText(item, cityQuery));
+  if (!haystack) return false;
+  return haystack.includes(normalizedFilter);
+}
+
 export function useTripDetailsDiscoveryFilters({
   discoveryData,
   cityQuery,
+  cityFilter,
   placeSearchQuery,
   placeSortBy,
   foodSearchQuery,
@@ -65,6 +102,7 @@ export function useTripDetailsDiscoveryFilters({
         || (p.description || '').toLowerCase().includes(q),
       );
     }
+    results = results.filter((p) => matchesCityFilter(p, cityFilter, cityQuery));
     if (placeSortBy === 'Rating: Low to High') {
       results = [...results].sort((a, b) => (a.rating || 0) - (b.rating || 0));
     } else if (placeSortBy === 'Rating: High to Low') {
@@ -73,7 +111,7 @@ export function useTripDetailsDiscoveryFilters({
       results = [...results].sort((a, b) => scorePlaceRecommendation(b) - scorePlaceRecommendation(a));
     }
     return results;
-  }, [discoveryData?.places, placeSearchQuery, placeSortBy]);
+  }, [discoveryData?.places, placeSearchQuery, placeSortBy, cityFilter, cityQuery]);
 
   const filteredFoods = useMemo(() => {
     const source = (Array.isArray(discoveryData?.foods) ? discoveryData.foods : [])
@@ -113,13 +151,14 @@ export function useTripDetailsDiscoveryFilters({
         return true;
       });
     }
+    results = results.filter((f) => matchesCityFilter(f, cityFilter, cityQuery));
     if (foodSortBy === 'Rating') {
       results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else if (foodSortBy === 'Most reviewed') {
       results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
     }
     return results;
-  }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy, cityQuery]);
+  }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy, cityFilter, cityQuery]);
 
   const filteredExperiences = useMemo(() => {
     const source = Array.isArray(discoveryData?.experiences) ? discoveryData.experiences : [];
@@ -158,6 +197,7 @@ export function useTripDetailsDiscoveryFilters({
         return true;
       });
     }
+    results = results.filter((e) => matchesCityFilter(e, cityFilter, cityQuery));
     if (experienceSortBy === 'Price: Low to High') {
       results = [...results].sort((a, b) => (a.price || 0) - (b.price || 0));
     } else if (experienceSortBy === 'Price: High to Low') {
@@ -177,6 +217,8 @@ export function useTripDetailsDiscoveryFilters({
     experiencePriceRange,
     experienceDurationFilter,
     experienceSortBy,
+    cityFilter,
+    cityQuery,
   ]);
 
   const filteredStays = useMemo(() => {
@@ -207,6 +249,8 @@ export function useTripDetailsDiscoveryFilters({
       });
     }
 
+    results = results.filter((s) => matchesCityFilter(s, cityFilter, cityQuery));
+
     if (staySortBy === 'Stars: High to Low') {
       results = [...results].sort((a, b) => getStayStarLevel(b) - getStayStarLevel(a));
     } else if (staySortBy === 'Stars: Low to High') {
@@ -222,7 +266,7 @@ export function useTripDetailsDiscoveryFilters({
     }
 
     return results;
-  }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayStarFilter, staySortBy]);
+  }, [discoveryData?.stays, staySearchQuery, stayTypeFilter, stayStarFilter, staySortBy, cityFilter, cityQuery]);
 
   const stayTypeOptions = useMemo(() => {
     const source = Array.isArray(discoveryData?.stays) ? discoveryData.stays : [];

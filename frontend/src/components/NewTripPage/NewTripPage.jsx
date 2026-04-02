@@ -118,6 +118,7 @@ export default function NewTripPage({ user, onLogout }) {
   const [cityPlanRows, setCityPlanRows] = useState([]);
   const [cityDayRanges, setCityDayRanges] = useState({});
   const [cityDayDrafts, setCityDayDrafts] = useState({});
+  const [cityRangeError, setCityRangeError] = useState('');
   const [whereOpen, setWhereOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -224,6 +225,7 @@ export default function NewTripPage({ user, onLogout }) {
   );
 
   const updateCityRange = (rowId, locationKey, field, value) => {
+    if (cityRangeError) setCityRangeError('');
     const maxDay = Math.max(1, totalTripDays || 1);
     const n = Number.parseInt(String(value), 10);
     const safe = Number.isFinite(n) ? Math.max(1, Math.min(maxDay, Math.round(n))) : 1;
@@ -272,6 +274,7 @@ export default function NewTripPage({ user, onLogout }) {
 
   const addCityPlanRow = () => {
     if (!selectedLocations.length) return;
+    if (cityRangeError) setCityRangeError('');
     cityPlanRowSeqRef.current += 1;
     setCityPlanRows((prev) => [
       ...prev,
@@ -280,6 +283,7 @@ export default function NewTripPage({ user, onLogout }) {
   };
 
   const removeCityPlanRow = (rowId) => {
+    if (cityRangeError) setCityRangeError('');
     setCityPlanRows((prev) => prev.filter((row) => row.id !== rowId));
     setCityDayRanges((prev) => {
       const next = { ...prev };
@@ -367,6 +371,7 @@ export default function NewTripPage({ user, onLogout }) {
     e.preventDefault();
     setDatesError('');
     setSubmitError('');
+    setCityRangeError('');
     const pendingLocation = resolveTypedLocation(whereQuery);
     const allLocations = [...selectedLocations];
     if (pendingLocation) {
@@ -425,6 +430,22 @@ export default function NewTripPage({ user, onLogout }) {
           endDay: Math.max(startDay, endDay),
         };
       }).sort((a, b) => a.startDay - b.startDay);
+
+      if (citySegments.length > 0) {
+        if (citySegments[0].startDay !== 1) {
+          const firstCity = citySegments[0].city || citySegments[0].locationLabel || 'the first city';
+          const message = `City ranges must start at Day 1. ${firstCity} currently starts at Day ${citySegments[0].startDay}.`;
+          setCityRangeError(message);
+          return;
+        }
+
+        const last = citySegments[citySegments.length - 1];
+        if (last.endDay !== dayCount) {
+          const message = `City ranges must end at Day ${dayCount}. Current end day is Day ${last.endDay}.`;
+          setCityRangeError(message);
+          return;
+        }
+      }
     } else {
       citySegments = [{
         city: String(allLocations[0]?.name || '').trim(),
@@ -615,25 +636,27 @@ export default function NewTripPage({ user, onLogout }) {
                       const canRemove = cityPlanRows.length > selectedLocations.length;
                       return (
                         <div key={row.id} className="new-trip__city-plan-row">
-                          <select
-                            className="new-trip__city-plan-select"
-                            value={row.locationKey}
-                            onChange={(e) => {
-                              const nextKey = e.target.value;
-                              setCityPlanRows((prev) => prev.map((it) => (it.id === row.id ? { ...it, locationKey: nextKey } : it)));
-                            }}
-                            aria-label="City"
-                          >
-                            {selectedLocations.map((optionLoc) => {
-                              const optionKey = getLocationKey(optionLoc);
-                              return (
-                                <option key={optionKey} value={optionKey}>{getLocationLabel(optionLoc)}</option>
-                              );
-                            })}
-                          </select>
+                          <div className="new-trip__city-plan-city-field">
+                            <select
+                              className="new-trip__city-plan-select"
+                              value={row.locationKey}
+                              onChange={(e) => {
+                                const nextKey = e.target.value;
+                                setCityPlanRows((prev) => prev.map((it) => (it.id === row.id ? { ...it, locationKey: nextKey } : it)));
+                              }}
+                              aria-label="City"
+                            >
+                              {selectedLocations.map((optionLoc) => {
+                                const optionKey = getLocationKey(optionLoc);
+                                return (
+                                  <option key={optionKey} value={optionKey}>{getLocationLabel(optionLoc)}</option>
+                                );
+                              })}
+                            </select>
+                          </div>
                           <div className="new-trip__city-plan-inputs">
-                            <label className="new-trip__city-plan-label">
-                              From
+                            <div className="new-trip__city-plan-range-group">
+                              <span className="new-trip__city-plan-range-prefix">Day</span>
                               <input
                                 type="text"
                                 inputMode="numeric"
@@ -650,10 +673,10 @@ export default function NewTripPage({ user, onLogout }) {
                                   }
                                 }}
                                 className="new-trip__city-plan-input"
+                                aria-label="Start day"
                               />
-                            </label>
-                            <label className="new-trip__city-plan-label">
-                              To
+                              <span className="new-trip__city-plan-range-separator">to</span>
+                              <span className="new-trip__city-plan-range-prefix">Day</span>
                               <input
                                 type="text"
                                 inputMode="numeric"
@@ -670,8 +693,9 @@ export default function NewTripPage({ user, onLogout }) {
                                   }
                                 }}
                                 className="new-trip__city-plan-input"
+                                aria-label="End day"
                               />
-                            </label>
+                            </div>
                             {canRemove ? (
                               <button
                                 type="button"
@@ -689,6 +713,9 @@ export default function NewTripPage({ user, onLogout }) {
                     <button type="button" className="new-trip__city-plan-add" onClick={addCityPlanRow}>
                       + Add another row
                     </button>
+                    {cityRangeError ? (
+                      <p className="new-trip__error new-trip__city-plan-error" role="alert">{cityRangeError}</p>
+                    ) : null}
                     <p className="new-trip__city-plan-foot">Total trip length: Day 1 to Day {totalTripDays}.</p>
                   </>
                 ) : (

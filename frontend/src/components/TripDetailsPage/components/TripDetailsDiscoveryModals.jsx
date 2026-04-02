@@ -21,6 +21,9 @@ export default function TripDetailsDiscoveryModals(props) {
     selectedPlaceMarkerId,
     setSelectedPlaceMarkerId,
     filteredPlaces,
+    addModalCityFilter,
+    setAddModalCityFilter,
+    addModalCityOptions,
     addEntireItineraryToTrip,
     openItineraryPlaceDetails,
     openAddToTripFromMapMarker,
@@ -219,6 +222,9 @@ export default function TripDetailsDiscoveryModals(props) {
           selectedPlaceMarkerId={selectedPlaceMarkerId}
           setSelectedPlaceMarkerId={setSelectedPlaceMarkerId}
           filteredPlaces={filteredPlaces}
+          addModalCityFilter={addModalCityFilter}
+          setAddModalCityFilter={setAddModalCityFilter}
+          addModalCityOptions={addModalCityOptions}
           addEntireItineraryToTrip={addEntireItineraryToTrip}
           openItineraryPlaceDetails={openItineraryPlaceDetails}
           openAddToTripFromMapMarker={openAddToTripFromMapMarker}
@@ -270,6 +276,9 @@ export default function TripDetailsDiscoveryModals(props) {
           mapCenter={mapCenter}
           allDayNums={allDayNums}
           filteredFoods={filteredFoods}
+          addModalCityFilter={addModalCityFilter}
+          setAddModalCityFilter={setAddModalCityFilter}
+          addModalCityOptions={addModalCityOptions}
           foodDetailsView={foodDetailsView}
           setFoodDetailsView={setFoodDetailsView}
           foodDetailsTab={foodDetailsTab}
@@ -318,6 +327,9 @@ export default function TripDetailsDiscoveryModals(props) {
           destinationLabel={destinationLabel}
           allDayNums={allDayNums}
           filteredStays={filteredStays}
+          addModalCityFilter={addModalCityFilter}
+          setAddModalCityFilter={setAddModalCityFilter}
+          addModalCityOptions={addModalCityOptions}
           stayTypeOptions={stayTypeOptions}
           stayDetailsView={stayDetailsView}
           setStayDetailsView={setStayDetailsView}
@@ -354,6 +366,9 @@ export default function TripDetailsDiscoveryModals(props) {
           mapCenter={mapCenter}
           allDayNums={allDayNums}
           filteredExperiences={filteredExperiences}
+          addModalCityFilter={addModalCityFilter}
+          setAddModalCityFilter={setAddModalCityFilter}
+          addModalCityOptions={addModalCityOptions}
           experienceDetailsView={experienceDetailsView}
           setExperienceDetailsView={setExperienceDetailsView}
           experienceDetailsTab={experienceDetailsTab}

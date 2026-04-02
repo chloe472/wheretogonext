@@ -32,6 +32,9 @@ export default function TripDetailsAddPlacesModal({
   selectedPlaceMarkerId,
   setSelectedPlaceMarkerId,
   filteredPlaces,
+  addModalCityFilter,
+  setAddModalCityFilter,
+  addModalCityOptions,
   addEntireItineraryToTrip,
   openItineraryPlaceDetails,
   openAddToTripFromMapMarker,
@@ -317,6 +320,19 @@ return (
                       <p className="trip-details__add-places-results">
                         {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
                       </p>
+                      <div className="trip-details__add-places-sort">
+                        <label htmlFor="add-places-city-filter">City:</label>
+                        <select
+                          id="add-places-city-filter"
+                          className="trip-details__add-places-sort-select"
+                          value={addModalCityFilter}
+                          onChange={(e) => setAddModalCityFilter(e.target.value)}
+                        >
+                          {addModalCityOptions.map((city) => (
+                            <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="trip-details__add-places-sort">
                         <label htmlFor="add-places-sort">Sort by:</label>
                         <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
