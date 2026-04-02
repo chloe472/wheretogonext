@@ -16,6 +16,8 @@ import {
   User,
   Send,
   Reply,
+  Camera,
+  UtensilsCrossed,
 } from 'lucide-react';
 import {
   fetchItineraryById,
@@ -34,6 +36,9 @@ import TripMap from '../TripMap/TripMap';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
+import ExplorePlaceDetailModal from './components/ExplorePlaceDetailModal';
+import ExploreAddToExistingTripModal from './components/ExploreAddToExistingTripModal';
+import { publishedStopToDetailPlace, mapMarkerToDetailPlace } from './lib/explorePlaceDetail';
 import './ItineraryDetailPage.css';
 
 const TABS = [
@@ -251,6 +256,9 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   const [customizeBusy, setCustomizeBusy] = useState(false);
   const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
+  const [explorePlaceDetail, setExplorePlaceDetail] = useState(null);
+  const [exploreAddItem, setExploreAddItem] = useState(null);
+  const [exploreAddOpen, setExploreAddOpen] = useState(false);
 
   useEffect(() => {
     const tab = String(searchParams.get('tab') || '').toLowerCase();
@@ -495,6 +503,11 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
 
   const openPublishedMapPlaceDetails = useCallback((marker) => {
     if (!marker) return;
+    const detail = mapMarkerToDetailPlace(marker);
+    if (detail && String(detail.name || '').trim()) {
+      setExplorePlaceDetail(detail);
+      return;
+    }
     const explicitUrl = String(marker.website || marker.originalData?.website || '').trim();
     if (explicitUrl) {
       window.open(explicitUrl, '_blank', 'noopener,noreferrer');
@@ -510,6 +523,25 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || name || 'place')}`;
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   }, []);
+
+  const handleExploreAddToTripFromDetail = useCallback(() => {
+    const place = explorePlaceDetail;
+    if (!place) return;
+    if (!user) {
+      onRequireLogin?.();
+      return;
+    }
+    const smartItemType = place.itemType === 'food' ? 'food' : 'place';
+    setExploreAddItem({
+      type: smartItemType,
+      data: place,
+      categoryId: smartItemType === 'food' ? 'food' : 'places',
+      category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
+      Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
+    });
+    setExplorePlaceDetail(null);
+    setExploreAddOpen(true);
+  }, [explorePlaceDetail, user, onRequireLogin]);
 
   const handlePostComment = async () => {
     const t = newComment.trim();
@@ -766,10 +798,15 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                                       <div className="itinerary-detail__stop-top">
                                         <h4 className="itinerary-detail__stop-name">{p.name || 'Place'}</h4>
                                         <div className="itinerary-detail__stop-actions">
-                                          <button type="button" className="itinerary-detail__icon-btn" aria-label="Save place">
-                                            <Heart size={18} />
-                                          </button>
-                                          <button type="button" className="itinerary-detail__icon-btn" aria-label="Add to trip">
+                                          <button
+                                            type="button"
+                                            className="itinerary-detail__icon-btn"
+                                            aria-label="Add to trip"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setExplorePlaceDetail(publishedStopToDetailPlace(p, p._idx ?? 0));
+                                            }}
+                                          >
                                             <Plus size={18} />
                                           </button>
                                         </div>
@@ -1050,6 +1087,21 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
         message={dialogMessage}
         confirmText="OK"
         onClose={() => setDialogMessage('')}
+      />
+
+      <ExplorePlaceDetailModal
+        place={explorePlaceDetail}
+        onClose={() => setExplorePlaceDetail(null)}
+        onAddToTrip={handleExploreAddToTripFromDetail}
+      />
+
+      <ExploreAddToExistingTripModal
+        open={exploreAddOpen}
+        addToTripItem={exploreAddItem}
+        onClose={() => {
+          setExploreAddOpen(false);
+          setExploreAddItem(null);
+        }}
       />
     </div>
   );

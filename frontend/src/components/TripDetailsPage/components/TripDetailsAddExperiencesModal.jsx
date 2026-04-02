@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Calendar as CalendarIcon,
   Clock,
   Heart,
@@ -120,7 +119,7 @@ export default function TripDetailsAddExperiencesModal({
                   onClick={onBackExperienceDetail}
                   aria-label="Back to list"
                 >
-                  <ArrowLeft size={20} aria-hidden /> Back
+                  Back
                 </button>
                 <button
                   type="button"

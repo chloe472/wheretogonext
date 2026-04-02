@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Calendar as CalendarIcon,
   ExternalLink,
   Heart,
@@ -103,7 +102,7 @@ return (
           <div className="trip-details__place-detail-panel">
             <div className="trip-details__place-detail-header">
               <button type="button" className="trip-details__place-detail-back" onClick={onBackFoodDetail} aria-label="Back to list">
-                <ArrowLeft size={20} aria-hidden /> Back
+                Back
               </button>
               <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={onCloseFoodBackdrop}>
                 <X size={20} aria-hidden />

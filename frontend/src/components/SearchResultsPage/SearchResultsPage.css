@@ -107,9 +107,10 @@
   margin: 4px 0 0;
   padding: 6px 0;
   list-style: none;
-  background: var(--wtg-primary-contrast);
+  background: var(--wtg-surface, var(--wtg-primary-contrast));
+  border: 1px solid var(--wtg-border, #e7e5e4);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 30px rgba(61, 52, 40, 0.12);
   max-height: 280px;
   overflow-y: auto;
   z-index: 50;
@@ -118,7 +119,7 @@
 .search-results__suggestion {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.625rem 1rem;
   font-size: 0.9375rem;
@@ -127,15 +128,53 @@
   background: transparent;
   border: none;
   cursor: pointer;
+  flex-wrap: wrap;
 }
 
 .search-results__suggestion:hover {
-  background: #f9fafb;
+  background: var(--wtg-hover, #f9fafb);
+}
+
+.search-results__suggestion--empty {
+  color: var(--wtg-text-muted, #9ca3af);
+  cursor: default;
+  justify-content: flex-start;
+}
+
+.search-results__suggestion-name {
+  font-weight: 500;
+  color: var(--wtg-text, #111827);
 }
 
 .search-results__suggestion-meta {
   font-size: 0.8125rem;
-  color: #9ca3af;
+  color: var(--wtg-text-muted, #9ca3af);
+}
+
+.search-results__type-badge {
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.search-results__type-badge--city {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.search-results__type-badge--country {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.search-results__type-badge--province {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .search-results__hero-hint {
