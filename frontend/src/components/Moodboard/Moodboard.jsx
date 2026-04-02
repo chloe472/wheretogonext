@@ -1,4 +1,4 @@
-import './styles/moodboard-shell.css';
+import './styles/moodboard.css';
 import TripHeader from '../TripDetailsHeader/TripDetailsHeader';
 import { useMoodboard } from './hooks';
 import { MoodboardFolderCard, MoodboardFolderModal } from './components';
@@ -55,7 +55,14 @@ export default function Moodboard({ user, onLogout }) {
         <div className="folder-section">
           {folders.length === 0 && !loading ? (
             <div className="folder-empty">
-              <p>No folders yet. Create one to start collecting images.</p>
+              <div className="empty-visual">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="empty-box" />
+                ))}
+              </div>
+                
+              <h3>No folders yet</h3>
+              <p>Create folders to collect images, moodboards, and ideas for each part of your trip.</p>
             </div>
           ) : (
             folders.map((folder) => (
