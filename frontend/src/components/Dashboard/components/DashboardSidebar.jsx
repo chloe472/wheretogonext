@@ -1,4 +1,5 @@
-import { Clock, FileText } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Clock, FileText } from 'lucide-react';
 import './DashboardSidebar.css';
 
 export default function DashboardSidebar({
@@ -13,6 +14,34 @@ export default function DashboardSidebar({
   onCloseSidebarModal,
 }) {
   const isSidebarModalOpen = sidebarModalType === 'coming-up' || sidebarModalType === 'recent-activity';
+  const LINE_PER_PAGE = 8;
+  const [sidebarModalPage, setSidebarModalPage] = useState(0);
+
+  const totalModalPages = useMemo(
+    () => Math.max(1, Math.ceil(sidebarModalItems.length / LINE_PER_PAGE)),
+    [sidebarModalItems.length],
+  );
+
+  const maxModalPageIndex = Math.max(0, totalModalPages - 1);
+  const safeSidebarModalPage = Math.min(sidebarModalPage, maxModalPageIndex);
+  const paginatedSidebarModalItems = useMemo(() => {
+    const start = safeSidebarModalPage * LINE_PER_PAGE;
+    return sidebarModalItems.slice(start, start + LINE_PER_PAGE);
+  }, [sidebarModalItems, safeSidebarModalPage]);
+
+  useEffect(() => {
+    if (isSidebarModalOpen) {
+      setSidebarModalPage(0);
+    }
+  }, [sidebarModalType, isSidebarModalOpen]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(sidebarModalItems.length / LINE_PER_PAGE) - 1);
+    setSidebarModalPage((page) => Math.min(page, maxPage));
+  }, [sidebarModalItems.length]);
+
+  const showSidebarModalPagination = sidebarModalItems.length > LINE_PER_PAGE;
+  const currentSidebarModalPageDisplay = safeSidebarModalPage + 1;
 
   return (
     <>
@@ -118,7 +147,7 @@ export default function DashboardSidebar({
             </div>
 
             <ul className="sidebar-block__list dashboard__sidebar-modal-list">
-              {sidebarModalItems.map((item) => (
+              {paginatedSidebarModalItems.map((item) => (
                 <li key={item.id} className="dashboard__sidebar-modal-item">
                   <span className="dashboard__sidebar-modal-item-title">
                     {sidebarModalType === 'recent-activity' ? item.text : item.name}
@@ -131,6 +160,34 @@ export default function DashboardSidebar({
                 </li>
               ))}
             </ul>
+
+            {showSidebarModalPagination ? (
+              <nav className="dashboard__sidebar-modal-pagination" aria-label="Sidebar list pages">
+                <button
+                  type="button"
+                  className="dashboard__sidebar-modal-pagination-btn"
+                  onClick={() => setSidebarModalPage((page) => Math.max(0, page - 1))}
+                  disabled={safeSidebarModalPage <= 0}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} aria-hidden />
+                  Previous
+                </button>
+                <span className="dashboard__sidebar-modal-pagination-meta">
+                  Page {currentSidebarModalPageDisplay} of {totalModalPages}
+                </span>
+                <button
+                  type="button"
+                  className="dashboard__sidebar-modal-pagination-btn"
+                  onClick={() => setSidebarModalPage((page) => Math.min(maxModalPageIndex, page + 1))}
+                  disabled={safeSidebarModalPage >= totalModalPages - 1}
+                  aria-label="Next page"
+                >
+                  Next
+                  <ChevronRight size={16} aria-hidden />
+                </button>
+              </nav>
+            ) : null}
           </div>
         </>
       )}
