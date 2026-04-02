@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   fetchMoodboardFolder,
   addMoodboardImage,
@@ -72,7 +73,7 @@ export function useMoodboardFolder(user) {
       await reactToMoodboardImage(tripId, folderId, imageId, emoji, user.name);
     } catch (err) {
       console.error(err);
-      alert('Failed to update reaction on server.');
+      toast.error('Failed to update reaction');
     }
   };
 
@@ -84,9 +85,10 @@ export function useMoodboardFolder(user) {
       setImages(updatedImages);
       setCurrentImageIdx(null);
       setShowDeleteModal(false);
+      toast.success('Image deleted');
     } catch (err) {
       console.error(err);
-      alert('Failed to delete image.');
+      toast.error(err?.message || 'Failed to delete image');
     }
   };
 
@@ -97,9 +99,10 @@ export function useMoodboardFolder(user) {
       setImages((prev) => [...prev, newImage]);
       setUrlInput('');
       setShowUrlModal(false);
+      toast.success('Image added');
     } catch (err) {
       console.error(err);
-      alert('Failed to add image.');
+      toast.error(err?.message || 'Failed to add image');
     }
   };
 
@@ -110,10 +113,11 @@ export function useMoodboardFolder(user) {
       reader.onload = async (ev) => {
         try {
           const newImage = await addMoodboardImage(tripId, folderId, ev.target.result);
+                    toast.success('Image uploaded');
           setImages((prev) => [...prev, newImage]);
         } catch (err) {
           console.error(err);
-          alert('Failed to upload image.');
+          toast.error(err?.message || 'Failed to upload image');
         }
       };
       reader.readAsDataURL(file);
@@ -121,7 +125,10 @@ export function useMoodboardFolder(user) {
   };
 
   const handleAnalyzeMoodboard = async () => {
-    if (images.length === 0) return alert('No images to analyze!');
+    if (images.length === 0) {
+      toast.error('Add some images before analysing');
+      return;
+    }
     setAiLoading(true);
     setAiResult(null);
     setShowAiModal(true);
@@ -133,9 +140,10 @@ export function useMoodboardFolder(user) {
       });
       const data = await res.json();
       setAiResult(data);
+      toast.success('Analysis complete');
     } catch (err) {
       console.error(err);
-      alert('AI failed');
+      toast.error('AI analysis failed. Please try again.');
     } finally {
       setAiLoading(false);
     }
@@ -149,6 +157,7 @@ export function useMoodboardFolder(user) {
     tripId,
     folderId,
     trip,
+    setTrip,
     folder,
     images,
     reactions,
