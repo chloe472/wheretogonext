@@ -133,10 +133,18 @@ export function useMoodboardFolder(user) {
     setAiResult(null);
     setShowAiModal(true);
     try {
+      const tripDestinations = String(trip?.locations || trip?.destination || '')
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const res = await fetch('/api/moodboard-analysis/analyze-moodboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images }),
+        body: JSON.stringify({
+          images,
+          destination: trip?.destination || '',
+          tripDestinations,
+        }),
       });
       const data = await res.json();
       setAiResult(data);

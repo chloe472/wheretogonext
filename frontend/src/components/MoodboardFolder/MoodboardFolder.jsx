@@ -103,6 +103,58 @@ export default function MoodboardFolder({ user }) {
   const titleDisplay = trip?.title || `${daysLength || 1} days to ${trip?.destination || 'your trip'}`;
   const headerCurrency = String(trip?.currency || 'USD').toUpperCase();
 
+  const aiLocationInsight = useMemo(() => {
+    if (aiResult?.locationInsight) return aiResult.locationInsight;
+
+    const places = Array.isArray(aiResult?.detectedPlaces)
+      ? aiResult.detectedPlaces
+      : (Array.isArray(aiResult?.places) ? aiResult.places : []);
+    if (places.length === 0) return null;
+
+    const rawTripDestinations = String(trip?.locations || trip?.destination || '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (rawTripDestinations.length === 0) return null;
+
+    const normalize = (s) => String(s || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9, ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const primary = (s) => String(s || '').split(',')[0].trim();
+
+    const tripPrimarySet = new Set(rawTripDestinations.map((d) => normalize(primary(d))).filter(Boolean));
+    const tripFullSet = new Set(rawTripDestinations.map((d) => normalize(d)).filter(Boolean));
+
+    const mismatches = [];
+    for (const place of places) {
+      const label = String(place?.location || place?.address || '').trim();
+      if (!label) continue;
+      const full = normalize(label);
+      const city = normalize(primary(label));
+      if (!full || !city) continue;
+      if (tripPrimarySet.has(city) || tripFullSet.has(full)) continue;
+      mismatches.push(label);
+    }
+
+    if (mismatches.length === 0) return null;
+
+    const detectedLabel = mismatches[0];
+    const tripDisplay = rawTripDestinations.join(', ');
+    const plural = mismatches.length > 1;
+
+    return {
+      mismatch: true,
+      detectedLabel,
+      canAddDetectedDestination: true,
+      message: plural
+        ? `These places look like they're in ${detectedLabel}, not ${tripDisplay}. You can still add them to your itinerary below, or add ${detectedLabel} to your trip destinations if you're visiting both.`
+        : `This place looks like it's in ${detectedLabel}, not ${tripDisplay}. You can still add it to your itinerary below, or add ${detectedLabel} to your trip destinations if you're visiting both.`,
+    };
+  }, [aiResult?.locationInsight, aiResult?.detectedPlaces, aiResult?.places, trip?.destination, trip?.locations]);
+
   const handleCommitTripTitle = async (nextTitle) => {
     const title = String(nextTitle || '').trim();
     if (!title || !tripId) return;
@@ -217,6 +269,39 @@ export default function MoodboardFolder({ user }) {
     setCurrencyModalOpen(false);
   };
 
+  const handleAddDetectedDestinationFromAi = async (label) => {
+    const raw = String(label || '').trim();
+    if (!raw || !tripId) return;
+
+    const currentStr = String(trip?.locations || trip?.destination || '');
+    const parts = currentStr.split(';').map((s) => s.trim()).filter(Boolean);
+    const cityToken = (s) => String(s || '').split(',')[0].trim().toLowerCase();
+    if (parts.some((p) => cityToken(p) === cityToken(raw))) {
+      toast('That destination is already on your trip.');
+      return;
+    }
+
+    const newLocations = [...parts, raw].join('; ');
+    const newDestination = parts.length > 0
+      ? String(parts[0]).split(',')[0].trim()
+      : String(raw).split(',')[0].trim();
+
+    try {
+      const updated = await updateItinerary(tripId, {
+        destination: newDestination,
+        locations: newLocations,
+      });
+      if (updated) {
+        setTrip((prev) => ({ ...(prev || {}), ...updated }));
+      } else {
+        setTrip((prev) => ({ ...(prev || {}), destination: newDestination, locations: newLocations }));
+      }
+      toast.success(`Added ${raw.split(',')[0].trim()} to your destinations`);
+    } catch (err) {
+      toast.error(err?.message || 'Could not update trip');
+    }
+  };
+
   const redirectToTripDetails = () => navigate(`/trip/${tripId}`);
   const whereTotalTripDays = Math.max(1, daysLength || 1);
 
@@ -262,8 +347,11 @@ export default function MoodboardFolder({ user }) {
         showAiModal={showAiModal}
         aiLoading={aiLoading}
         aiResult={aiResult}
+        aiLocationInsight={aiLocationInsight}
+        tripDestination={trip?.destination || ''}
         setShowAiModal={setShowAiModal}
         addToItinerary={addToItinerary}
+        onAddDetectedDestination={handleAddDetectedDestinationFromAi}
         folder={folder}
         images={images}
         tripId={tripId}

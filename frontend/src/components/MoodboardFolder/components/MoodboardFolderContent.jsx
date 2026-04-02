@@ -8,8 +8,11 @@ export default function MoodboardFolderContent({
   showAiModal,
   aiLoading,
   aiResult,
+  aiLocationInsight,
+  tripDestination,
   setShowAiModal,
   addToItinerary,
+  onAddDetectedDestination,
   folder,
   images,
   tripId,
@@ -37,8 +40,11 @@ export default function MoodboardFolderContent({
         show={showAiModal}
         aiLoading={aiLoading}
         aiResult={aiResult}
+        locationInsight={aiLocationInsight}
+        tripDestination={tripDestination}
         onClose={() => setShowAiModal(false)}
         onAddToItinerary={addToItinerary}
+        onAddDetectedDestination={onAddDetectedDestination}
       />
 
       <div className="container">
