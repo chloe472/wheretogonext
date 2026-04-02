@@ -1,4 +1,4 @@
-/* ── Folder list header + grid ──────────────────────────────── */
+/* Folder list header + grid */
 .header-section {
   display: flex;
   justify-content: space-between;
@@ -36,7 +36,7 @@
   opacity: 0.9;
 }
 
-/* ── Folder grid ──────────────────────────────────────────────── */
+/* Folder grid */
 .folder-section {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -98,7 +98,7 @@
   background: #e9daf0;
 }
 
-/* ── Folder card footer ─────────────────────────────────────── */
+/* Folder card footer */
 .folder-info-row {
   display: flex;
   justify-content: space-between;

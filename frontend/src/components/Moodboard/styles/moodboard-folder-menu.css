@@ -1,41 +1,60 @@
-/* ── Folder context menu (three-dot) ────────────────────────── */
+/* Folder menu */
 .folder-menu {
   position: relative;
 }
 
 .menu-btn {
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--wtg-text, #1c1917);
   font-size: 1.2rem;
   cursor: pointer;
 }
 
 .menu-btn:hover {
-  color: var(--wtg-primary, #362b24);
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
 }
 
 .menu-dropdown {
   position: absolute;
+  top: calc(100% + 4px);
   right: 0;
-  top: 36px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  z-index: 9999;
-  min-width: 120px;
-  overflow: hidden;
+  min-width: 11.5rem;
+  max-height: min(70vh, 22rem);
+  overflow-y: auto;
+  padding: 0.35rem 0;
+  background: var(--wtg-surface, #fff);
+  border: 1px solid var(--wtg-border, #d6d3d1);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(61, 52, 40, 0.14);
+  z-index: 50;
 }
 
 .menu-item {
+  display: block;
   width: 100%;
-  padding: 0.6rem 1rem;
-  border: none;
-  background: none;
   text-align: left;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text, #1c1917);
+  border: none;
+  background: transparent;
   cursor: pointer;
-  font-size: 0.9rem;
+  transition: background 0.12s;
 }
 
 .menu-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--wtg-hover, rgba(28, 25, 23, 0.06));
+}
+
+.menu-item.delete {
+  color: #b42318;
 }
