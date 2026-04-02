@@ -1,10 +1,11 @@
 /* Folder detail page header */
 .folder-header-row {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 2rem;
+  margin: 20px 0 40px;
 }
 
 .folder-left {
@@ -13,25 +14,40 @@
   gap: 12px;
 }
 
-.back-btn {
-  font-size: 1.25rem;
-  background: none;
+.itinerary-detail__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
   border: none;
+  border-radius: 8px;
+  background: var(--wtg-primary, #57534e);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
   cursor: pointer;
-  font-weight: bold;
-  color: #5c4a3d;
+}
+
+.itinerary-detail__back-btn {
+  position: absolute;
+  top: 0;
+  left: -92px;
+  display: inline-flex;
+  margin: 0;
+  z-index: 2;
 }
 
 .folder-title h1 {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 600;
   color: #5c4a3d;
-  margin-bottom: 0;
+  margin: 0 0 0.95rem;
 }
 
 .folder-title p {
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   color: #6b5d4f;
+  margin-top: 4px;
 }
 
 .folder-right {

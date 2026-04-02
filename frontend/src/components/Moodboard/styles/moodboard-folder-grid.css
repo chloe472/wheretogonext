@@ -1,11 +1,35 @@
 /* Folder list header + grid */
 .header-section {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
   margin: 20px 0 40px;
+}
+
+.itinerary-detail__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--wtg-primary, #57534e);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.itinerary-detail__back-btn {
+  position: absolute;
+  top: 0;
+  left: -92px;
+  display: inline-flex;
+  margin: 0;
+  z-index: 2;
 }
 
 .header-left h1 {

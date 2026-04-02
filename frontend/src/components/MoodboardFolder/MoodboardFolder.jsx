@@ -2,19 +2,13 @@ import './styles/moodboard-folder.css';
 import { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import TripHeader from '../TripDetailsPage/components/TripDetailsHeader';
-import TripDetailsWhereModal from '../TripDetailsPage/components/TripDetailsWhereModal';
-import TripDetailsCurrencyModal from '../TripDetailsPage/components/TripDetailsCurrencyModal';
-import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import { updateItinerary, deleteItinerary } from '../../api/itinerariesApi';
 import { useMoodboardFolder } from './hooks';
 import { useTripDetailsWhereSuggestions } from '../TripDetailsPage/hooks/useTripDetailsWhereSuggestions';
 import { useTripDetailsExchangeRates } from '../TripDetailsPage/hooks/useTripDetailsExchangeRates';
 import {
-  MoodboardPin,
-  MoodboardFolderHeader,
-  MoodboardAiModal,
-  MoodboardUrlModal,
-  MoodboardDeleteImageModal,
+  MoodboardFolderContent,
+  MoodboardFolderTripOverlays,
 } from './components';
 import '../TripDetailsPage/styles/trip-details-modal-shared.css';
 import '../TripDetailsPage/styles/trip-details-where-modal.css';
@@ -73,6 +67,7 @@ export default function MoodboardFolder({ user }) {
 
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [modalCurrency, setModalCurrency] = useState('USD');
+  const [deleteTripModalOpen, setDeleteTripModalOpen] = useState(false);
 
   const [whereLocationSuggestions, setWhereLocationSuggestions] = useState([]);
   const [whereSuggestionsLoading, setWhereSuggestionsLoading] = useState(false);
@@ -114,16 +109,19 @@ export default function MoodboardFolder({ user }) {
     try {
       const updated = await updateItinerary(tripId, { title });
       if (updated) setTrip((prev) => ({ ...(prev || {}), ...updated }));
-      toast.success('Trip renamed');
+      toast.success('Changes saved', { id: 'trip-details-saved' });
     } catch (err) {
       toast.error(err?.message || 'Failed to rename trip');
     }
   };
 
-  const handleRequestDeleteTrip = async () => {
+  const handleRequestDeleteTrip = () => {
+    setDeleteTripModalOpen(true);
+  };
+
+  const handleConfirmDeleteTrip = async () => {
     if (!tripId) return;
-    const ok = window.confirm('Delete this trip? This cannot be undone.');
-    if (!ok) return;
+    setDeleteTripModalOpen(false);
     try {
       await deleteItinerary(tripId);
       toast.success('Trip deleted');
@@ -153,7 +151,7 @@ export default function MoodboardFolder({ user }) {
       toast.error('Please enter a valid non-negative amount');
       return;
     }
-    await applyTripUpdate({ budgetSpent: value }, 'Budget updated');
+    await applyTripUpdate({ budgetSpent: value }, 'Changes saved');
   };
 
   const handleOpenWhereModal = async () => {
@@ -200,7 +198,7 @@ export default function MoodboardFolder({ user }) {
       toast.error('End date must be after or equal to start date');
       return;
     }
-    await applyTripUpdate({ startDate, endDate, dates: `${startDate} - ${endDate}` }, 'Dates updated');
+    await applyTripUpdate({ startDate, endDate, dates: `${startDate} - ${endDate}` }, 'Changes saved');
     setDateModalOpen(false);
   };
 
@@ -256,120 +254,72 @@ export default function MoodboardFolder({ user }) {
           onOpenNotesModal={redirectToTripDetails}
           onOpenRouteIdeas={redirectToTripDetails}
           viewMode={viewMode}
-          setViewMode={setViewMode}
+          setViewMode={() => redirectToTripDetails()}
         />
       )}
 
-      <MoodboardAiModal
-        show={showAiModal}
+      <MoodboardFolderContent
+        showAiModal={showAiModal}
         aiLoading={aiLoading}
         aiResult={aiResult}
-        onClose={() => setShowAiModal(false)}
-        onAddToItinerary={addToItinerary}
+        setShowAiModal={setShowAiModal}
+        addToItinerary={addToItinerary}
+        folder={folder}
+        images={images}
+        tripId={tripId}
+        handleAnalyzeMoodboard={handleAnalyzeMoodboard}
+        setShowUrlModal={setShowUrlModal}
+        navigate={navigate}
+        handleFileUpload={handleFileUpload}
+        folderId={folderId}
+        reactions={reactions}
+        user={user}
+        handleEmojiClick={handleEmojiClick}
+        setCurrentImageIdx={setCurrentImageIdx}
+        setShowDeleteModal={setShowDeleteModal}
+        showUrlModal={showUrlModal}
+        urlInput={urlInput}
+        setUrlInput={setUrlInput}
+        handleAddUrl={handleAddUrl}
+        showDeleteModal={showDeleteModal}
+        currentImageIdx={currentImageIdx}
+        handleDeleteImage={handleDeleteImage}
       />
 
-      <div className="container">
-        <MoodboardFolderHeader
-          folder={folder}
-          images={images}
-          tripId={tripId}
-          onAnalyze={handleAnalyzeMoodboard}
-          onAddUrl={() => setShowUrlModal(true)}
-          navigate={navigate}
-        />
-
-        <input
-          type="file"
-          id="file-input"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={handleFileUpload}
-        />
-
-        <div className="pinterest">
-          {images.map((img, idx) => {
-            const pinId = folderId + '-' + idx;
-            return (
-              <MoodboardPin
-                key={pinId}
-                img={img}
-                idx={idx}
-                pinId={pinId}
-                reactions={reactions}
-                user={user}
-                onEmojiClick={handleEmojiClick}
-                onDeleteClick={() => {
-                  setCurrentImageIdx(idx);
-                  setShowDeleteModal(true);
-                }}
-              />
-            );
-          })}
-        </div>
-
-        <MoodboardUrlModal
-          show={showUrlModal}
-          urlInput={urlInput}
-          onChange={setUrlInput}
-          onCancel={() => setShowUrlModal(false)}
-          onAdd={handleAddUrl}
-        />
-
-        <MoodboardDeleteImageModal
-          show={showDeleteModal && currentImageIdx !== null}
-          onCancel={() => setShowDeleteModal(false)}
-          onDelete={handleDeleteImage}
-        />
-
-        {whereModalOpen && (
-          <TripDetailsWhereModal
-            onClose={() => setWhereModalOpen(false)}
-            whereModalRef={whereModalRef}
-            whereQuery={whereQuery}
-            setWhereQuery={setWhereQuery}
-            whereSuggestionsOpen={whereSuggestionsOpen}
-            setWhereSuggestionsOpen={setWhereSuggestionsOpen}
-            whereSuggestionsLoading={whereSuggestionsLoading}
-            whereLocationSuggestions={whereLocationSuggestions}
-            whereSelectedLocations={whereSelectedLocations}
-            setWhereSelectedLocations={setWhereSelectedLocations}
-            whereCityDayRanges={whereCityDayRanges}
-            whereDefaultCityDayRanges={{}}
-            whereTotalTripDays={whereTotalTripDays}
-            whereCityDayDrafts={whereCityDayDrafts}
-            whereCityRangeError={whereCityRangeError}
-            setWhereCityRangeError={setWhereCityRangeError}
-            handleWhereCityRangeInputChange={(loc, field, value) => {
-              const key = `${String(loc?.name || '').toLowerCase()}::${field}`;
-              setWhereCityDayDrafts((prev) => ({ ...prev, [key]: value }));
-            }}
-            commitWhereCityRangeInput={() => {}}
-            onApply={handleApplyWhereModal}
-          />
-        )}
-
-        <DateRangePickerModal
-          open={dateModalOpen}
-          start={trip?.startDate || null}
-          end={trip?.endDate || null}
-          displayStartForMonth={trip?.startDate || null}
-          onApply={handleApplyDateModal}
-          onClose={() => setDateModalOpen(false)}
-          title="When"
-        />
-
-        {currencyModalOpen && (
-          <TripDetailsCurrencyModal
-            onClose={() => setCurrencyModalOpen(false)}
-            currencyOptions={currencyOptions}
-            currencyOptionsForModal={currencyOptionsForModal}
-            modalCurrency={modalCurrency}
-            setModalCurrency={setModalCurrency}
-            onApply={handleApplyCurrencyModal}
-          />
-        )}
-      </div>
+      <MoodboardFolderTripOverlays
+        deleteTripModalOpen={deleteTripModalOpen}
+        closeDeleteTripModal={() => setDeleteTripModalOpen(false)}
+        confirmDeleteTrip={handleConfirmDeleteTrip}
+        whereModalOpen={whereModalOpen}
+        closeWhereModal={() => setWhereModalOpen(false)}
+        whereModalRef={whereModalRef}
+        whereQuery={whereQuery}
+        setWhereQuery={setWhereQuery}
+        whereSuggestionsOpen={whereSuggestionsOpen}
+        setWhereSuggestionsOpen={setWhereSuggestionsOpen}
+        whereSuggestionsLoading={whereSuggestionsLoading}
+        whereLocationSuggestions={whereLocationSuggestions}
+        whereSelectedLocations={whereSelectedLocations}
+        setWhereSelectedLocations={setWhereSelectedLocations}
+        whereCityDayRanges={whereCityDayRanges}
+        whereTotalTripDays={whereTotalTripDays}
+        whereCityDayDrafts={whereCityDayDrafts}
+        whereCityRangeError={whereCityRangeError}
+        setWhereCityRangeError={setWhereCityRangeError}
+        setWhereCityDayDrafts={setWhereCityDayDrafts}
+        applyWhereModal={handleApplyWhereModal}
+        dateModalOpen={dateModalOpen}
+        trip={trip}
+        applyDateModal={handleApplyDateModal}
+        closeDateModal={() => setDateModalOpen(false)}
+        currencyModalOpen={currencyModalOpen}
+        closeCurrencyModal={() => setCurrencyModalOpen(false)}
+        currencyOptions={currencyOptions}
+        currencyOptionsForModal={currencyOptionsForModal}
+        modalCurrency={modalCurrency}
+        setModalCurrency={setModalCurrency}
+        applyCurrencyModal={handleApplyCurrencyModal}
+      />
     </div>
   );
 }
