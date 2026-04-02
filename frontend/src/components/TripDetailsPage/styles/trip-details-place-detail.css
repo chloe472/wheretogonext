@@ -8,3 +8,24 @@
   background: var(--place-surface, #faf8f5);
   border-right: 1px solid var(--place-border, #d4c4b0);
 }
+
+/* Matches itinerary-detail primary back (Explore hero: .itinerary-detail__btn). */
+.trip-details__place-detail-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--wtg-primary, #57534e);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.trip-details__place-detail-back:hover {
+  background: #4f3d34;
+}

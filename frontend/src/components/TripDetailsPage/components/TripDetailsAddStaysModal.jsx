@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Check,
   ExternalLink,
   Heart,
@@ -100,7 +99,7 @@ export default function TripDetailsAddStaysModal({
                   onClick={onBackStayDetail}
                   aria-label="Back to list"
                 >
-                  <ArrowLeft size={20} aria-hidden /> Back
+                  Back
                 </button>
                 <button
                   type="button"
