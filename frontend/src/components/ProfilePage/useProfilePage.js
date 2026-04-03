@@ -5,6 +5,7 @@ import {
   updateItinerary,
   duplicateItinerary,
   deleteItinerary,
+  shareItineraryWithFriends,
 } from '../../api/itinerariesApi';
 import {
   fetchMyProfile,
@@ -21,6 +22,7 @@ import {
   sendFriendRequestByIdentifier,
   searchUserByIdentifier,
   addMapDestination,
+  shareProfileWithFriends,
 } from '../../api/profileApi';
 import countriesData from '../../data/countries.json';
 import { CITIES } from '../../data/cities';
@@ -96,6 +98,9 @@ export function useProfilePage({
   const [addFriendResults, setAddFriendResults] = useState([]);
   const [addFriendSelectedId, setAddFriendSelectedId] = useState(null);
   const [addFriendSearching, setAddFriendSearching] = useState(false);
+  const [profileShareOpen, setProfileShareOpen] = useState(false);
+  const [profileShareSelectedIds, setProfileShareSelectedIds] = useState([]);
+  const [profileShareSending, setProfileShareSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [geoData, setGeoData] = useState(null);
@@ -128,9 +133,6 @@ export function useProfilePage({
   const [statsListOpen, setStatsListOpen] = useState(null); // 'countries' | 'cities' | null
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTrip, setShareTrip] = useState(null);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [shareError, setShareError] = useState('');
-  const [shareEmail, setShareEmail] = useState('');
 
   const isSelf = !profileId || (user?.id && String(profileId) === String(user.id));
 
@@ -590,8 +592,36 @@ export function useProfilePage({
   };
 
   const handleShare = () => {
+    setProfileShareSelectedIds([]);
+    setProfileShareOpen(true);
+  };
+
+  const handleProfileShareToggleFriend = (friendId) => {
+    setProfileShareSelectedIds((prev) =>
+      prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
+    );
+  };
+
+  const handleProfileShareSend = async () => {
+    if (profileShareSelectedIds.length === 0) return;
+    setProfileShareSending(true);
+    try {
+      await shareProfileWithFriends(profileShareSelectedIds);
+      toast.success('Profile shared!');
+      setProfileShareOpen(false);
+      setProfileShareSelectedIds([]);
+    } catch (err) {
+      toast.error(err?.message || 'Could not share profile.');
+    } finally {
+      setProfileShareSending(false);
+    }
+  };
+
+  const handleProfileShareCopyLink = () => {
     if (!shareUrl.trim()) return;
-    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => toast.success('Profile link copied!'))
+      .catch(() => toast.error('Could not copy link.'));
   };
 
   const getTripLink = (trip) => {
@@ -885,68 +915,27 @@ export function useProfilePage({
     }
   };
 
-  const openShareTrip = async (trip) => {
+  const openShareTrip = (trip) => {
     if (!trip?.id) return;
-    setShareOpen(true);
-    setShareLoading(true);
-    setShareError('');
     setShareTrip({ ...trip });
-    try {
-      const full = await fetchItineraryById(trip.id);
-      setShareTrip((prev) => ({
-        ...prev,
-        ...(full || {}),
-        id: trip.id,
-      }));
-    } catch (err) {
-      setShareError(err?.message || 'Failed to load collaborators.');
-    } finally {
-      setShareLoading(false);
-    }
+    setShareOpen(true);
   };
 
   const closeShareTrip = () => {
     setShareOpen(false);
     setShareTrip(null);
-    setShareEmail('');
-    setShareError('');
   };
 
-  const saveCollaborators = async (nextCollaborators) => {
-    if (!shareTrip?.id) return;
-    setShareLoading(true);
-    setShareError('');
+  const handleShareWithFriend = async (friend) => {
+    if (!friend?.id || !shareTrip?.id) return;
     try {
-      const updated = await updateItinerary(shareTrip.id, { collaborators: nextCollaborators });
-      setShareTrip((prev) => ({
-        ...prev,
-        collaborators: updated?.collaborators || nextCollaborators,
-      }));
+      await shareItineraryWithFriends(shareTrip.id, [friend.id]);
+      toast.success(`Shared trip with ${friend.name || 'friend'}`);
+      setShareOpen(false);
+      setShareTrip(null);
     } catch (err) {
-      setShareError(err?.message || 'Failed to update collaborators.');
-    } finally {
-      setShareLoading(false);
+      toast.error(err?.message || 'Could not share trip.');
     }
-  };
-
-  const handleInviteCollaborator = async () => {
-    const email = shareEmail.trim().toLowerCase();
-    if (!email) return;
-    const existing = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
-    if (existing.some((c) => String(c.email || '').toLowerCase() === email)) {
-      setShareError('This collaborator is already invited.');
-      return;
-    }
-    const next = [...existing, { email, role: 'viewer' }];
-    await saveCollaborators(next);
-    setShareEmail('');
-  };
-
-  const handleRemoveCollaborator = async (email) => {
-    if (!email) return;
-    const existing = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
-    const next = existing.filter((c) => String(c.email || '').toLowerCase() !== String(email).toLowerCase());
-    await saveCollaborators(next);
   };
 
   const handleCopyShareLink = async () => {
@@ -1138,10 +1127,6 @@ export function useProfilePage({
     setStatsListOpen,
     shareOpen,
     shareTrip,
-    shareLoading,
-    shareError,
-    shareEmail,
-    setShareEmail,
     isSelf,
     shareUrl,
     countries,
@@ -1156,6 +1141,13 @@ export function useProfilePage({
     declineRequest,
     handleFriendToggle,
     handleShare,
+    profileShareOpen,
+    setProfileShareOpen,
+    profileShareSelectedIds,
+    profileShareSending,
+    handleProfileShareToggleFriend,
+    handleProfileShareSend,
+    handleProfileShareCopyLink,
     getTripLink,
     refreshProfile,
     refreshRequests,
@@ -1166,8 +1158,7 @@ export function useProfilePage({
     handleItineraryOwnerMenu,
     applyRenameFromModal,
     closeShareTrip,
-    handleInviteCollaborator,
-    handleRemoveCollaborator,
+    handleShareWithFriend,
     handleCopyShareLink,
     commitSocialDraft,
     saveProfile,

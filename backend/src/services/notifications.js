@@ -15,8 +15,8 @@ function dedupeFilterFromPayload(payload) {
   const type = String(payload?.type || '').trim();
   if (!recipient || !type) return null;
 
-  // Prevent noisy duplicates for event-style notifications.
-  if ((type === 'itinerary_added' || type === 'itinerary_updated') && itineraryId) {
+  // Prevent noisy duplicates for update-style notifications only.
+  if (type === 'itinerary_updated' && itineraryId) {
     return {
       recipient,
       type,

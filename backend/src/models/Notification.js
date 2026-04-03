@@ -12,6 +12,7 @@ const notificationSchema = new mongoose.Schema(
         'itinerary_updated',
         'friend_request_accepted',
         'itinerary_commented',
+        'profile_shared',
       ],
       required: true,
       index: true,

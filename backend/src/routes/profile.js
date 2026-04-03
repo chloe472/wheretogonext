@@ -658,4 +658,56 @@ router.delete('/:id/friends', requireAuth, async (req, res) => {
   }
 });
 
+// Share your own profile with a list of friends — sends each a profile_shared notification
+router.post('/me/share', requireAuth, async (req, res) => {
+  try {
+    const actor = await User.findById(req.userId).select('name').lean();
+    if (!actor) return res.status(404).json({ error: 'User not found.' });
+
+    const friendIds = Array.isArray(req.body?.friendIds) ? req.body.friendIds : [];
+    const validIds = friendIds
+      .map((fid) => String(fid || '').trim())
+      .filter((fid) => mongoose.isValidObjectId(fid) && fid !== String(req.userId));
+
+    if (validIds.length === 0) return res.json({ ok: true, sent: 0 });
+
+    // Verify each recipient is actually a friend
+    const [userA_base, userB_base] = [req.userId];
+    const friendships = await Friendship.find({
+      $or: validIds.map((fid) => {
+        const [a, b] = sortFriendPair(req.userId, fid);
+        return { userA: a, userB: b };
+      }),
+    }).lean();
+    const confirmedFriendIds = new Set(
+      friendships.map((f) => {
+        const a = String(f.userA);
+        const b = String(f.userB);
+        return a === String(req.userId) ? b : a;
+      })
+    );
+
+    const notifications = validIds
+      .filter((fid) => confirmedFriendIds.has(fid))
+      .map((fid) => ({
+        recipientId: fid,
+        actorId: req.userId,
+        type: 'profile_shared',
+        title: `${actor.name || 'Someone'} shared their profile with you`,
+        message: `Check out ${actor.name || 'their'} travel profile.`,
+        link: `/profile/${req.userId}`,
+        meta: { sharedByUserId: String(req.userId) },
+      }));
+
+    const results = await Promise.allSettled(
+      notifications.map((n) => createNotification(n))
+    );
+    const sent = results.filter((r) => r.status === 'fulfilled' && r.value).length;
+    return res.json({ ok: true, sent });
+  } catch (err) {
+    console.error('Profile share error:', err);
+    return res.status(500).json({ error: 'Failed to share profile.' });
+  }
+});
+
 export default router;

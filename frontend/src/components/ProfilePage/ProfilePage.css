@@ -1,3 +1,5 @@
+@import '../TripDetailsPage/styles/trip-share-modal.css';
+
 .profile-page {
   min-height: 100vh;
   display: flex;
@@ -435,6 +437,97 @@
   color: #a04535;
   font-weight: 600;
   cursor: pointer;
+}
+
+.profile-page__collab-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-page__collab-sub {
+  font-size: 0.78rem;
+  color: var(--wtg-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Share with friends section */
+.profile-page__share-friends-section {
+  margin-bottom: 1.25rem;
+}
+
+.profile-page__share-friends-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.profile-page__share-friend-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--wtg-border);
+  border-radius: 12px;
+  background: var(--wtg-surface);
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 70px;
+}
+
+.profile-page__share-friend-btn:hover:not(:disabled) {
+  border-color: var(--wtg-primary);
+  background: var(--wtg-hover);
+}
+
+.profile-page__share-friend-btn--shared {
+  border-color: var(--wtg-primary);
+  background: color-mix(in srgb, var(--wtg-primary) 10%, transparent);
+}
+
+.profile-page__share-friend-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.profile-page__share-friend-avatar--placeholder {
+  background: var(--wtg-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.profile-page__share-friend-name {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  text-align: center;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-page__share-friend-check {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.7rem;
+  color: var(--wtg-primary);
+  font-weight: 700;
 }
 
 

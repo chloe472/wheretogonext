@@ -62,7 +62,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
     }
 
     loadLatest();
-    const intervalId = window.setInterval(loadLatest, 60000);
+    const intervalId = window.setInterval(loadLatest, 15000);
 
     return () => {
       cancelled = true;
@@ -109,13 +109,20 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       if (accepterId) return `/profile/${encodeURIComponent(accepterId)}`;
       return '/profile?tab=friends&section=friends';
     }
+    if (type === 'profile_shared') {
+      const sharerId = String(n?.meta?.sharedByUserId || '').trim();
+      if (sharerId) return `/profile/${encodeURIComponent(sharerId)}`;
+    }
     const direct = String(n?.link || '').trim();
     if (direct) return direct;
     if (type === 'itinerary_commented' && n?.meta?.itineraryId) {
       return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}?tab=comments`;
     }
-    if ((type === 'itinerary_added' || type === 'itinerary_updated') && n?.meta?.itineraryId) {
-      return `/trip/${encodeURIComponent(String(n.meta.itineraryId))}`;
+    if (type === 'itinerary_added' && n?.meta?.itineraryId) {
+      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}`;
+    }
+    if (type === 'itinerary_updated' && n?.meta?.itineraryId) {
+      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}`;
     }
     return '/';
   };

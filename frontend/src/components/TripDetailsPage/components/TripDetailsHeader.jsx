@@ -286,7 +286,7 @@ export default function TripDetailsHeader({
             <CalendarIcon size={18} aria-hidden />
           </button>
         </div>
-        <button type="button" className="trip-details__icon-btn" aria-label="Share">
+        <button type="button" className="trip-details__icon-btn" aria-label="Share" onClick={onShareTrip}>
           <Share2 size={18} aria-hidden />
         </button>
       </div>

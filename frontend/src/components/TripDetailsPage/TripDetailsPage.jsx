@@ -26,11 +26,14 @@ import {
   duplicateItinerary,
   fetchItineraryById,
   updateItinerary,
+  shareItineraryWithFriends,
 } from '../../api/itinerariesApi';
 import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
 import SetCoverImageModal from '../Dashboard/components/SetCoverImageModal';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { useSocialImport } from '../SocialImportModal/useSocialImport';
+import { fetchMyProfile } from '../../api/profileApi';
+import TripShareModal from './components/TripShareModal';
 import {
   TripDetailsPageLayout,
   TripDetailsModalStack,
@@ -374,28 +377,39 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const openDateModal = () => setDateModalOpen(true);
 
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareFriends, setShareFriends] = useState([]);
+  const [shareLoading, setShareLoading] = useState(false);
+
   const handleShareTrip = useCallback(async () => {
-    const url = typeof window !== 'undefined' ? window.location.href : '';
-    if (!url) return;
+    setShareModalOpen(true);
+    setShareLoading(true);
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = url;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        if (!ok) throw new Error('Copy command failed');
-      }
-      toast.success('Link copied to clipboard!');
-    } catch (error) {
-      toast.error(error?.message || 'Could not copy link. Try copying from the address bar.');
+      const profilePayload = await fetchMyProfile().catch(() => null);
+      setShareFriends(Array.isArray(profilePayload?.friends) ? profilePayload.friends : []);
+    } finally {
+      setShareLoading(false);
+    }
+  }, [tripId]);
+
+  const handleShareWithFriend = useCallback(async (friend) => {
+    if (!friend?.id) return;
+    try {
+      await shareItineraryWithFriends(tripId, [friend.id]);
+      toast.success(`Shared trip with ${friend.name || 'friend'}`);
+      setShareModalOpen(false);
+    } catch (err) {
+      toast.error(err?.message || 'Could not share trip.');
+    }
+  }, [tripId]);
+
+  const handleShareCopyLink = useCallback(async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied!');
+    } catch {
+      toast.error('Could not copy link.');
     }
   }, []);
 
@@ -1110,6 +1124,18 @@ export default function TripDetailsPage({ user, onLogout }) {
     );
   }
 
+  const userId = String(user?.id || user?._id || '').trim();
+  const creatorId = String(
+    serverItinerary?.creator?._id ||
+    serverItinerary?.creator?.id ||
+    serverItinerary?.creator ||
+    ''
+  ).trim();
+  if (userId && creatorId && userId !== creatorId) {
+    navigate(`/itineraries/${tripId}`, { replace: true });
+    return null;
+  }
+
   return (
     <div className="trip-details">
       <TripDetailsPageLayout
@@ -1210,6 +1236,15 @@ export default function TripDetailsPage({ user, onLogout }) {
         dateModalOpen={dateModalOpen}
         applyDateRange={applyDateRange}
         setDateModalOpen={setDateModalOpen}
+      />
+
+      <TripShareModal
+        open={shareModalOpen}
+        loading={shareLoading}
+        friends={shareFriends}
+        onClose={() => setShareModalOpen(false)}
+        onShareWithFriend={handleShareWithFriend}
+        onCopy={handleShareCopyLink}
       />
 
       <PublishItineraryModal
