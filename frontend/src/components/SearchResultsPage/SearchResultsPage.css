@@ -236,6 +236,13 @@
   color: var(--wtg-primary);
 }
 
+.search-results__interest-hint {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--wtg-text-muted, #6b7280);
+}
+
 .search-results__filter {
   margin-bottom: 1.25rem;
 }

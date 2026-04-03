@@ -14,6 +14,8 @@ export function mapItineraryToCard(it) {
   const cover = coverImages[0] || '';
   const placesCount = Array.isArray(it.places) ? it.places.length : 0;
 
+  const publishedAt = it.publishedAt || it.createdAt || null;
+
   return {
     id: String(it._id ?? it.id ?? ''),
     title: it.title || '',
@@ -25,6 +27,7 @@ export function mapItineraryToCard(it) {
     placesCount,
     duration: `${days} ${days === 1 ? 'day' : 'days'}`,
     days,
+    publishedAt,
     creator: creatorName,
     creatorAvatar: creatorPicture,
     creatorId,
@@ -56,9 +59,73 @@ export function applyClientSort(cards, sortBy) {
       return list.sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
     case 'Duration':
       return list.sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+    case 'Newest': {
+      const t = (c) => {
+        const d = new Date(c.publishedAt || 0);
+        return Number.isFinite(d.getTime()) ? d.getTime() : 0;
+      };
+      return list.sort((a, b) => t(b) - t(a));
+    }
     default:
       return list;
   }
+}
+
+/**
+ * Explore / community list: when the user has profile interests (same labels as itinerary.categories),
+ * rank itineraries with more overlapping categories first; then apply the selected sort as tie-breaker.
+ */
+export function applyExploreOrdering(cards, sortBy, profileInterests) {
+  const raw = Array.isArray(profileInterests) ? profileInterests : [];
+  const interestSet = new Set(
+    raw.map((s) => String(s || '').trim().toLowerCase()).filter(Boolean),
+  );
+  const useInterestBoost = interestSet.size > 0;
+
+  const matchScore = (card) => {
+    if (!useInterestBoost) return 0;
+    const tags = Array.isArray(card.tags) ? card.tags : [];
+    let n = 0;
+    tags.forEach((t) => {
+      if (interestSet.has(String(t).trim().toLowerCase())) n += 1;
+    });
+    return n;
+  };
+
+  const secondaryCompare = (a, b) => {
+    switch (sortBy) {
+      case 'Price: Low to High':
+        return (a.views ?? 0) - (b.views ?? 0);
+      case 'Price: High to Low':
+        return (b.views ?? 0) - (a.views ?? 0);
+      case 'Duration':
+        return (a.days ?? 0) - (b.days ?? 0);
+      case 'Newest': {
+        const ta = new Date(a.publishedAt || 0).getTime();
+        const tb = new Date(b.publishedAt || 0).getTime();
+        const aOk = Number.isFinite(ta);
+        const bOk = Number.isFinite(tb);
+        if (aOk && bOk) return tb - ta;
+        return (b.views ?? 0) - (a.views ?? 0);
+      }
+      case 'Most Popular':
+      default:
+        return (b.views ?? 0) - (a.views ?? 0);
+    }
+  };
+
+  if (!useInterestBoost) {
+    return applyClientSort([...cards], sortBy);
+  }
+
+  const list = [...cards];
+  list.sort((a, b) => {
+    const sa = matchScore(a);
+    const sb = matchScore(b);
+    if (sb !== sa) return sb - sa;
+    return secondaryCompare(a, b);
+  });
+  return list;
 }
 
 /**

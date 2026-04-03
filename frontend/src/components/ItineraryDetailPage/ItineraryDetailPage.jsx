@@ -32,6 +32,7 @@ import {
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { formatViewCount } from '../../lib/formatViewCount';
 import { buildItineraryMapMarkers } from '../../lib/itineraryMapMarkers';
+import { getDestinationList } from '../TripDetailsPage/lib/tripDetailsPageHelpers';
 import TripMap from '../TripMap/TripMap';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
@@ -538,10 +539,11 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       categoryId: smartItemType === 'food' ? 'food' : 'places',
       category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
       Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
+      sourceItineraryDestinationLabels: getDestinationList(itinerary?.destination, itinerary?.locations),
     });
     setExplorePlaceDetail(null);
     setExploreAddOpen(true);
-  }, [explorePlaceDetail, user, onRequireLogin]);
+  }, [explorePlaceDetail, user, onRequireLogin, itinerary?.destination, itinerary?.locations]);
 
   const handlePostComment = async () => {
     const t = newComment.trim();
