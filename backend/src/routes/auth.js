@@ -36,13 +36,12 @@ function userToJson(user) {
     email: user.email,
     name: user.name,
     picture: user.picture,
-    username: user.username,
   };
 }
 
 router.post('/register', requireJwt, async (req, res) => {
   try {
-    const { email, password, name, username } = req.body;
+    const { email, password, name } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
@@ -60,19 +59,15 @@ router.post('/register', requireJwt, async (req, res) => {
       return res.status(400).json({ error: 'Password must contain at least one symbol.' });
     }
 
-    const existing = await User.findOne({ $or: [{ email: emailTrim }, ...(username ? [{ username: String(username).trim() }] : [])] });
+    const existing = await User.findOne({ email: emailTrim });
     if (existing) {
-      if (existing.email === emailTrim) {
-        return res.status(409).json({ error: 'An account with this email already exists.' });
-      }
-      return res.status(409).json({ error: 'Username is already taken.' });
+      return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
     const user = await User.create({
       email: emailTrim,
       password,
       name: name ? String(name).trim() : undefined,
-      username: username ? String(username).trim() || undefined : undefined,
     });
 
     const token = signToken(user);
@@ -106,22 +101,17 @@ router.post('/login', requireJwt, async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
     if (!emailOrUsername || !password) {
-      return res.status(400).json({ error: 'Email/username and password are required.' });
+      return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const isEmail = emailOrUsername.includes('@');
-    const user = await User.findOne(
-      isEmail
-        ? { email: String(emailOrUsername).trim().toLowerCase() }
-        : { username: String(emailOrUsername).trim() }
-    );
+    const user = await User.findOne({ email: String(emailOrUsername).trim().toLowerCase() });
     if (!user || !user.password) {
-      return res.status(401).json({ error: 'Invalid email/username or password.' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(401).json({ error: 'Invalid email/username or password.' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const token = signToken(user);

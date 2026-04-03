@@ -22,8 +22,9 @@ function getBackendAssetOrigin() {
   if (envBase) return envBase;
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
+    const backendPort = String(import.meta?.env?.VITE_BACKEND_PORT || '5001');
     if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '3000') {
-      return `${protocol}//${hostname}:5000`;
+      return `${protocol}//${hostname}:${backendPort}`;
     }
     return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }

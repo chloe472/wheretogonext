@@ -11,8 +11,8 @@ export default function MoodboardFolderHeader({
   return (
     <div className="folder-header-row">
       <div className="folder-left">
-        <button className="back-btn" onClick={() => navigate(`/trip/${tripId}/moodboard`)}>
-          &lt;
+        <button className="wtg-back-btn" onClick={() => navigate(`/trip/${tripId}/moodboard`)}>
+          Back
         </button>
         <div className="folder-title">
           <h1>{folder?.name}</h1>

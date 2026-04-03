@@ -355,7 +355,7 @@ async function enrichCollaboratorsInItineraries(docs) {
   if (emails.length === 0) return docs;
 
   const users = await User.find({ email: { $in: emails } })
-    .select('_id email name username picture')
+    .select('_id email name picture')
     .lean();
   const byEmail = new Map(users.map((u) => [String(u.email || '').trim().toLowerCase(), u]));
 
@@ -374,7 +374,6 @@ async function enrichCollaboratorsInItineraries(docs) {
             id: String(matched._id),
             email: matched.email || '',
             name: matched.name || '',
-            username: matched.username || '',
             picture: matched.picture || '',
           },
         };
@@ -447,7 +446,7 @@ router.get('/', async (req, res) => {
     const docs = await Itinerary.find(filter)
       .sort(sort)
       .limit(limit)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -469,7 +468,7 @@ router.get('/mine', requireAuth, async (req, res) => {
 
     const docs = await Itinerary.find({ creator: req.userId })
       .sort({ updatedAt: -1 })
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -505,7 +504,7 @@ router.get('/shared-with-me', requireAuth, async (req, res) => {
       },
     })
       .sort({ updatedAt: -1 })
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enriched = await enrichCollaboratorsInItineraries(docs);
@@ -601,7 +600,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     const doc = await ItineraryComment.create({
       itineraryId: id,
       userId: req.userId,
-      userName: req.user?.name || req.user?.username || req.user?.email || 'User',
+      userName: req.user?.name || req.user?.email || 'User',
       body,
       parentId,
     });
@@ -615,7 +614,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
         actorId: req.userId,
         type: 'itinerary_commented',
         title: 'New comment on your itinerary',
-        message: `${req.user?.name || req.user?.username || 'Someone'} commented on "${itinerary?.title || 'your itinerary'}".`,
+        message: `${req.user?.name || 'Someone'} commented on "${itinerary?.title || 'your itinerary'}".`,
         link: `/itineraries/${id}?tab=comments`,
         meta: {
           itineraryId: String(id),
@@ -756,7 +755,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     });
 
     const populated = await Itinerary.findById(doc._id)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
@@ -819,7 +818,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     let itinerary = await Itinerary.findById(id)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     if (!itinerary) {
@@ -837,7 +836,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         { $inc: { viewCount: 1 } },
         { new: true }
       )
-        .populate('creator', 'name email picture username intro')
+        .populate('creator', 'name email picture intro')
         .lean();
     }
 
@@ -950,7 +949,7 @@ router.post('/', requireAuth, async (req, res) => {
     });
 
     const populated = await Itinerary.findById(doc._id)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     if (collaboratorIds.length > 0) {
@@ -960,7 +959,7 @@ router.post('/', requireAuth, async (req, res) => {
           actorId: req.userId,
           type: 'itinerary_added',
           title: 'You were added to a travel planner',
-          message: `${req.user?.name || req.user?.username || 'Someone'} added you to "${doc.title}".`,
+          message: `${req.user?.name || 'Someone'} added you to "${doc.title}".`,
           link: `/trip/${String(doc._id)}`,
           meta: { itineraryId: String(doc._id) },
         }))
@@ -1074,7 +1073,7 @@ router.put('/:id', requireAuth, async (req, res) => {
           actorId: req.userId,
           type: 'itinerary_added',
           title: 'You were added to a travel planner',
-          message: `${req.user?.name || req.user?.username || 'Someone'} added you to "${existing.title}".`,
+          message: `${req.user?.name || 'Someone'} added you to "${existing.title}".`,
           link: `/trip/${String(existing._id)}`,
           meta: { itineraryId: String(existing._id) },
         }))
@@ -1088,7 +1087,7 @@ router.put('/:id', requireAuth, async (req, res) => {
           actorId: req.userId,
           type: 'itinerary_updated',
           title: 'Travel planner updated',
-          message: `${req.user?.name || req.user?.username || 'Someone'} made changes to "${existing.title}".`,
+          message: `${req.user?.name || 'Someone'} made changes to "${existing.title}".`,
           link: `/trip/${String(existing._id)}`,
           meta: { itineraryId: String(existing._id) },
         }))
@@ -1096,7 +1095,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     const populated = await Itinerary.findById(existing._id)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);
@@ -1194,7 +1193,7 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     await existing.save();
 
     const populated = await Itinerary.findById(existing._id)
-      .populate('creator', 'name email picture username intro')
+      .populate('creator', 'name email picture intro')
       .lean();
 
     const enrichedOne = await enrichCollaboratorsInItineraries(populated);

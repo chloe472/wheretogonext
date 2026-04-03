@@ -36,6 +36,26 @@ body {
   background: var(--wtg-bg);
 }
 
+.wtg-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 10px;
+  background: #4b3a2c;
+  border: 1px solid #3d2f24;
+  box-shadow: 0 10px 24px rgba(61, 52, 40, 0.18);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fdf8f2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.wtg-back-btn:hover {
+  background: #3f3126;
+}
+
 #root {
   min-height: 100vh;
   background: var(--wtg-bg);

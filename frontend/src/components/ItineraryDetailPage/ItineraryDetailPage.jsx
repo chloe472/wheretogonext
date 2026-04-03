@@ -564,7 +564,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
         <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
         <div className="itinerary-detail--center">
           <p>{error || 'Itinerary not found.'}</p>
-          <Link to="/search">Back to Explore</Link>
+          <Link to="/search" className="wtg-back-btn">Back to Explore</Link>
         </div>
       </div>
     );

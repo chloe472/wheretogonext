@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronDown, Users } from 'lucide-react';
 import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../api/itinerariesApi';
+import { fetchMyProfile, searchUserByIdentifier } from '../../api/profileApi';
+import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { fetchCitySuggestions } from '../../api/locationsApi';
 import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
@@ -121,12 +123,17 @@ export default function NewTripPage({ user, onLogout }) {
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [datesError, setDatesError] = useState('');
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [friendsList, setFriendsList] = useState([]);
+  const [inviteQuery, setInviteQuery] = useState('');
+  const [inviteSearching, setInviteSearching] = useState(false);
+  const [invitePreview, setInvitePreview] = useState(null);
+  const [inviteError, setInviteError] = useState('');
   const [invitedEmails, setInvitedEmails] = useState([]);
+  const [invitedFriends, setInvitedFriends] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const whereRef = useRef(null);
+  const friendsRef = useRef(null);
 
   const totalTripDays = getTripDayCount(startDate, endDate);
   const defaultCityDayRanges = buildDefaultCityDayRanges(selectedLocations, totalTripDays || 1);
@@ -170,6 +177,62 @@ export default function NewTripPage({ user, onLogout }) {
       return next;
     });
   }, [selectedLocations, defaultCityDayRanges, totalTripDays]);
+
+  useEffect(() => {
+    fetchMyProfile().then((data) => setFriendsList(data?.friends || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const trimmed = inviteQuery.trim();
+    if (trimmed.length < 2) {
+      setInvitePreview(null);
+      setInviteError('');
+      setInviteSearching(false);
+      return () => {};
+    }
+    setInviteSearching(true);
+    setInvitePreview(null);
+    setInviteError('');
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchUserByIdentifier(trimmed);
+        const found = data?.users?.[0] || null;
+        // filter out already-invited
+        if (found && (invitedFriends.some((f) => f.id === found.id) || invitedEmails.includes(trimmed.toLowerCase()))) {
+          setInviteError('Already added.');
+          setInvitePreview(null);
+        } else if (found) {
+          setInvitePreview(found);
+        } else {
+          setInviteError('No user found.');
+        }
+      } catch {
+        setInviteError('Search failed.');
+      } finally {
+        setInviteSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inviteQuery]);
+
+  const addInvitePreview = () => {
+    if (!invitePreview) return;
+    setInvitedFriends((prev) => [...prev, invitePreview]);
+    setInviteQuery('');
+    setInvitePreview(null);
+    setInviteError('');
+  };
+
+  useEffect(() => {
+    if (!friendsOpen) return;
+    function handleClick(e) {
+      if (friendsRef.current && !friendsRef.current.contains(e.target)) {
+        setFriendsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [friendsOpen]);
 
   useEffect(() => {
     setCityDayDrafts((prev) => {
@@ -367,8 +430,11 @@ export default function NewTripPage({ user, onLogout }) {
       placesSaved: 0,
       budget: '$0',
       budgetSpent: 0,
-      travelers: 1 + (invitedEmails?.length || 0),
-      collaborators: invitedEmails,
+      travelers: 1 + (invitedEmails?.length || 0) + (invitedFriends?.length || 0),
+      collaborators: [
+        ...invitedEmails,
+        ...invitedFriends.map((f) => ({ userId: f.id })),
+      ],
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
       image: coverUrl,
@@ -421,7 +487,7 @@ export default function NewTripPage({ user, onLogout }) {
   return (
     <div className="new-trip">
       <header className="new-trip__header">
-        <Link to="/" className="new-trip__back" aria-label="Back to My Trips" onClick={handleBackToTrips}>
+        <Link to="/" className="new-trip__back wtg-back-btn" aria-label="Back to My Trips" onClick={handleBackToTrips}>
           ← My Trips
         </Link>
       </header>
@@ -613,16 +679,89 @@ export default function NewTripPage({ user, onLogout }) {
           </div>
 
           <div className="new-trip__invite-section">
+            <p className="new-trip__label">Tripmates</p>
+
+            {/* always-visible invited list */}
+            {(invitedFriends.length > 0 || invitedEmails.length > 0) && (
+              <ul className="new-trip__invited-list">
+                {invitedFriends.map((f) => (
+                  <li key={`friend-${f.id}`} className="new-trip__invited-item">
+                    <div className="new-trip__invited-avatar">
+                      {f.picture
+                        ? <img src={resolveImageUrl(f.picture)} alt="" onError={applyImageFallback} />
+                        : <span>{(f.name || '?')[0].toUpperCase()}</span>
+                      }
+                    </div>
+                    <div className="new-trip__invited-info">
+                      <span className="new-trip__invited-name">{f.name}</span>
+                      {f.email && <span className="new-trip__invited-handle">@{f.email.split('@')[0]}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      className="new-trip__invited-remove"
+                      onClick={() => setInvitedFriends((prev) => prev.filter((x) => x.id !== f.id))}
+                      aria-label={`Remove ${f.name}`}
+                    >×</button>
+                  </li>
+                ))}
+                {invitedEmails.map((email) => (
+                  <li key={email} className="new-trip__invited-item">
+                    <div className="new-trip__invited-avatar new-trip__invited-avatar--email">@</div>
+                    <span className="new-trip__invited-name">{email}</span>
+                    <button
+                      type="button"
+                      className="new-trip__invited-remove"
+                      onClick={() => setInvitedEmails((prev) => prev.filter((e) => e !== email))}
+                      aria-label={`Remove ${email}`}
+                    >×</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* search input + friends picker */}
             <div className="new-trip__invite-row">
-              <button
-                type="button"
-                className="new-trip__invite"
-                onClick={() => setInviteOpen((o) => !o)}
-                aria-expanded={inviteOpen}
-              >
-                + Invite tripmates
-              </button>
-              <div className="new-trip__friends-wrap">
+              <div className="new-trip__invite-search-wrap">
+                <div className="new-trip__invite-input-row">
+                  <input
+                    type="text"
+                    className="new-trip__input"
+                    placeholder="Search by name or email…"
+                    value={inviteQuery}
+                    onChange={(e) => { setInviteQuery(e.target.value); setInvitePreview(null); setInviteError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addInvitePreview(); } }}
+                  />
+                  <button
+                    type="button"
+                    className="new-trip__invite-add-btn"
+                    onClick={addInvitePreview}
+                    disabled={!invitePreview}
+                  >
+                    Add
+                  </button>
+                </div>
+                {inviteSearching && <p className="new-trip__invite-status">Searching…</p>}
+                {!inviteSearching && inviteError && inviteQuery.trim().length >= 2 && (
+                  <p className="new-trip__invite-status new-trip__invite-status--error">{inviteError}</p>
+                )}
+                {!inviteSearching && invitePreview && (
+                  <div className="new-trip__invite-preview">
+                    <div className="new-trip__friend-avatar">
+                      {invitePreview.picture
+                        ? <img src={resolveImageUrl(invitePreview.picture)} alt="" onError={applyImageFallback} />
+                        : <span>{(invitePreview.name || '?')[0].toUpperCase()}</span>
+                      }
+                    </div>
+                    <div className="new-trip__friend-info">
+                      <span className="new-trip__friend-name">{invitePreview.name}</span>
+                      {invitePreview.email && <span className="new-trip__friend-handle">@{invitePreview.email.split('@')[0]}</span>}
+                    </div>
+                    <span className="new-trip__friend-check">✓</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="new-trip__friends-wrap" ref={friendsRef}>
                 <button
                   type="button"
                   className="new-trip__friends-btn"
@@ -636,67 +775,44 @@ export default function NewTripPage({ user, onLogout }) {
                 </button>
                 {friendsOpen && (
                   <div className="new-trip__friends-dropdown" role="listbox">
-                    <p className="new-trip__friends-hint">No friends added yet. Use &quot;+ Invite tripmates&quot; to add by email.</p>
+                    {friendsList.length === 0 ? (
+                      <p className="new-trip__friends-hint">No friends yet.</p>
+                    ) : (
+                      <ul className="new-trip__friends-list">
+                        {friendsList.map((friend) => {
+                          const selected = invitedFriends.some((f) => f.id === friend.id);
+                          return (
+                            <li key={friend.id}>
+                              <button
+                                type="button"
+                                className={`new-trip__friend-item${selected ? ' new-trip__friend-item--selected' : ''}`}
+                                onClick={() => setInvitedFriends((prev) =>
+                                  selected ? prev.filter((f) => f.id !== friend.id) : [...prev, friend]
+                                )}
+                                role="option"
+                                aria-selected={selected}
+                              >
+                                <div className="new-trip__friend-avatar">
+                                  {friend.picture
+                                    ? <img src={resolveImageUrl(friend.picture)} alt="" onError={applyImageFallback} />
+                                    : <span>{(friend.name || '?')[0].toUpperCase()}</span>
+                                  }
+                                </div>
+                                <div className="new-trip__friend-info">
+                                  <span className="new-trip__friend-name">{friend.name}</span>
+                                  {friend.email && <span className="new-trip__friend-handle">@{friend.email.split('@')[0]}</span>}
+                                </div>
+                                {selected && <span className="new-trip__friend-check">✓</span>}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>
             </div>
-            {inviteOpen && (
-              <div className="new-trip__invite-panel">
-                <label htmlFor="invite-email" className="new-trip__label">Invite by email</label>
-                <div className="new-trip__invite-input-row">
-                  <input
-                    id="invite-email"
-                    type="email"
-                    className="new-trip__input"
-                    placeholder="e.g. friend@example.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const email = inviteEmail.trim().toLowerCase();
-                        if (email && !invitedEmails.includes(email)) {
-                          setInvitedEmails((prev) => [...prev, email]);
-                          setInviteEmail('');
-                        }
-                      }
-                    }}
-                    autoComplete="email"
-                  />
-                  <button
-                    type="button"
-                    className="new-trip__invite-add-btn"
-                    onClick={() => {
-                      const email = inviteEmail.trim().toLowerCase();
-                      if (email && !invitedEmails.includes(email)) {
-                        setInvitedEmails((prev) => [...prev, email]);
-                        setInviteEmail('');
-                      }
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-                {invitedEmails.length > 0 && (
-                  <ul className="new-trip__invited-list">
-                    {invitedEmails.map((email) => (
-                      <li key={email} className="new-trip__invited-item">
-                        <span className="new-trip__invited-email">{email}</span>
-                        <button
-                          type="button"
-                          className="new-trip__invited-remove"
-                          onClick={() => setInvitedEmails((prev) => prev.filter((e) => e !== email))}
-                          aria-label={`Remove ${email}`}
-                        >
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </div>
 
           {submitError && (

@@ -113,7 +113,6 @@ export function serializeNotification(doc) {
     ? {
       id: String(doc.actor._id || doc.actor.id || ''),
       name: doc.actor.name || '',
-      username: doc.actor.username || '',
       picture: doc.actor.picture || '',
     }
     : null;

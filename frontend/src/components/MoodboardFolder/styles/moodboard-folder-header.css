@@ -13,14 +13,6 @@
   gap: 12px;
 }
 
-.back-btn {
-  font-size: 1.25rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-  color: #5c4a3d;
-}
 
 .folder-title h1 {
   font-size: 2.25rem;

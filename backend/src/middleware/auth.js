@@ -29,7 +29,6 @@ export async function requireAuth(req, res, next) {
       email: user.email,
       name: user.name,
       picture: user.picture,
-      username: user.username,
     };
     return next();
   } catch {

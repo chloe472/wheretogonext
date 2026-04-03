@@ -9,9 +9,8 @@ import {
   EyeOff,
   ArrowRight,
 } from 'lucide-react';
+import { apiUrl } from '../../api/apiConfig';
 import './AuthModal.css';
-
-const API_BASE = '/api';
 
 export default function AuthModal({ onClose, onLoginSuccess }) {
   const [tab, setTab] = useState('login');

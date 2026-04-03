@@ -19,7 +19,7 @@ const profileStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg';
+    const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.heic', '.heif'].includes(ext) ? ext : '.jpg';
     cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`);
   },
 });
@@ -30,6 +30,8 @@ const PROFILE_IMAGE_MIME = new Set([
   'image/webp',
   'image/gif',
   'image/svg+xml',
+  'image/heic',
+  'image/heif',
 ]);
 
 const profileUpload = multer({
@@ -45,12 +47,18 @@ function serializeUser(user, { includeEmail = false } = {}) {
   return {
     id: String(user._id),
     name: user.name || '',
-    username: user.username || '',
     picture: user.picture || '',
     intro: user.intro || '',
     interests: Array.isArray(user.interests) ? user.interests : [],
     nationality: user.nationality || '',
     socials: Array.isArray(user.socials) ? user.socials : [],
+    mapDestinations: Array.isArray(user.mapDestinations)
+      ? user.mapDestinations.map((dest) => ({
+        id: String(dest._id || ''),
+        country: dest.country || '',
+        city: dest.city || '',
+      }))
+      : [],
     ...(includeEmail ? { email: user.email || '' } : {}),
   };
 }
@@ -90,6 +98,10 @@ async function findFriendshipId(userId, otherId) {
   return Friendship.findOne({ userA, userB }).select('_id').lean();
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function loadFriends(userId) {
   const rows = await Friendship.find({
     $or: [{ userA: userId }, { userB: userId }],
@@ -104,12 +116,11 @@ async function loadFriends(userId) {
   });
   const uniqueIds = Array.from(new Set(friendIds));
   const friends = await User.find({ _id: { $in: uniqueIds } })
-    .select('name username picture email')
+    .select('name picture email')
     .lean();
   return friends.map((friend) => ({
     id: String(friend._id),
     name: friend.name || '',
-    username: friend.username || '',
     picture: friend.picture || '',
   }));
 }
@@ -187,7 +198,7 @@ router.get('/me', requireAuth, async (req, res) => {
 router.get('/requests', requireAuth, async (req, res) => {
   try {
     const rows = await FriendRequest.find({ to: req.userId, status: 'pending' })
-      .populate('from', 'name username picture')
+      .populate('from', 'name picture')
       .sort({ createdAt: -1 })
       .lean();
     const requests = rows.map((r) => ({
@@ -195,7 +206,6 @@ router.get('/requests', requireAuth, async (req, res) => {
       from: {
         id: String(r.from?._id || ''),
         name: r.from?.name || '',
-        username: r.from?.username || '',
         picture: r.from?.picture || '',
       },
       createdAt: r.createdAt,
@@ -210,7 +220,7 @@ router.get('/requests', requireAuth, async (req, res) => {
 router.get('/requests/outgoing', requireAuth, async (req, res) => {
   try {
     const rows = await FriendRequest.find({ from: req.userId, status: 'pending' })
-      .populate('to', 'name username picture')
+      .populate('to', 'name picture')
       .sort({ createdAt: -1 })
       .lean();
     const requests = rows.map((r) => ({
@@ -218,7 +228,6 @@ router.get('/requests/outgoing', requireAuth, async (req, res) => {
       to: {
         id: String(r.to?._id || ''),
         name: r.to?.name || '',
-        username: r.to?.username || '',
         picture: r.to?.picture || '',
       },
       createdAt: r.createdAt,
@@ -247,13 +256,13 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       { upsert: true }
     );
 
-    const accepter = await User.findById(req.userId).select('name username email').lean();
+    const accepter = await User.findById(req.userId).select('name email').lean();
     await createNotification({
       recipientId: String(reqDoc.from),
       actorId: req.userId,
       type: 'friend_request_accepted',
       title: 'Friend request accepted',
-      message: `${accepter?.name || accepter?.username || accepter?.email || 'Someone'} accepted your friend request.`,
+      message: `${accepter?.name || accepter?.email || 'Someone'} accepted your friend request.`,
       link: '/profile?tab=friends&section=friends',
       meta: { acceptedByUserId: String(req.userId) },
     });
@@ -266,21 +275,150 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
   }
 });
 
+router.get('/search', requireAuth, async (req, res) => {
+  try {
+    const raw = String(req.query?.q || '').trim();
+    if (!raw || raw.length < 2) return res.status(400).json({ error: 'Query too short.' });
+
+    let users = [];
+    if (raw.includes('@')) {
+      const u = await User.findOne({ email: raw.toLowerCase() }).select('name picture email').lean();
+      if (u) users = [u];
+    } else {
+      users = await User.find({ name: new RegExp(`^${escapeRegex(raw)}`, 'i') })
+        .select('name picture')
+        .limit(5)
+        .lean();
+    }
+
+    const meId = String(req.userId);
+    const result = users
+      .filter((u) => String(u._id) !== meId)
+      .map((u) => ({
+        id: String(u._id),
+        name: u.name || '',
+        picture: u.picture || '',
+      }));
+
+    return res.json({ users: result });
+  } catch (err) {
+    console.error('Search users error:', err);
+    return res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+router.post('/requests/by-identifier', requireAuth, async (req, res) => {
+  try {
+    const raw = String(req.body?.identifier || '').trim();
+    if (!raw) return res.status(400).json({ error: 'Please enter a name or email.' });
+
+    let target = null;
+    if (raw.includes('@')) {
+      target = await User.findOne({ email: raw.toLowerCase() }).lean();
+    } else {
+      const nameMatches = await User.find({ name: new RegExp(`^${escapeRegex(raw)}$`, 'i') })
+        .select('name picture email')
+        .lean();
+      if (nameMatches.length > 1) {
+        return res.status(409).json({ error: 'Multiple users found. Please use their email.' });
+      }
+      target = nameMatches[0] || null;
+    }
+
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (String(target._id) === String(req.userId)) {
+      return res.status(400).json({ error: 'You cannot add yourself.' });
+    }
+
+    const [userA, userB] = sortFriendPair(req.userId, target._id);
+    const existingFriend = await Friendship.findOne({ userA, userB }).lean();
+    if (existingFriend) return res.status(200).json({ ok: true, status: 'friends' });
+
+    const upsertResult = await FriendRequest.updateOne(
+      { from: req.userId, to: target._id },
+      { $setOnInsert: { from: req.userId, to: target._id, status: 'pending' } },
+      { upsert: true }
+    );
+
+    if (Number(upsertResult?.upsertedCount || 0) > 0) {
+      await createNotification({
+        recipientId: String(target._id),
+        actorId: req.userId,
+        type: 'friend_request_received',
+        title: 'New friend request',
+        message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
+        link: '/profile?tab=friends&section=requests',
+        meta: { fromUserId: String(req.userId) },
+      });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      status: 'pending',
+      user: {
+        id: String(target._id),
+        name: target.name || '',
+        picture: target.picture || '',
+      },
+    });
+  } catch (err) {
+    console.error('Add friend by identifier error:', err);
+    return res.status(500).json({ error: 'Failed to send friend request' });
+  }
+});
+
 router.delete('/requests/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid request id' });
     }
-    const reqDoc = await FriendRequest.findById(id).lean();
-    if (!reqDoc || (String(reqDoc.to) !== String(req.userId) && String(reqDoc.from) !== String(req.userId))) {
+    let reqDoc = await FriendRequest.findById(id).lean();
+    if (!reqDoc) {
+      reqDoc = await FriendRequest.findOne({
+        status: 'pending',
+        $or: [
+          { from: req.userId, to: id },
+          { from: id, to: req.userId },
+        ],
+      }).lean();
+      if (!reqDoc) return res.status(404).json({ error: 'Request not found' });
+    }
+    if (String(reqDoc.to) !== String(req.userId) && String(reqDoc.from) !== String(req.userId)) {
       return res.status(404).json({ error: 'Request not found' });
     }
-    await FriendRequest.deleteOne({ _id: id });
+    await FriendRequest.deleteOne({ _id: reqDoc._id });
     return res.json({ ok: true });
   } catch (err) {
     console.error('Delete request error:', err);
     return res.status(500).json({ error: 'Failed to remove request' });
+  }
+});
+
+router.get('/search', requireAuth, async (req, res) => {
+  try {
+    const q = String(req.query?.q || '').trim();
+    if (q.length < 2) return res.json({ users: [] });
+    const regex = new RegExp(escapeRegex(q), 'i');
+    const users = await User.find({
+      _id: { $ne: req.userId },
+      $or: [{ name: regex }, { username: regex }, { email: regex }],
+    })
+      .select('name username picture email')
+      .limit(5)
+      .lean();
+    return res.json({
+      users: users.map((u) => ({
+        id: String(u._id),
+        name: u.name || '',
+        username: u.username || '',
+        picture: u.picture || '',
+        email: u.email || '',
+      })),
+    });
+  } catch (err) {
+    console.error('Search users error:', err);
+    return res.status(500).json({ error: 'Failed to search users' });
   }
 });
 
@@ -307,7 +445,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 router.put('/me', requireAuth, async (req, res) => {
   try {
-    const { name, username, picture, intro, interests, nationality, socials } = req.body || {};
+    const { name, picture, intro, interests, nationality, socials } = req.body || {};
     const updates = {};
     if (name !== undefined) updates.name = String(name).trim();
     if (picture !== undefined) updates.picture = String(picture).trim();
@@ -333,17 +471,6 @@ router.put('/me', requireAuth, async (req, res) => {
         .filter((s) => s.platform || s.url || s.handle)
         .slice(0, 8);
     }
-    if (username !== undefined) {
-      const next = String(username).trim().toLowerCase();
-      if (next && !/^[a-z0-9._-]{3,20}$/.test(next)) {
-        return res.status(400).json({ error: 'Username must be 3-20 characters (a-z, 0-9, . _ -).' });
-      }
-      updates.username = next || undefined;
-    }
-    if (updates.username) {
-      const existing = await User.findOne({ username: updates.username, _id: { $ne: req.userId } }).lean();
-      if (existing) return res.status(409).json({ error: 'Username is already taken.' });
-    }
     const updated = await User.findByIdAndUpdate(req.userId, updates, { new: true }).lean();
     if (!updated) return res.status(404).json({ error: 'User not found' });
     return res.json({ profile: serializeUser(updated, { includeEmail: true }) });
@@ -353,7 +480,49 @@ router.put('/me', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/me/photo', requireAuth, profileUpload.single('photo'), async (req, res) => {
+router.post('/me/map-destinations', requireAuth, async (req, res) => {
+  try {
+    const country = String(req.body?.country || '').trim();
+    const city = String(req.body?.city || '').trim();
+    if (!country) {
+      return res.status(400).json({ error: 'Country is required.' });
+    }
+    const updated = await User.findByIdAndUpdate(
+      req.userId,
+      { $push: { mapDestinations: { country, city } } },
+      { new: true }
+    ).lean();
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    return res.json({ profile: serializeUser(updated, { includeEmail: true }) });
+  } catch (err) {
+    console.error('Add map destination error:', err);
+    return res.status(500).json({ error: 'Failed to add destination' });
+  }
+});
+
+router.delete('/me/map-destinations/:destId', requireAuth, async (req, res) => {
+  try {
+    const updated = await User.findByIdAndUpdate(
+      req.userId,
+      { $pull: { mapDestinations: { _id: req.params.destId } } },
+      { new: true }
+    ).lean();
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    return res.json({ profile: serializeUser(updated, { includeEmail: true }) });
+  } catch (err) {
+    console.error('Remove map destination error:', err);
+    return res.status(500).json({ error: 'Failed to remove destination' });
+  }
+});
+
+router.post('/me/photo', requireAuth, (req, res, next) => {
+  profileUpload.single('photo')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Invalid photo upload.' });
+    }
+    return next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No photo uploaded.' });
     const relative = `/uploads/profiles/${req.file.filename}`;
@@ -367,6 +536,29 @@ router.post('/me/photo', requireAuth, profileUpload.single('photo'), async (req,
   } catch (err) {
     console.error('Profile photo error:', err);
     return res.status(500).json({ error: 'Failed to upload photo' });
+  }
+});
+
+router.delete('/me/photo', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('picture').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const current = String(user.picture || '');
+    if (current.startsWith('/uploads/profiles/')) {
+      const filename = path.basename(current);
+      const filePath = path.join(uploadDir, filename);
+      fs.unlink(filePath, () => {});
+    }
+    const updated = await User.findByIdAndUpdate(
+      req.userId,
+      { picture: '' },
+      { new: true }
+    ).lean();
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    return res.json({ profile: serializeUser(updated, { includeEmail: true }) });
+  } catch (err) {
+    console.error('Remove profile photo error:', err);
+    return res.status(500).json({ error: 'Failed to remove photo' });
   }
 });
 
@@ -398,7 +590,7 @@ router.post('/:id/friends', requireAuth, async (req, res) => {
         actorId: req.userId,
         type: 'friend_request_received',
         title: 'New friend request',
-        message: `${req.user?.name || req.user?.username || req.user?.email || 'Someone'} sent you a friend request.`,
+        message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
         link: '/profile?tab=friends&section=requests',
         meta: { fromUserId: String(req.userId) },
       });
