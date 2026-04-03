@@ -7,6 +7,8 @@ import {
   MessageCircle,
   Heart,
   Plus,
+  MapPin,
+  Clock3,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
@@ -14,6 +16,8 @@ import {
   User,
   Send,
   Reply,
+  Camera,
+  UtensilsCrossed,
 } from 'lucide-react';
 import {
   fetchItineraryById,
@@ -32,6 +36,9 @@ import TripMap from '../TripMap/TripMap';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
+import ExplorePlaceDetailModal from './components/ExplorePlaceDetailModal';
+import ExploreAddToExistingTripModal from './components/ExploreAddToExistingTripModal';
+import { publishedStopToDetailPlace, mapMarkerToDetailPlace } from './lib/explorePlaceDetail';
 import './ItineraryDetailPage.css';
 
 const TABS = [
@@ -249,6 +256,9 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   const [customizeBusy, setCustomizeBusy] = useState(false);
   const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
+  const [explorePlaceDetail, setExplorePlaceDetail] = useState(null);
+  const [exploreAddItem, setExploreAddItem] = useState(null);
+  const [exploreAddOpen, setExploreAddOpen] = useState(false);
 
   useEffect(() => {
     const tab = String(searchParams.get('tab') || '').toLowerCase();
@@ -493,6 +503,11 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
 
   const openPublishedMapPlaceDetails = useCallback((marker) => {
     if (!marker) return;
+    const detail = mapMarkerToDetailPlace(marker);
+    if (detail && String(detail.name || '').trim()) {
+      setExplorePlaceDetail(detail);
+      return;
+    }
     const explicitUrl = String(marker.website || marker.originalData?.website || '').trim();
     if (explicitUrl) {
       window.open(explicitUrl, '_blank', 'noopener,noreferrer');
@@ -508,6 +523,25 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || name || 'place')}`;
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   }, []);
+
+  const handleExploreAddToTripFromDetail = useCallback(() => {
+    const place = explorePlaceDetail;
+    if (!place) return;
+    if (!user) {
+      onRequireLogin?.();
+      return;
+    }
+    const smartItemType = place.itemType === 'food' ? 'food' : 'place';
+    setExploreAddItem({
+      type: smartItemType,
+      data: place,
+      categoryId: smartItemType === 'food' ? 'food' : 'places',
+      category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
+      Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
+    });
+    setExplorePlaceDetail(null);
+    setExploreAddOpen(true);
+  }, [explorePlaceDetail, user, onRequireLogin]);
 
   const handlePostComment = async () => {
     const t = newComment.trim();
@@ -582,6 +616,16 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
       <div className="itinerary-detail__layout">
         <main className="itinerary-detail__main">
           <section className="itinerary-detail__hero">
+            <button
+              type="button"
+              className="itinerary-detail__btn itinerary-detail__back-btn"
+              onClick={() => {
+                if (window.history.length > 1) navigate(-1);
+                else navigate('/search');
+              }}
+            >
+              Back
+            </button>
             <h1 className="itinerary-detail__title">{itinerary.title}</h1>
             <div className="itinerary-detail__meta-row">
               <span className="itinerary-detail__meta">Published {formatPublished(published)}</span>
@@ -749,39 +793,58 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
                               <li key={`${day}-${n}-${p.name}`} className="itinerary-detail__stop">
                                 <div className="itinerary-detail__stop-badge">{n}</div>
                                 <div className="itinerary-detail__stop-body">
-                                  <div className="itinerary-detail__stop-top">
-                                    <h4 className="itinerary-detail__stop-name">{p.name || 'Place'}</h4>
-                                    <div className="itinerary-detail__stop-actions">
-                                      <button type="button" className="itinerary-detail__icon-btn" aria-label="Save place">
-                                        <Heart size={18} />
-                                      </button>
-                                      <button type="button" className="itinerary-detail__icon-btn" aria-label="Add to trip">
-                                        <Plus size={18} />
-                                      </button>
+                                  <div className="itinerary-detail__stop-main">
+                                    <div className="itinerary-detail__stop-copy">
+                                      <div className="itinerary-detail__stop-top">
+                                        <h4 className="itinerary-detail__stop-name">{p.name || 'Place'}</h4>
+                                        <div className="itinerary-detail__stop-actions">
+                                          <button
+                                            type="button"
+                                            className="itinerary-detail__icon-btn"
+                                            aria-label="Add to trip"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setExplorePlaceDetail(publishedStopToDetailPlace(p, p._idx ?? 0));
+                                            }}
+                                          >
+                                            <Plus size={18} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {p.category && (
+                                        <span className="itinerary-detail__stop-cat">{p.category}</span>
+                                      )}
+                                      {p.rating != null && (
+                                        <p className="itinerary-detail__stop-rating">
+                                          ★ {p.rating}
+                                          {p.reviewCount != null ? ` (${p.reviewCount} reviews)` : ''}
+                                        </p>
+                                      )}
+                                      {p.address && (
+                                        <p className="itinerary-detail__stop-addr">
+                                          <MapPin size={16} aria-hidden />
+                                          <span>{p.address}</span>
+                                        </p>
+                                      )}
+                                      {p.timeSlot && (
+                                        <p className="itinerary-detail__stop-time">
+                                          <Clock3 size={16} aria-hidden />
+                                          <span>{p.timeSlot}</span>
+                                        </p>
+                                      )}
+                                      {p.notes && <p className="itinerary-detail__stop-notes">{p.notes}</p>}
                                     </div>
+                                    {p.image ? (
+                                      <div className="itinerary-detail__stop-media">
+                                        <img
+                                          className="itinerary-detail__stop-thumb"
+                                          src={resolveImageUrl(p.image, p.name, 'landmark')}
+                                          alt=""
+                                          onError={(e) => applyImageFallback(e)}
+                                        />
+                                      </div>
+                                    ) : null}
                                   </div>
-                                  {p.category && (
-                                    <span className="itinerary-detail__stop-cat">{p.category}</span>
-                                  )}
-                                  {p.rating != null && (
-                                    <p className="itinerary-detail__stop-rating">
-                                      ★ {p.rating}
-                                      {p.reviewCount != null ? ` (${p.reviewCount} reviews)` : ''}
-                                    </p>
-                                  )}
-                                  {p.address && <p className="itinerary-detail__stop-addr">{p.address}</p>}
-                                  {p.timeSlot && (
-                                    <p className="itinerary-detail__stop-time">{p.timeSlot}</p>
-                                  )}
-                                  {p.notes && <p className="itinerary-detail__stop-notes">{p.notes}</p>}
-                                  {p.image && (
-                                    <img
-                                      className="itinerary-detail__stop-thumb"
-                                      src={resolveImageUrl(p.image, p.name, 'landmark')}
-                                      alt=""
-                                      onError={(e) => applyImageFallback(e)}
-                                    />
-                                  )}
                                 </div>
                               </li>
                             );
@@ -1024,6 +1087,21 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
         message={dialogMessage}
         confirmText="OK"
         onClose={() => setDialogMessage('')}
+      />
+
+      <ExplorePlaceDetailModal
+        place={explorePlaceDetail}
+        onClose={() => setExplorePlaceDetail(null)}
+        onAddToTrip={handleExploreAddToTripFromDetail}
+      />
+
+      <ExploreAddToExistingTripModal
+        open={exploreAddOpen}
+        addToTripItem={exploreAddItem}
+        onClose={() => {
+          setExploreAddOpen(false);
+          setExploreAddItem(null);
+        }}
       />
     </div>
   );

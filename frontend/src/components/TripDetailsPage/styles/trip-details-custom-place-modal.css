@@ -15,6 +15,17 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
+/* Parent supplies backdrop (e.g. Explore → add to existing trip). */
+.trip-details__custom-place-modal--embedded {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  z-index: 1;
+  max-height: min(72vh, 640px);
+  width: 100%;
+}
+
 .trip-details__custom-place-head {
   display: flex;
   align-items: center;

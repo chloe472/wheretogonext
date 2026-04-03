@@ -134,6 +134,32 @@
   word-break: break-word;
 }
 
+.trip-details__itinerary-meta-line--note {
+  white-space: normal;
+}
+
+.trip-details__itinerary-note-text {
+  white-space: pre-line;
+}
+
+.trip-details__itinerary-note-toggle {
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--wtg-primary);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.trip-details__itinerary-note-toggle:hover {
+  text-decoration-thickness: 2px;
+}
+
 .trip-details__itinerary-meta-link {
   color: var(--wtg-primary);
   text-decoration: underline;

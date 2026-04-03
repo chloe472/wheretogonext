@@ -28,6 +28,7 @@ export default function TripDetailsSettingsTransportModals({
   whereLocationSuggestions,
   whereSelectedLocations,
   setWhereSelectedLocations,
+  whereCityPlanRows,
   whereCityDayRanges,
   whereDefaultCityDayRanges,
   whereTotalTripDays,
@@ -36,6 +37,9 @@ export default function TripDetailsSettingsTransportModals({
   setWhereCityRangeError,
   handleWhereCityRangeInputChange,
   commitWhereCityRangeInput,
+  addWhereCityPlanRow,
+  removeWhereCityPlanRow,
+  updateWhereCityPlanRowLocation,
   handleWhereModalApply,
   notesModalOpen,
   setNotesModalOpen,
@@ -115,6 +119,7 @@ export default function TripDetailsSettingsTransportModals({
           whereLocationSuggestions={whereLocationSuggestions}
           whereSelectedLocations={whereSelectedLocations}
           setWhereSelectedLocations={setWhereSelectedLocations}
+          whereCityPlanRows={whereCityPlanRows}
           whereCityDayRanges={whereCityDayRanges}
           whereDefaultCityDayRanges={whereDefaultCityDayRanges}
           whereTotalTripDays={whereTotalTripDays}
@@ -123,6 +128,9 @@ export default function TripDetailsSettingsTransportModals({
           setWhereCityRangeError={setWhereCityRangeError}
           handleWhereCityRangeInputChange={handleWhereCityRangeInputChange}
           commitWhereCityRangeInput={commitWhereCityRangeInput}
+          addWhereCityPlanRow={addWhereCityPlanRow}
+          removeWhereCityPlanRow={removeWhereCityPlanRow}
+          updateWhereCityPlanRowLocation={updateWhereCityPlanRowLocation}
           onApply={handleWhereModalApply}
         />
       )}
@@ -168,6 +176,7 @@ export default function TripDetailsSettingsTransportModals({
             setTripExpenseItems((prev) => prev.filter((it) => it.id !== pendingDeleteItemId));
             setPendingDeleteItemId(null);
             setEditPlaceItem(null);
+            showInAppNotice('Itinerary spot deleted.', 'success');
           }}
         />
       )}

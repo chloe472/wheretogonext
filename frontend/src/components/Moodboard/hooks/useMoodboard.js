@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { fetchItineraryById } from '../../../api/itinerariesApi';
 import {
   fetchMoodboardFolders,
@@ -50,6 +51,9 @@ export function useMoodboard() {
       setFolders(updated);
       setShowCreate(false);
       setNewFolderName('');
+      toast.success('Folder created');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to create folder');
     } finally {
       setLoading(false);
     }
@@ -64,6 +68,9 @@ export function useMoodboard() {
       setShowEdit(false);
       setCurrentFolder(null);
       setNewFolderName('');
+      toast.success('Folder renamed');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to rename folder');
     } finally {
       setLoading(false);
     }
@@ -77,6 +84,9 @@ export function useMoodboard() {
       setFolders(updated);
       setShowDelete(false);
       setCurrentFolder(null);
+      toast.success('Folder deleted');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete folder');
     } finally {
       setLoading(false);
     }
@@ -98,6 +108,7 @@ export function useMoodboard() {
   return {
     tripId,
     trip,
+    setTrip,
     folders,
     loading,
     error,

@@ -1,4 +1,4 @@
-/* ── Pinterest-style pin grid ───────────────────────────────── */
+/* Pinterest-style pin grid */
 .pinterest {
   column-count: 3;
   column-gap: 1rem;
@@ -25,7 +25,7 @@
   transform: translateY(-2px);
 }
 
-/* ── Delete button ──────────────────────────────────────────── */
+/* Delete button */
 .pin-delete-btn {
   position: absolute;
   top: 8px;
@@ -48,7 +48,7 @@
   background-color: rgba(41, 22, 22, 0.8);
 }
 
-/* ── Emoji reaction popup ───────────────────────────────────── */
+/* Emoji reaction popup */
 .emoji-popup {
   position: absolute;
   top: 50%;
@@ -75,7 +75,7 @@
   cursor: pointer;
 }
 
-/* ── Emoji reaction badges ──────────────────────────────────── */
+/* Emoji reaction badges */
 .pin-reactions {
   position: absolute;
   top: 8px;

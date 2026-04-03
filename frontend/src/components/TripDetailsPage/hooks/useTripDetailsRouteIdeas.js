@@ -105,108 +105,158 @@ export function useTripDetailsRouteIdeas({
 
     const dayCount = tripDayCount;
 
-    const cityHintByDay = {};
+    const cityHintsByDay = {};
     if (Array.isArray(trip?.citySegments) && trip.citySegments.length > 0) {
-      trip.citySegments.forEach((seg) => {
+      trip.citySegments.forEach((seg, segIdx) => {
         const city = String(seg?.city || seg?.locationLabel || '').trim();
+        if (!city) return;
         const startDay = Math.max(1, Math.min(dayCount, Number(seg?.startDay) || 1));
         const endDay = Math.max(startDay, Math.min(dayCount, Number(seg?.endDay) || startDay));
         for (let dayNum = startDay; dayNum <= endDay; dayNum += 1) {
-          if (!cityHintByDay[dayNum] && city) cityHintByDay[dayNum] = city;
+          if (!Array.isArray(cityHintsByDay[dayNum])) cityHintsByDay[dayNum] = [];
+          cityHintsByDay[dayNum].push({ city, startDay, endDay, segIdx });
         }
       });
     }
 
-    const targetStops = Math.max(3, Math.min(dayCount * 5, uniqueRankedPlaces.length || candidatePlaces.length));
-    const workingPool = [...uniqueRankedPlaces];
-    const remaining = [...workingPool];
-    const orderedDayPlaces = Array.from({ length: dayCount }, (_, idx) => ({
-      dayNum: idx + 1,
-      cityHint: cityHintByDay[idx + 1] || '',
-      ordered: [],
-    }));
-    const CLUSTER_RADIUS_KM = 6;
-    const MAX_REASONABLE_RADIUS_KM = 12;
+    const resolveDayHalfHints = (dayNum) => {
+      const options = Array.isArray(cityHintsByDay[dayNum]) ? cityHintsByDay[dayNum] : [];
+      if (options.length === 0) return { morning: '', afternoon: '', all: [] };
 
-    const seededPlaces = [];
-    for (let dayIdx = 0; dayIdx < orderedDayPlaces.length; dayIdx += 1) {
-      if (remaining.length === 0) break;
+      const byStart = [...options].sort((a, b) => {
+        if (a.startDay !== b.startDay) return a.startDay - b.startDay;
+        if (a.endDay !== b.endDay) return a.endDay - b.endDay;
+        return a.segIdx - b.segIdx;
+      });
+      const byLateStart = [...options].sort((a, b) => {
+        if (a.startDay !== b.startDay) return b.startDay - a.startDay;
+        if (a.endDay !== b.endDay) return a.endDay - b.endDay;
+        return a.segIdx - b.segIdx;
+      });
 
+      const morning = String(byStart[0]?.city || '').trim();
+      const afternoon = String(byLateStart[0]?.city || morning).trim() || morning;
+      const all = Array.from(new Set(byStart.map((item) => String(item.city || '').trim()).filter(Boolean)));
+      return { morning, afternoon, all };
+    };
+
+    const routeCityNames = (() => {
+      const source = Array.isArray(trip?.citySegments) && trip.citySegments.length > 0
+        ? trip.citySegments.map((seg) => seg?.city || seg?.locationLabel || '')
+        : selectedDestinations;
+      const unique = [];
+      const seen = new Set();
+      source.forEach((entry) => {
+        const label = String(entry || '').trim().replace(/\s+/g, ' ');
+        if (!label) return;
+        const key = normalizeCityToken(label);
+        if (seen.has(key)) return;
+        seen.add(key);
+        unique.push(label);
+      });
+      return unique;
+    })();
+
+    const routeTitleLabel = (() => {
+      if (routeCityNames.length === 0) return destinationLabel;
+      if (routeCityNames.length === 1) return routeCityNames[0];
+      if (routeCityNames.length === 2) return `${routeCityNames[0]} to ${routeCityNames[1]}`;
+      return routeCityNames.join(', ');
+    })();
+
+    const takeBestMatchingPlace = (pool, cityHint = '', anchor = null) => {
+      if (!Array.isArray(pool) || pool.length === 0) return null;
+      const preferred = cityHint ? pool.filter((candidate) => matchesCityHint(candidate, cityHint)) : pool;
+      const candidates = preferred.length > 0 ? preferred : pool;
       let bestIdx = 0;
       let bestObjective = Number.NEGATIVE_INFINITY;
-
-      const dayCityHint = orderedDayPlaces[dayIdx]?.cityHint || '';
-      for (let i = 0; i < remaining.length; i += 1) {
-        const candidate = remaining[i];
-        if (dayCityHint && !matchesCityHint(candidate, dayCityHint)) continue;
-        const spreadBonus = seededPlaces.length > 0
-          ? Math.min(
-            seededPlaces.reduce((minDist, seeded) => Math.min(minDist, distanceBetween(seeded, candidate)), Number.POSITIVE_INFINITY),
-            15,
-          ) * 18
-          : 0;
-        const objective = candidate._score + spreadBonus;
-        if (objective > bestObjective) {
-          bestObjective = objective;
-          bestIdx = i;
-        }
-      }
-
-      const seed = remaining.splice(bestIdx, 1)[0] || null;
-      if (!seed) continue;
-      orderedDayPlaces[dayIdx].ordered.push(seed);
-      seededPlaces.push(seed);
-    }
-
-    const reusablePool = uniqueRankedPlaces.length > 0 ? uniqueRankedPlaces : workingPool;
-    let reuseIdx = 0;
-    for (let dayIdx = 0; dayIdx < orderedDayPlaces.length; dayIdx += 1) {
-      if (orderedDayPlaces[dayIdx].ordered.length > 0) continue;
-      const fallback = reusablePool[reuseIdx % reusablePool.length];
-      if (fallback) orderedDayPlaces[dayIdx].ordered.push(fallback);
-      reuseIdx += 1;
-    }
-
-    let fillCursor = 0;
-    while (remaining.length > 0 && orderedDayPlaces.some((d) => d.ordered.length < 5)) {
-      const day = orderedDayPlaces[fillCursor % orderedDayPlaces.length];
-      fillCursor += 1;
-      if (day.ordered.length >= 5) continue;
-
-      const anchor = day.ordered[day.ordered.length - 1] || remaining[0];
-      const dayCityHint = day.cityHint || '';
-      let preferredIndices = [];
-
-      for (let i = 0; i < remaining.length; i += 1) {
-        if (dayCityHint && !matchesCityHint(remaining[i], dayCityHint)) continue;
-        const distKm = distanceBetween(anchor, remaining[i]);
-        if (distKm <= CLUSTER_RADIUS_KM) preferredIndices.push(i);
-      }
-      if (preferredIndices.length === 0) {
-        for (let i = 0; i < remaining.length; i += 1) {
-          if (dayCityHint && !matchesCityHint(remaining[i], dayCityHint)) continue;
-          const distKm = distanceBetween(anchor, remaining[i]);
-          if (distKm <= MAX_REASONABLE_RADIUS_KM) preferredIndices.push(i);
-        }
-      }
-      if (preferredIndices.length === 0) {
-        preferredIndices = Array.from({ length: remaining.length }, (_, i) => i);
-      }
-
-      let bestIdx = preferredIndices[0];
-      let bestObjective = Number.NEGATIVE_INFINITY;
-      preferredIndices.forEach((idx) => {
-        const candidate = remaining[idx];
-        const distKm = distanceBetween(anchor, candidate);
-        const objective = candidate._score - (distKm * 22);
+      candidates.forEach((candidate, idx) => {
+        const distPenalty = anchor ? distanceBetween(anchor, candidate) * 20 : 0;
+        const cityBonus = cityHint && matchesCityHint(candidate, cityHint) ? 250 : 0;
+        const objective = Number(candidate?._score || 0) + cityBonus - distPenalty;
         if (objective > bestObjective) {
           bestObjective = objective;
           bestIdx = idx;
         }
       });
+      return candidates[bestIdx] || null;
+    };
 
-      day.ordered.push(remaining.splice(bestIdx, 1)[0]);
-    }
+    const takeBestMatchingPlaces = (pool, cityHint = '', count = 1, anchor = null) => {
+      const selected = [];
+      let working = Array.isArray(pool) ? [...pool] : [];
+      let currentAnchor = anchor;
+      while (selected.length < count && working.length > 0) {
+        const pick = takeBestMatchingPlace(working, cityHint, currentAnchor);
+        if (!pick) break;
+        selected.push(pick);
+        working = working.filter((item) => item !== pick);
+        currentAnchor = pick;
+      }
+      return selected;
+    };
+
+    const remaining = [...uniqueRankedPlaces];
+    const orderedDayPlaces = Array.from({ length: dayCount }, (_, idx) => {
+      const dayNum = idx + 1;
+      const dayHints = resolveDayHalfHints(dayNum);
+      return {
+        dayNum,
+        cityHint: dayHints.morning || '',
+        morningCityHint: dayHints.morning || '',
+        afternoonCityHint: dayHints.afternoon || '',
+        cityHints: dayHints.all,
+        ordered: [],
+      };
+    });
+    orderedDayPlaces.forEach((bucket, bucketIdx) => {
+      if (remaining.length === 0) return;
+
+      const splitDay = bucket.morningCityHint && bucket.afternoonCityHint && bucket.morningCityHint !== bucket.afternoonCityHint;
+      if (splitDay) {
+        const morningPicks = takeBestMatchingPlaces(remaining, bucket.morningCityHint, 2);
+        morningPicks.forEach((pick) => {
+          bucket.ordered.push(pick);
+          const pickIdx = remaining.indexOf(pick);
+          if (pickIdx >= 0) remaining.splice(pickIdx, 1);
+        });
+
+        const afternoonAnchor = morningPicks[morningPicks.length - 1] || morningPicks[0] || null;
+        const afternoonPicks = takeBestMatchingPlaces(remaining, bucket.afternoonCityHint, 2, afternoonAnchor);
+        afternoonPicks.forEach((pick) => {
+          bucket.ordered.push(pick);
+          const pickIdx = remaining.indexOf(pick);
+          if (pickIdx >= 0) remaining.splice(pickIdx, 1);
+        });
+
+        while (bucket.ordered.length < 4 && remaining.length > 0) {
+          const fallbackPick = takeBestMatchingPlace(remaining, bucket.afternoonCityHint || bucket.morningCityHint, bucket.ordered[bucket.ordered.length - 1] || null);
+          if (!fallbackPick) break;
+          bucket.ordered.push(fallbackPick);
+          const pickIdx = remaining.indexOf(fallbackPick);
+          if (pickIdx >= 0) remaining.splice(pickIdx, 1);
+        }
+        return;
+      }
+
+      const dayCityHint = bucket.morningCityHint || bucket.cityHint || '';
+      let anchor = null;
+      while (bucket.ordered.length < 5 && remaining.length > 0) {
+        const pick = takeBestMatchingPlace(remaining, dayCityHint, anchor);
+        if (!pick) break;
+        bucket.ordered.push(pick);
+        anchor = pick;
+        const pickIdx = remaining.indexOf(pick);
+        if (pickIdx >= 0) remaining.splice(pickIdx, 1);
+      }
+
+      if (bucket.ordered.length === 0) {
+        const fallback = uniqueRankedPlaces[bucketIdx % uniqueRankedPlaces.length];
+        if (fallback) bucket.ordered.push(fallback);
+      }
+    });
+
+    const targetStops = Math.max(3, Math.min(dayCount * 5, uniqueRankedPlaces.length || candidatePlaces.length));
 
     const toCandidateKey = (item) => String(item?._uniqueKey || candidateUniqueKey(item));
     const usedCandidateKeys = new Set(
@@ -263,9 +313,15 @@ export function useTripDetailsRouteIdeas({
     });
 
     orderedDayPlaces.forEach((bucket, bucketIdx) => {
+      const splitDay = bucket.morningCityHint && bucket.afternoonCityHint && bucket.morningCityHint !== bucket.afternoonCityHint;
+      if (splitDay) {
+        bucket.ordered = bucket.ordered.slice(0, 4);
+        return;
+      }
       if (bucket.ordered.length >= 5) return;
-      const cityPool = bucket.cityHint
-        ? uniqueRankedPlaces.filter((candidate) => matchesCityHint(candidate, bucket.cityHint))
+      const primaryHint = bucket.morningCityHint || bucket.cityHint;
+      const cityPool = primaryHint
+        ? uniqueRankedPlaces.filter((candidate) => matchesCityHint(candidate, primaryHint))
         : uniqueRankedPlaces;
       const pool = cityPool.length > 0 ? cityPool : uniqueRankedPlaces;
       if (pool.length === 0) return;
@@ -286,12 +342,19 @@ export function useTripDetailsRouteIdeas({
 
     const emittedKeys = new Set();
     const itineraryPlaces = orderedDayPlaces
-      .flatMap((bucket) => bucket.ordered.slice(0, 5).map((source, index) => {
+      .flatMap((bucket) => bucket.ordered.slice(0, 4).map((source, index) => {
         const emitKey = toCandidateKey(source);
         if (!emitKey || emittedKeys.has(emitKey)) return null;
         emittedKeys.add(emitKey);
         const resolvedDurationMinutes = resolveSmartDurationMinutes(source);
         const cityHint = bucket.cityHint || '';
+        const halfThreshold = bucket.morningCityHint && bucket.afternoonCityHint && bucket.morningCityHint !== bucket.afternoonCityHint ? 2 : 3;
+        const slotCityHint = index < halfThreshold
+          ? (bucket.morningCityHint || cityHint)
+          : (bucket.afternoonCityHint || bucket.morningCityHint || cityHint);
+        const dayTitle = bucket.morningCityHint && bucket.afternoonCityHint && bucket.morningCityHint !== bucket.afternoonCityHint
+          ? `Day ${bucket.dayNum} - ${bucket.morningCityHint} to ${bucket.afternoonCityHint}`
+          : (cityHint ? `Day ${bucket.dayNum} - ${cityHint}` : `Day ${bucket.dayNum}`);
         return {
           id: `smart-itinerary-${bucket.dayNum}-${index}-${source.id || source._idx || 'place'}`,
           name: source.name || `Stop ${index + 1}`,
@@ -307,7 +370,8 @@ export function useTripDetailsRouteIdeas({
           itemType: source._itemType === 'food' ? 'food' : 'place',
           category: source._itemType === 'food' ? 'Food & Beverage' : 'Place',
           dayNum: bucket.dayNum,
-          dayTitle: cityHint ? `Day ${bucket.dayNum} - ${cityHint}` : `Day ${bucket.dayNum}`,
+          dayTitle,
+          cityHint: slotCityHint,
           durationMinutes: resolvedDurationMinutes,
           durationLabel: source.estimatedDuration || formatDurationLabelFromMinutes(resolvedDurationMinutes),
         };
@@ -319,8 +383,8 @@ export function useTripDetailsRouteIdeas({
 
     return [{
       id: 'smart-itinerary-generator',
-      title: `${destinationLabel}: Smart Itinerary Generator`,
-      destination: destinationLabel,
+      title: `${routeTitleLabel}: Smart Itinerary Generator`,
+      destination: routeTitleLabel,
       duration: `${dayCount} days`,
       type: 'Smart-generated',
       creator: 'Smart Itinerary Generator',

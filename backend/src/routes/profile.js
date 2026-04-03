@@ -179,6 +179,37 @@ async function buildProfile({ userId, includePrivateTrips, includeEmail, viewerI
   };
 }
 
+router.get('/lookup', requireAuth, async (req, res) => {
+  try {
+    const email = String(req.query?.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required.' });
+    }
+
+    const user = await User.findOne({ email })
+      .select('_id email name username picture')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found for that email.' });
+    }
+
+    return res.json({
+      exists: true,
+      user: {
+        id: String(user._id),
+        email: user.email || '',
+        name: user.name || '',
+        username: user.username || '',
+        picture: user.picture || '',
+      },
+    });
+  } catch (err) {
+    console.error('Profile lookup error:', err);
+    return res.status(500).json({ error: 'Failed to look up account' });
+  }
+});
+
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const payload = await buildProfile({

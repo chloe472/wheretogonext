@@ -1,4 +1,5 @@
 import { Footprints, Bike, Car, Train } from 'lucide-react';
+import { resolveImageUrl } from '../../../lib/imageFallback';
 import { searchLocations } from './tripDetailsLocationData';
 
 export const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
@@ -90,6 +91,72 @@ export function getDestinationList(destination = '', locations = '') {
   });
 
   return unique;
+}
+
+export function splitRouteLocationLabel(label = '') {
+  const parts = String(label || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const city = parts[0] || '';
+  const country = parts.length > 1 ? parts[parts.length - 1] : '';
+  return { city, country };
+}
+
+export function buildTripRouteSummary(destination = '', locations = '') {
+  const routeLocations = getDestinationList(destination, locations);
+  const uniqueLocations = [];
+  const seenLocationKeys = new Set();
+  routeLocations.forEach((entry) => {
+    const label = String(entry || '').trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seenLocationKeys.has(key)) return;
+    seenLocationKeys.add(key);
+    uniqueLocations.push(label);
+  });
+
+  const uniqueCities = [];
+  const seenCities = new Set();
+  const uniqueCountries = [];
+  const seenCountries = new Set();
+
+  uniqueLocations.forEach((label) => {
+    const { city, country } = splitRouteLocationLabel(label);
+    const cityKey = city.toLowerCase();
+    if (city && !seenCities.has(cityKey)) {
+      seenCities.add(cityKey);
+      uniqueCities.push(city);
+    }
+    const countryKey = country.toLowerCase();
+    if (country && !seenCountries.has(countryKey)) {
+      seenCountries.add(countryKey);
+      uniqueCountries.push(country);
+    }
+  });
+
+  if (uniqueCities.length === 0) {
+    return {
+      routeLocations: uniqueLocations,
+      title: destination ? `Trip to ${destination}` : 'Untitled trip',
+      displayLocations: uniqueLocations.join('; '),
+    };
+  }
+
+  const cityPart = uniqueCities.join(', ');
+  const countryPart = uniqueCountries.length === 1
+    ? uniqueCountries[0]
+    : uniqueCountries.length > 1
+      ? uniqueCountries.join(', ')
+      : '';
+
+  const routeName = countryPart ? `${cityPart}, ${countryPart}` : cityPart;
+
+  return {
+    routeLocations: uniqueLocations,
+    title: `Trip to ${routeName}`,
+    displayLocations: uniqueCities.join('; '),
+  };
 }
 
 export function getTripDayCount(startDate, endDate) {
@@ -1077,6 +1144,122 @@ export function getTravelBetween(fromItem, toItem, mode, cache, setCache) {
   
   // Return fallback calculation immediately for initial render
   return getTravelBetweenFallback(fromItem, toItem, mode);
+}
+
+/**
+ * Pure append for discovery / Explore flows (same rules as TripDetails add-to-trip).
+ * @returns {{ ok: true, tripExpenseItems: object[] } | { ok: false, reason: 'overlap' | 'invalid_stay', message: string }}
+ */
+export function tryAppendItemToExpenseList(tripExpenseItems, {
+  itemType,
+  data,
+  categoryId,
+  category,
+  Icon,
+  values,
+  currency = 'USD',
+  exchangeRates = {},
+}) {
+  const prev = Array.isArray(tripExpenseItems) ? tripExpenseItems : [];
+  const isStayCategory = String(categoryId || '').toLowerCase() === 'stays';
+  const costNum = parseFloat(values?.cost) || 0;
+  const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
+  const durationHrsNum = isStayCategory ? 0 : Number(values?.durationHrs || 0);
+  const durationMinsNum = isStayCategory ? 0 : Number(values?.durationMins || 0);
+  const startTime = isStayCategory
+    ? (values?.checkInTime || '15:00')
+    : (values?.startTime || '07:00');
+  const resolvedDate = isStayCategory
+    ? (values?.checkInDate || values?.date)
+    : values?.date;
+
+  const checkInDate = isStayCategory ? (values?.checkInDate || resolvedDate) : '';
+  const checkInTime = isStayCategory ? (values?.checkInTime || startTime || '15:00') : '';
+  const checkOutDate = isStayCategory ? (values?.checkOutDate || checkInDate) : '';
+  const checkOutTime = isStayCategory ? (values?.checkOutTime || checkInTime || '11:00') : '';
+
+  const checkInDateTime = isStayCategory ? parseDateTimeLocal(checkInDate, checkInTime) : null;
+  const checkOutDateTime = isStayCategory ? parseDateTimeLocal(checkOutDate, checkOutTime) : null;
+  const stayDurationMinutes = (isStayCategory && checkInDateTime && checkOutDateTime)
+    ? Math.max(0, Math.round((checkOutDateTime.getTime() - checkInDateTime.getTime()) / (1000 * 60)))
+    : 0;
+  const stayDuration = isStayCategory
+    ? durationMinutesToParts(stayDurationMinutes)
+    : { durationHrs: durationHrsNum, durationMins: durationMinsNum };
+
+  if (isStayCategory) {
+    if (!checkInDateTime || !checkOutDateTime || checkOutDateTime <= checkInDateTime) {
+      return {
+        ok: false,
+        reason: 'invalid_stay',
+        message: 'Check-out must be after check-in.',
+      };
+    }
+  }
+
+  if (!isStayCategory) {
+    const overlapping = findTimeOverlapItem(prev, {
+      date: resolvedDate,
+      startTime,
+      durationHrs: stayDuration.durationHrs,
+      durationMins: stayDuration.durationMins,
+    });
+    if (overlapping) {
+      return {
+        ok: false,
+        reason: 'overlap',
+        message: `Time overlaps with ${overlapping.name}. Please choose another time slot.`,
+      };
+    }
+  }
+
+  const docs = Array.isArray(values?.travelDocs)
+    ? values.travelDocs
+      .map((file, idx) => {
+        const normalized = normalizeAttachment(file) || createAttachmentFromFile(file);
+        if (!normalized) return null;
+        return {
+          id: `${data.id || data.name || 'doc'}-${idx}-${Date.now()}`,
+          name: normalized.name || `Document ${idx + 1}`,
+          type: normalized.type || '',
+          url: normalized.url || '',
+        };
+      })
+      .filter(Boolean)
+    : [];
+
+  const newItem = {
+    id: `${itemType}-${data.id}-${Date.now()}`,
+    sourcePlaceId: data.id || null,
+    name: data.name,
+    total: costNumUsd,
+    categoryId,
+    category,
+    date: resolvedDate,
+    detail: data.address || data.name,
+    Icon,
+    lat: data.lat,
+    lng: data.lng,
+    notes: values?.note || '',
+    attachments: docs,
+    startTime,
+    durationHrs: stayDuration.durationHrs,
+    durationMins: stayDuration.durationMins,
+    checkInDate: isStayCategory ? checkInDate : undefined,
+    checkInTime: isStayCategory ? checkInTime : undefined,
+    checkOutDate: isStayCategory ? checkOutDate : undefined,
+    checkOutTime: isStayCategory ? checkOutTime : undefined,
+    externalLink: normalizeExternalUrl(values?.externalLink || data.website || ''),
+    placeImageUrl: resolveImageUrl(
+      data.image,
+      data.name,
+      itemType === 'food' ? 'restaurant' : itemType === 'experience' ? 'activity' : itemType === 'stay' ? 'hotel' : 'landmark',
+    ),
+    rating: data.rating,
+    reviewCount: data.reviewCount,
+  };
+
+  return { ok: true, tripExpenseItems: [...prev, newItem] };
 }
 
 export const EXPENSE_CATEGORIES = [

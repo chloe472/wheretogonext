@@ -5,7 +5,7 @@ import { createItinerary, fetchItineraryById, fetchMyItineraries } from '../../a
 import { fetchMyProfile, searchUserByIdentifier } from '../../api/profileApi';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { fetchCitySuggestions } from '../../api/locationsApi';
-import { getCoverImageForDestination } from '../../data/tripDestinationMeta';
+import { lookupUserByEmail } from '../../api/profileApi';
 import DateRangePickerModal from '../DateRangePickerModal/DateRangePickerModal';
 import './NewTripPage.css';
 
@@ -115,8 +115,11 @@ export default function NewTripPage({ user, onLogout }) {
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [selectedLocations, setSelectedLocations] = useState([]);
+  const cityPlanRowSeqRef = useRef(0);
+  const [cityPlanRows, setCityPlanRows] = useState([]);
   const [cityDayRanges, setCityDayRanges] = useState({});
   const [cityDayDrafts, setCityDayDrafts] = useState({});
+  const [cityRangeError, setCityRangeError] = useState('');
   const [whereOpen, setWhereOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -129,11 +132,14 @@ export default function NewTripPage({ user, onLogout }) {
   const [invitePreview, setInvitePreview] = useState(null);
   const [inviteError, setInviteError] = useState('');
   const [invitedEmails, setInvitedEmails] = useState([]);
-  const [invitedFriends, setInvitedFriends] = useState([]);
+  const [inviteError, setInviteError] = useState('');
+  const [validatingInvite, setValidatingInvite] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const whereRef = useRef(null);
   const friendsRef = useRef(null);
+
+  const myEmail = String(user?.email || '').trim().toLowerCase();
 
   const totalTripDays = getTripDayCount(startDate, endDate);
   const defaultCityDayRanges = buildDefaultCityDayRanges(selectedLocations, totalTripDays || 1);
@@ -168,85 +174,44 @@ export default function NewTripPage({ user, onLogout }) {
   }, [whereQuery]);
 
   useEffect(() => {
-    setCityDayRanges((prev) => {
-      const next = {};
+    const selectedKeys = new Set(selectedLocations.map((loc) => getLocationKey(loc)));
+    setCityPlanRows((prev) => {
+      const next = prev.filter((row) => selectedKeys.has(row.locationKey));
       selectedLocations.forEach((loc) => {
         const key = getLocationKey(loc);
-        next[key] = prev[key] || defaultCityDayRanges[key] || { startDay: 1, endDay: Math.max(1, totalTripDays || 1) };
-      });
-      return next;
-    });
-  }, [selectedLocations, defaultCityDayRanges, totalTripDays]);
-
-  useEffect(() => {
-    fetchMyProfile().then((data) => setFriendsList(data?.friends || [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const trimmed = inviteQuery.trim();
-    if (trimmed.length < 2) {
-      setInvitePreview(null);
-      setInviteError('');
-      setInviteSearching(false);
-      return () => {};
-    }
-    setInviteSearching(true);
-    setInvitePreview(null);
-    setInviteError('');
-    const timer = setTimeout(async () => {
-      try {
-        const data = await searchUserByIdentifier(trimmed);
-        const found = data?.users?.[0] || null;
-        // filter out already-invited
-        if (found && (invitedFriends.some((f) => f.id === found.id) || invitedEmails.includes(trimmed.toLowerCase()))) {
-          setInviteError('Already added.');
-          setInvitePreview(null);
-        } else if (found) {
-          setInvitePreview(found);
-        } else {
-          setInviteError('No user found.');
-        }
-      } catch {
-        setInviteError('Search failed.');
-      } finally {
-        setInviteSearching(false);
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [inviteQuery]);
-
-  const addInvitePreview = () => {
-    if (!invitePreview) return;
-    setInvitedFriends((prev) => [...prev, invitePreview]);
-    setInviteQuery('');
-    setInvitePreview(null);
-    setInviteError('');
-  };
-
-  useEffect(() => {
-    if (!friendsOpen) return;
-    function handleClick(e) {
-      if (friendsRef.current && !friendsRef.current.contains(e.target)) {
-        setFriendsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [friendsOpen]);
-
-  useEffect(() => {
-    setCityDayDrafts((prev) => {
-      const validKeys = new Set(selectedLocations.map((loc) => getLocationKey(loc)));
-      const next = {};
-      Object.entries(prev).forEach(([key, value]) => {
-        const [locKey] = key.split('::');
-        if (validKeys.has(locKey)) {
-          next[key] = value;
+        if (!next.some((row) => row.locationKey === key)) {
+          cityPlanRowSeqRef.current += 1;
+          next.push({ id: `city-plan-${cityPlanRowSeqRef.current}`, locationKey: key });
         }
       });
       return next;
     });
   }, [selectedLocations]);
+
+  useEffect(() => {
+    setCityDayRanges((prev) => {
+      const next = {};
+      cityPlanRows.forEach((row) => {
+        const fallback = defaultCityDayRanges[row.locationKey] || { startDay: 1, endDay: Math.max(1, totalTripDays || 1) };
+        next[row.id] = prev[row.id] || fallback;
+      });
+      return next;
+    });
+  }, [cityPlanRows, defaultCityDayRanges, totalTripDays]);
+
+  useEffect(() => {
+    setCityDayDrafts((prev) => {
+      const validRowIds = new Set(cityPlanRows.map((row) => row.id));
+      const next = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const [rowId] = key.split('::');
+        if (validRowIds.has(rowId)) {
+          next[key] = value;
+        }
+      });
+      return next;
+    });
+  }, [cityPlanRows]);
 
   const addLocation = (loc) => {
     if (!loc) return;
@@ -264,34 +229,34 @@ export default function NewTripPage({ user, onLogout }) {
       && !selectedLocations.some((selected) => getLocationKey(selected) === getLocationKey(loc)),
   );
 
-  const updateCityRange = (loc, field, value) => {
-    const key = getLocationKey(loc);
+  const updateCityRange = (rowId, locationKey, field, value) => {
+    if (cityRangeError) setCityRangeError('');
     const maxDay = Math.max(1, totalTripDays || 1);
     const n = Number.parseInt(String(value), 10);
     const safe = Number.isFinite(n) ? Math.max(1, Math.min(maxDay, Math.round(n))) : 1;
     setCityDayRanges((prev) => {
-      const current = prev[key] || defaultCityDayRanges[key] || { startDay: 1, endDay: maxDay };
+      const current = prev[rowId] || defaultCityDayRanges[locationKey] || { startDay: 1, endDay: maxDay };
       const next = { ...current, [field]: safe };
       if (next.startDay > next.endDay) {
         if (field === 'startDay') next.endDay = next.startDay;
         if (field === 'endDay') next.startDay = next.endDay;
       }
-      return { ...prev, [key]: next };
+      return { ...prev, [rowId]: next };
     });
   };
 
-  const getCityDayDraftKey = (loc, field) => `${getLocationKey(loc)}::${field}`;
+  const getCityDayDraftKey = (rowId, field) => `${rowId}::${field}`;
 
-  const handleCityRangeInputChange = (loc, field, value) => {
+  const handleCityRangeInputChange = (row, field, value) => {
     const raw = String(value);
     const sanitized = raw.replace(/[^0-9]/g, '');
-    const draftKey = getCityDayDraftKey(loc, field);
+    const draftKey = getCityDayDraftKey(row.id, field);
+    if (cityRangeError) setCityRangeError('');
     setCityDayDrafts((prev) => ({ ...prev, [draftKey]: sanitized }));
   };
 
-  const commitCityRangeInput = (loc, field) => {
-    const key = getLocationKey(loc);
-    const draftKey = getCityDayDraftKey(loc, field);
+  const commitCityRangeInput = (row, field) => {
+    const draftKey = getCityDayDraftKey(row.id, field);
     const raw = cityDayDrafts[draftKey];
 
     if (raw === undefined) return;
@@ -305,10 +270,45 @@ export default function NewTripPage({ user, onLogout }) {
       return;
     }
 
-    updateCityRange(loc, field, raw);
+    const maxDay = Math.max(1, totalTripDays || 1);
+    const parsed = Number.parseInt(String(raw), 10);
+    if (Number.isFinite(parsed) && parsed > maxDay) {
+      setCityRangeError(`Day cannot exceed Day ${maxDay}.`);
+      return;
+    }
+
+    if (cityRangeError) setCityRangeError('');
+
+    updateCityRange(row.id, row.locationKey, field, raw);
     setCityDayDrafts((prev) => {
       const next = { ...prev };
       delete next[draftKey];
+      return next;
+    });
+  };
+
+  const addCityPlanRow = () => {
+    if (!selectedLocations.length) return;
+    if (cityRangeError) setCityRangeError('');
+    cityPlanRowSeqRef.current += 1;
+    setCityPlanRows((prev) => [
+      ...prev,
+      { id: `city-plan-${cityPlanRowSeqRef.current}`, locationKey: getLocationKey(selectedLocations[0]) },
+    ]);
+  };
+
+  const removeCityPlanRow = (rowId) => {
+    if (cityRangeError) setCityRangeError('');
+    setCityPlanRows((prev) => prev.filter((row) => row.id !== rowId));
+    setCityDayRanges((prev) => {
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    setCityDayDrafts((prev) => {
+      const next = { ...prev };
+      delete next[`${rowId}::startDay`];
+      delete next[`${rowId}::endDay`];
       return next;
     });
   };
@@ -355,10 +355,38 @@ export default function NewTripPage({ user, onLogout }) {
     }, 220);
   };
 
+  const handleAddInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) {
+      setInviteError('');
+      return;
+    }
+    if (email === myEmail) {
+      setInviteError('You cannot add your own email as a tripmate.');
+      return;
+    }
+    if (invitedEmails.includes(email)) {
+      setInviteError('That tripmate has already been added.');
+      return;
+    }
+    setValidatingInvite(true);
+    setInviteError('');
+    try {
+      await lookupUserByEmail(email);
+      setInvitedEmails((prev) => [...prev, email]);
+      setInviteEmail('');
+    } catch (err) {
+      setInviteError(err?.message || 'Could not add that tripmate.');
+    } finally {
+      setValidatingInvite(false);
+    }
+  };
+
   const handleStartPlanning = async (e) => {
     e.preventDefault();
     setDatesError('');
     setSubmitError('');
+    setCityRangeError('');
     const pendingLocation = resolveTypedLocation(whereQuery);
     const allLocations = [...selectedLocations];
     if (pendingLocation) {
@@ -390,11 +418,22 @@ export default function NewTripPage({ user, onLogout }) {
     const fallbackRanges = buildDefaultCityDayRanges(allLocations, dayCount);
     let citySegments = [];
     if (allLocations.length > 1) {
-      citySegments = allLocations.map((loc) => {
+      const allLocationKeys = allLocations.map((loc) => getLocationKey(loc));
+      const effectiveRows = cityPlanRows
+        .filter((row) => allLocationKeys.includes(row.locationKey));
+      allLocations.forEach((loc) => {
         const key = getLocationKey(loc);
-        const selected = cityDayRanges[key] || fallbackRanges[key] || { startDay: 1, endDay: dayCount };
-        const startDraft = cityDayDrafts[getCityDayDraftKey(loc, 'startDay')];
-        const endDraft = cityDayDrafts[getCityDayDraftKey(loc, 'endDay')];
+        if (!effectiveRows.some((row) => row.locationKey === key)) {
+          effectiveRows.push({ id: `virtual-${key}`, locationKey: key });
+        }
+      });
+
+      citySegments = effectiveRows.map((row) => {
+        const loc = allLocations.find((item) => getLocationKey(item) === row.locationKey) || allLocations[0];
+        const key = getLocationKey(loc);
+        const selected = cityDayRanges[row.id] || fallbackRanges[key] || { startDay: 1, endDay: dayCount };
+        const startDraft = cityDayDrafts[getCityDayDraftKey(row.id, 'startDay')];
+        const endDraft = cityDayDrafts[getCityDayDraftKey(row.id, 'endDay')];
         const startSource = startDraft !== undefined && startDraft !== '' ? startDraft : selected.startDay;
         const endSource = endDraft !== undefined && endDraft !== '' ? endDraft : selected.endDay;
         const startDay = Math.max(1, Math.min(dayCount, Number(startSource) || 1));
@@ -406,6 +445,22 @@ export default function NewTripPage({ user, onLogout }) {
           endDay: Math.max(startDay, endDay),
         };
       }).sort((a, b) => a.startDay - b.startDay);
+
+      if (citySegments.length > 0) {
+        if (citySegments[0].startDay !== 1) {
+          const firstCity = citySegments[0].city || citySegments[0].locationLabel || 'the first city';
+          const message = `City ranges must start at Day 1. ${firstCity} currently starts at Day ${citySegments[0].startDay}.`;
+          setCityRangeError(message);
+          return;
+        }
+
+        const last = citySegments[citySegments.length - 1];
+        if (last.endDay !== dayCount) {
+          const message = `City ranges must end at Day ${dayCount}. Current end day is Day ${last.endDay}.`;
+          setCityRangeError(message);
+          return;
+        }
+      }
     } else {
       citySegments = [{
         city: String(allLocations[0]?.name || '').trim(),
@@ -418,7 +473,6 @@ export default function NewTripPage({ user, onLogout }) {
     const primaryLocation = allLocations[0];
     const title = getLocationLabel(primaryLocation);
     const locations = citySegments.map((seg) => seg.locationLabel).join('; ');
-    const coverUrl = getCoverImageForDestination(primaryLocation.name, locations);
     const payload = {
       title: `Trip to ${title}`,
       overview: '',
@@ -437,8 +491,6 @@ export default function NewTripPage({ user, onLogout }) {
       ],
       status: 'Planning',
       statusClass: 'trip-card__status--planning',
-      image: coverUrl,
-      coverImages: [coverUrl],
       published: false,
       visibility: 'private',
       citySegments,
@@ -487,8 +539,8 @@ export default function NewTripPage({ user, onLogout }) {
   return (
     <div className="new-trip">
       <header className="new-trip__header">
-        <Link to="/" className="new-trip__back wtg-back-btn" aria-label="Back to My Trips" onClick={handleBackToTrips}>
-          ← My Trips
+        <Link to="/" className="new-trip__back" aria-label="Back to My Trips" onClick={handleBackToTrips}>
+          Back
         </Link>
       </header>
 
@@ -592,24 +644,43 @@ export default function NewTripPage({ user, onLogout }) {
                 </p>
                 {totalTripDays > 0 ? (
                   <>
-                    {selectedLocations.map((loc) => {
-                      const key = getLocationKey(loc);
-                      const range = cityDayRanges[key] || defaultCityDayRanges[key] || { startDay: 1, endDay: totalTripDays };
+                    {cityPlanRows.map((row) => {
+                      const loc = selectedLocations.find((item) => getLocationKey(item) === row.locationKey) || selectedLocations[0];
+                      if (!loc) return null;
+                      const range = cityDayRanges[row.id] || defaultCityDayRanges[row.locationKey] || { startDay: 1, endDay: totalTripDays };
+                      const canRemove = cityPlanRows.length > selectedLocations.length;
                       return (
-                        <div key={key} className="new-trip__city-plan-row">
-                          <span className="new-trip__city-plan-city">{getLocationLabel(loc)}</span>
+                        <div key={row.id} className="new-trip__city-plan-row">
+                          <div className="new-trip__city-plan-city-field">
+                            <select
+                              className="new-trip__city-plan-select"
+                              value={row.locationKey}
+                              onChange={(e) => {
+                                const nextKey = e.target.value;
+                                setCityPlanRows((prev) => prev.map((it) => (it.id === row.id ? { ...it, locationKey: nextKey } : it)));
+                              }}
+                              aria-label="City"
+                            >
+                              {selectedLocations.map((optionLoc) => {
+                                const optionKey = getLocationKey(optionLoc);
+                                return (
+                                  <option key={optionKey} value={optionKey}>{getLocationLabel(optionLoc)}</option>
+                                );
+                              })}
+                            </select>
+                          </div>
                           <div className="new-trip__city-plan-inputs">
-                            <label className="new-trip__city-plan-label">
-                              From
+                            <div className="new-trip__city-plan-range-group">
+                              <span className="new-trip__city-plan-range-prefix">Day</span>
                               <input
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 min={1}
                                 max={totalTripDays}
-                                value={cityDayDrafts[getCityDayDraftKey(loc, 'startDay')] ?? String(range.startDay)}
-                                onChange={(e) => handleCityRangeInputChange(loc, 'startDay', e.target.value)}
-                                onBlur={() => commitCityRangeInput(loc, 'startDay')}
+                                value={cityDayDrafts[getCityDayDraftKey(row.id, 'startDay')] ?? String(range.startDay)}
+                                onChange={(e) => handleCityRangeInputChange(row, 'startDay', e.target.value)}
+                                onBlur={() => commitCityRangeInput(row, 'startDay')}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -617,19 +688,19 @@ export default function NewTripPage({ user, onLogout }) {
                                   }
                                 }}
                                 className="new-trip__city-plan-input"
+                                aria-label="Start day"
                               />
-                            </label>
-                            <label className="new-trip__city-plan-label">
-                              To
+                              <span className="new-trip__city-plan-range-separator">to</span>
+                              <span className="new-trip__city-plan-range-prefix">Day</span>
                               <input
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 min={1}
                                 max={totalTripDays}
-                                value={cityDayDrafts[getCityDayDraftKey(loc, 'endDay')] ?? String(range.endDay)}
-                                onChange={(e) => handleCityRangeInputChange(loc, 'endDay', e.target.value)}
-                                onBlur={() => commitCityRangeInput(loc, 'endDay')}
+                                value={cityDayDrafts[getCityDayDraftKey(row.id, 'endDay')] ?? String(range.endDay)}
+                                onChange={(e) => handleCityRangeInputChange(row, 'endDay', e.target.value)}
+                                onBlur={() => commitCityRangeInput(row, 'endDay')}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -637,12 +708,29 @@ export default function NewTripPage({ user, onLogout }) {
                                   }
                                 }}
                                 className="new-trip__city-plan-input"
+                                aria-label="End day"
                               />
-                            </label>
+                            </div>
+                            {canRemove ? (
+                              <button
+                                type="button"
+                                className="new-trip__city-plan-remove"
+                                onClick={() => removeCityPlanRow(row.id)}
+                                aria-label="Remove row"
+                              >
+                                Remove
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       );
                     })}
+                    <button type="button" className="new-trip__city-plan-add" onClick={addCityPlanRow}>
+                      + Add another row
+                    </button>
+                    {cityRangeError ? (
+                      <p className="new-trip__error new-trip__city-plan-error" role="alert">{cityRangeError}</p>
+                    ) : null}
                     <p className="new-trip__city-plan-foot">Total trip length: Day 1 to Day {totalTripDays}.</p>
                   </>
                 ) : (
@@ -813,6 +901,62 @@ export default function NewTripPage({ user, onLogout }) {
                 )}
               </div>
             </div>
+<<<<<<< HEAD
+=======
+            {inviteOpen && (
+              <div className="new-trip__invite-panel">
+                <label htmlFor="invite-email" className="new-trip__label">Invite by email</label>
+                <div className="new-trip__invite-input-row">
+                  <input
+                    id="invite-email"
+                    type="email"
+                    className="new-trip__input"
+                    placeholder="e.g. friend@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value);
+                      if (inviteError) setInviteError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddInvite();
+                      }
+                    }}
+                    autoComplete="email"
+                  />
+                  <button
+                    type="button"
+                    className="new-trip__invite-add-btn"
+                    onClick={handleAddInvite}
+                    disabled={validatingInvite}
+                  >
+                    {validatingInvite ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+                {inviteError ? (
+                  <p className="new-trip__error" role="alert">{inviteError}</p>
+                ) : null}
+                {invitedEmails.length > 0 && (
+                  <ul className="new-trip__invited-list">
+                    {invitedEmails.map((email) => (
+                      <li key={email} className="new-trip__invited-item">
+                        <span className="new-trip__invited-email">{email}</span>
+                        <button
+                          type="button"
+                          className="new-trip__invited-remove"
+                          onClick={() => setInvitedEmails((prev) => prev.filter((e) => e !== email))}
+                          aria-label={`Remove ${email}`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+>>>>>>> cccd73791376edf219883e1068e11132f54f38e6
           </div>
 
           {submitError && (

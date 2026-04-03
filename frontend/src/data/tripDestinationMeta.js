@@ -323,17 +323,14 @@ export function isGenericDefaultCoverUrl(url) {
 export function resolveTripCardCoverImage(raw) {
   const coverImages = Array.isArray(raw.coverImages) ? raw.coverImages.filter(Boolean) : [];
   const image = raw.image && String(raw.image).trim();
-  const primary = image || coverImages[0] || '';
-  const dest = String(raw.destination || '').trim();
-  const loc = String(raw.locations || '').trim();
+  const primary = coverImages[0] || image || '';
   // When a user duplicates a public itinerary ("Customize trip"), keep the source cover exactly.
-  // Do not replace "generic defaults" with destination-based images — the copy should look identical.
+  // Do not replace copied covers — the duplicate should look identical.
   if (raw?.customizedFromItineraryId) {
-    const copiedCover = coverImages[0] || image || '';
-    return copiedCover;
+    return primary;
   }
   if (!primary || isGenericDefaultCoverUrl(primary)) {
-    return getCoverImageForDestination(dest, loc);
+    return '';
   }
   return primary;
 }

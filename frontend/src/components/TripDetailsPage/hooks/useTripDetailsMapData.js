@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { resolveImageUrl } from '../../../lib/imageFallback';
-import { getMapCenterForDestination } from '../lib/tripDetailsLocationData';
 import { DAY_COLOR_OPTIONS } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsMapData({
   discoveryData,
+  discoveryLoading,
   tripExpenseItems,
   trip,
   days,
@@ -20,8 +20,8 @@ export function useTripDetailsMapData({
     }
     const firstItem = tripExpenseItems.find((i) => i.lat != null && i.lng != null);
     if (firstItem) return [firstItem.lat, firstItem.lng];
-    return getMapCenterForDestination(trip?.destination || trip?.locations);
-  }, [discoveryData?.center, tripExpenseItems, locationUpdateKey, trip?.destination, trip?.locations]);
+    return discoveryLoading ? [1.3521, 103.8198] : [47.6062, -122.3321];
+  }, [discoveryData?.center, discoveryLoading, tripExpenseItems, locationUpdateKey]);
 
   const mapMarkers = useMemo(() => {
     const colorForDay = (dNum) => (
@@ -46,6 +46,10 @@ export function useTripDetailsMapData({
           website: i.externalLink || '',
         };
       });
+
+    if (discoveryLoading && tripItemMarkers.length === 0) {
+      return [];
+    }
 
     const sourcePlaces = Array.isArray(discoveryData?.places) ? discoveryData.places : [];
     const sourceFoods = Array.isArray(discoveryData?.foods) ? discoveryData.foods : [];
@@ -142,44 +146,13 @@ export function useTripDetailsMapData({
     const foodMarkers = toDiscoveryMarkers(sourceFoods, 'food', 24);
     const experienceMarkers = toDiscoveryMarkers(sourceExperiences, 'experience', 30);
 
-    const destinationMarkers = selectedDestinations
-      .map((label, idx) => {
-        const [lat, lng] = getMapCenterForDestination(label);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return {
-          id: `destination-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${idx}`,
-          markerType: 'trip',
-          name: label,
-          lat,
-          lng,
-          dayNum: 1,
-          color: colorForDay(1),
-          address: label,
-          website: '',
-        };
-      })
-      .filter(Boolean);
-
-    const destinationMarkerByCoord = new Map();
-    destinationMarkers.forEach((marker) => {
-      const key = `${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`;
-      if (!destinationMarkerByCoord.has(key)) destinationMarkerByCoord.set(key, marker);
-    });
-    const dedupedDestinationMarkers = Array.from(destinationMarkerByCoord.values());
-
     if (mapFilter === 'Food & Beverages') return foodMarkers;
     if (mapFilter === 'Experiences') return experienceMarkers;
-    if (mapFilter === 'My Trip') return tripItemMarkers.length > 0 ? tripItemMarkers : dedupedDestinationMarkers;
+    if (mapFilter === 'My Trip') return tripItemMarkers;
 
-    const baseDefaultMarkers = placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
-    if (dedupedDestinationMarkers.length === 0) return baseDefaultMarkers;
-
-    const seenCoords = new Set(baseDefaultMarkers.map((marker) => `${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`));
-    const missingDestinationMarkers = dedupedDestinationMarkers.filter(
-      (marker) => !seenCoords.has(`${Number(marker.lat).toFixed(4)},${Number(marker.lng).toFixed(4)}`),
-    );
-    return [...baseDefaultMarkers, ...missingDestinationMarkers];
+    return placeMarkers.length > 0 ? placeMarkers : tripItemMarkers;
   }, [
+    discoveryLoading,
     tripExpenseItems,
     days,
     discoveryData?.places,
@@ -188,7 +161,6 @@ export function useTripDetailsMapData({
     mapFilter,
     cityQuery,
     dayColors,
-    selectedDestinations,
   ]);
 
   return { mapCenter, mapMarkers };

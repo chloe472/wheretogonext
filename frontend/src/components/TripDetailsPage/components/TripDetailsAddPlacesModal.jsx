@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Calendar as CalendarIcon,
   Camera,
   Clock,
@@ -33,6 +32,9 @@ export default function TripDetailsAddPlacesModal({
   selectedPlaceMarkerId,
   setSelectedPlaceMarkerId,
   filteredPlaces,
+  addModalCityFilter,
+  setAddModalCityFilter,
+  addModalCityOptions,
   addEntireItineraryToTrip,
   openItineraryPlaceDetails,
   openAddToTripFromMapMarker,
@@ -319,6 +321,19 @@ return (
                         {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
                       </p>
                       <div className="trip-details__add-places-sort">
+                        <label htmlFor="add-places-city-filter">City:</label>
+                        <select
+                          id="add-places-city-filter"
+                          className="trip-details__add-places-sort-select"
+                          value={addModalCityFilter}
+                          onChange={(e) => setAddModalCityFilter(e.target.value)}
+                        >
+                          {addModalCityOptions.map((city) => (
+                            <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="trip-details__add-places-sort">
                         <label htmlFor="add-places-sort">Sort by:</label>
                         <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
                           {PLACE_SORT_OPTIONS.map((opt) => (
@@ -421,7 +436,7 @@ return (
           <div className="trip-details__place-detail-panel">
             <div className="trip-details__place-detail-header">
               <button type="button" className="trip-details__place-detail-back" onClick={() => { setPlaceDetailsView(null); setPlaceDetailsTab('overview'); }} aria-label="Back to list">
-                <ArrowLeft size={20} aria-hidden /> Back
+                Back
               </button>
               <button type="button" className="trip-details__place-detail-close" aria-label="Close" onClick={onClosePlaceDetailHeader}>
                 <X size={20} aria-hidden />

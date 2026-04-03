@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getTripDaysFromTrip } from '../lib/tripDetailsPageHelpers';
+import { buildTripRouteSummary, getTripDaysFromTrip } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsTitleChrome({ trip, tripId, locationUpdateKey }) {
   const [titleDropdownOpen, setTitleDropdownOpen] = useState(false);
@@ -12,7 +12,11 @@ export function useTripDetailsTitleChrome({ trip, tripId, locationUpdateKey }) {
   useEffect(() => {
     if (trip) {
       const d = getTripDaysFromTrip(trip);
-      setTitleDisplay(trip.title ?? `${d.length} days to ${trip.destination}`);
+      const routeSummary = buildTripRouteSummary(trip.destination, trip.locations);
+      const shouldRebuildAutoTitle = !trip.title || String(trip.title).trim().toLowerCase().startsWith('trip to ');
+      setTitleDisplay(shouldRebuildAutoTitle
+        ? (routeSummary.title ?? `${d.length} days to ${trip.destination}`)
+        : trip.title);
     }
   }, [tripId, trip?.destination, locationUpdateKey, trip]);
 

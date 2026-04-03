@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { searchLocations } from '../../data/mockLocations';
+import { fetchCitySuggestions } from '../../api/locationsApi';
 import {
   ADVENTURE_TYPES,
   DURATIONS,
@@ -21,6 +21,18 @@ import './SearchResultsPage.css';
 
 const RECENT_DESTINATIONS = ['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'];
 
+const TYPE_LABELS = { City: 'City', Country: 'Country', Province: 'Province' };
+
+function isCityLocation(loc) {
+  return String(loc?.type || '').toLowerCase() === 'city';
+}
+
+function getLocationKey(loc) {
+  const name = String(loc?.name || '').trim();
+  const country = String(loc?.country || '').trim();
+  return country ? `${name}, ${country}`.toLowerCase() : name.toLowerCase();
+}
+
 export default function SearchResultsPage({ user, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
@@ -32,14 +44,45 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [itineraries, setItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const searchRef = useRef(null);
   const suggestRef = useRef(null);
 
-  const suggestions = searchLocations(searchInput.trim());
+  const suggestions = locationSuggestions.filter((loc) => isCityLocation(loc));
 
   useEffect(() => {
     setSearchInput(q);
   }, [q]);
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (!trimmed) {
+      setLocationSuggestions([]);
+      setSuggestionsLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const next = await fetchCitySuggestions(trimmed, { signal: controller.signal, limit: 12 });
+        setLocationSuggestions(Array.isArray(next) ? next : []);
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          setLocationSuggestions([]);
+        }
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [searchInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +152,8 @@ export default function SearchResultsPage({ user, onLogout }) {
     setSuggestOpen(false);
   };
 
+  const showSuggestionPanel = suggestOpen && searchInput.trim().length >= 2;
+
   return (
     <div className="search-results">
       <DashboardHeader user={user} onLogout={onLogout} activeNav="explore" />
@@ -130,6 +175,9 @@ export default function SearchResultsPage({ user, onLogout }) {
               onChange={(e) => { setSearchInput(e.target.value); setSuggestOpen(true); }}
               onFocus={() => setSuggestOpen(true)}
               aria-label="Search destinations or itineraries"
+              aria-expanded={showSuggestionPanel}
+              aria-autocomplete="list"
+              autoComplete="off"
             />
             {(q || searchInput.trim()) && (
               <button
@@ -141,20 +189,39 @@ export default function SearchResultsPage({ user, onLogout }) {
                 ×
               </button>
             )}
-            {suggestOpen && suggestions.length > 0 && (
+            {showSuggestionPanel && (
               <ul className="search-results__suggestions" role="listbox" ref={suggestRef}>
-                {suggestions.slice(0, 8).map((loc) => (
-                  <li key={loc.id}>
-                    <button type="button" className="search-results__suggestion" onClick={() => handleSelectSuggestion(loc)} role="option">
-                      {loc.name}
-                      {loc.country && <span className="search-results__suggestion-meta">{loc.country}</span>}
-                    </button>
+                {suggestionsLoading ? (
+                  <li className="search-results__suggestion search-results__suggestion--empty" role="option">
+                    Searching cities...
                   </li>
-                ))}
+                ) : suggestions.length === 0 ? (
+                  <li className="search-results__suggestion search-results__suggestion--empty" role="option">
+                    No results
+                  </li>
+                ) : (
+                  suggestions.slice(0, 8).map((loc) => (
+                    <li key={String(loc.id || getLocationKey(loc))}>
+                      <button
+                        type="button"
+                        className="search-results__suggestion"
+                        onClick={() => handleSelectSuggestion(loc)}
+                        role="option"
+                      >
+                        <span className="search-results__suggestion-name">{loc.name}</span>
+                        {loc.country && (
+                          <span className="search-results__suggestion-meta">{loc.country}</span>
+                        )}
+                        <span className={`search-results__type-badge search-results__type-badge--${String(loc.type || 'City').toLowerCase()}`}>
+                          {TYPE_LABELS[loc.type] || loc.type || 'City'}
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
               </ul>
             )}
           </form>
-          <p className="search-results__hero-hint">Search by your most recent destination</p>
           <div className="search-results__tags">
             {RECENT_DESTINATIONS.map((dest) => {
               const isActive = q.trim().toLowerCase() === dest.toLowerCase();

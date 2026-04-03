@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Check,
   ExternalLink,
   Heart,
@@ -26,6 +25,9 @@ export default function TripDetailsAddStaysModal({
   destinationLabel,
   allDayNums,
   filteredStays,
+  addModalCityFilter,
+  setAddModalCityFilter,
+  addModalCityOptions,
   stayTypeOptions,
   stayDetailsView,
   setStayDetailsView,
@@ -100,7 +102,7 @@ export default function TripDetailsAddStaysModal({
                   onClick={onBackStayDetail}
                   aria-label="Back to list"
                 >
-                  <ArrowLeft size={20} aria-hidden /> Back
+                  Back
                 </button>
                 <button
                   type="button"
@@ -494,6 +496,16 @@ export default function TripDetailsAddStaysModal({
                 <div className="trip-details__add-food-toolbar">
                   <p className="trip-details__add-places-results">{filteredStays.length} results found</p>
                   <div className="trip-details__add-food-toolbar-actions">
+                    <select
+                      className="trip-details__add-places-sort-select"
+                      value={addModalCityFilter}
+                      onChange={(e) => setAddModalCityFilter(e.target.value)}
+                      aria-label="Filter by city"
+                    >
+                      {addModalCityOptions.map((city) => (
+                        <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
+                      ))}
+                    </select>
                     <select
                       className="trip-details__add-places-sort-select"
                       value={stayTypeFilter}

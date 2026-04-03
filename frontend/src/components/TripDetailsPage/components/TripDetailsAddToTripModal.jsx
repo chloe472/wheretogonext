@@ -39,6 +39,9 @@ export default function TripDetailsAddToTripModal({
   setAddToTripExternalLink,
   addToTripTravelDocs,
   setAddToTripTravelDocs,
+  /** When false, only the dialog panel is rendered (parent supplies backdrop). */
+  showBackdrop = true,
+  submitting = false,
 }) {
   const handleImageError = (event) => {
     applyImageFallback(event);
@@ -48,9 +51,11 @@ export default function TripDetailsAddToTripModal({
 
   return (
     <>
-      <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={onClose} />
+      {showBackdrop ? (
+        <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={onClose} />
+      ) : null}
       <div
-        className="trip-details__custom-place-modal"
+        className={`trip-details__custom-place-modal${showBackdrop ? '' : ' trip-details__custom-place-modal--embedded'}`}
         role="dialog"
         aria-labelledby="add-to-trip-title"
         aria-modal="true"
@@ -278,8 +283,8 @@ export default function TripDetailsAddToTripModal({
             <button type="button" className="trip-details__custom-place-cancel" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="trip-details__custom-place-submit">
-              Add to trip
+            <button type="submit" className="trip-details__custom-place-submit" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Add to trip'}
             </button>
           </div>
         </form>

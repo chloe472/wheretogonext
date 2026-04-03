@@ -1988,9 +1988,9 @@ async function fetchStays(lat, lon, destination, useGooglePlaces) {
       website: '',
       mapsUrl: buildStayMapsUrl(stay),
       bookingUrl: buildStayBookingUrl(stay),
-      image: stay.photoReference ? `http://localhost:5000/api/discovery/photo?reference=${stay.photoReference}&maxwidth=800` : '',
+      image: stay.photoReference ? `/api/discovery/photo?reference=${encodeURIComponent(stay.photoReference)}&maxwidth=800` : '',
       images: stay.photoReferences?.length > 0 
-        ? stay.photoReferences.map(ref => `http://localhost:5000/api/discovery/photo?reference=${ref}&maxwidth=800`) 
+        ? stay.photoReferences.map((ref) => `/api/discovery/photo?reference=${encodeURIComponent(ref)}&maxwidth=800`) 
         : [],
       description: `${stay.name} is a ${stay.rating}-star ${hotelType.toLowerCase()} in ${destination}, offering comfortable accommodations with modern amenities.`,
       overview: `${stay.name} is a well-rated ${hotelType.toLowerCase()} located in ${destination}. With a rating of ${stay.rating} stars from ${stay.reviewCount.toLocaleString()} reviews, it offers quality accommodation for travelers.`,
@@ -2165,8 +2165,8 @@ router.get('/destination', async (req, res) => {
           lng: it.lng,
           address: it.address,
           description: useGooglePlaces && it.editorialSummary ? it.editorialSummary : `${it.name} in ${destination}`,
-          image: useGooglePlaces && it.photoReference ? `http://localhost:5000/api/discovery/photo?reference=${it.photoReference}&maxwidth=800` : '',
-          images: useGooglePlaces && it.photoReferences ? it.photoReferences.map(ref => `http://localhost:5000/api/discovery/photo?reference=${ref}&maxwidth=800`) : [],
+          image: useGooglePlaces && it.photoReference ? `/api/discovery/photo?reference=${encodeURIComponent(it.photoReference)}&maxwidth=800` : '',
+          images: useGooglePlaces && it.photoReferences ? it.photoReferences.map((ref) => `/api/discovery/photo?reference=${encodeURIComponent(ref)}&maxwidth=800`) : [],
           website: it.website,
           phone: it.phone,
           openingHoursRaw: useGooglePlaces && it.openingHours?.weekday_text ? it.openingHours.weekday_text.join('; ') : (it.tags?.opening_hours || ''),
@@ -2201,7 +2201,7 @@ router.get('/destination', async (req, res) => {
           lat: it.lat,
           lng: it.lng,
           address: it.address,
-          image: useGooglePlaces && it.photoReference ? `http://localhost:5000/api/discovery/photo?reference=${it.photoReference}&maxwidth=800` : '',
+          image: useGooglePlaces && it.photoReference ? `/api/discovery/photo?reference=${encodeURIComponent(it.photoReference)}&maxwidth=800` : '',
           cuisine: useGooglePlaces ? (it.types?.join(', ') || 'Local cuisine') : (it.tags?.cuisine || 'Local cuisine'),
           priceLevel: useGooglePlaces ? '$'.repeat(Math.max(1, it.priceLevel || 2)) : toPriceLevel(it.amenityType),
         dietaryTags: toDietary(it.tags),

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { fetchDiscoveryData } from '../../../api/discoveryApi';
-import { getMapCenterForDestination } from '../lib/tripDetailsLocationData';
 import { getDestinationList, mergeUniqueBy } from '../lib/tripDetailsPageHelpers';
 
 const INITIAL_DISCOVERY = {
@@ -101,7 +100,7 @@ export function useTripDetailsDiscovery(trip) {
             foods: [],
             experiences: [],
             communityItineraries: [],
-            center: getMapCenterForDestination(targets[0]),
+            center: null,
             warning: 'Could not connect to the discovery service. Please check that the backend is running and try again.',
             cached: false,
             stale: true,

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Calendar as CalendarIcon,
   Clock,
   Heart,
@@ -26,6 +25,9 @@ export default function TripDetailsAddExperiencesModal({
   mapCenter,
   allDayNums,
   filteredExperiences,
+  addModalCityFilter,
+  setAddModalCityFilter,
+  addModalCityOptions,
   experienceDetailsView,
   setExperienceDetailsView,
   experienceDetailsTab,
@@ -120,7 +122,7 @@ export default function TripDetailsAddExperiencesModal({
                   onClick={onBackExperienceDetail}
                   aria-label="Back to list"
                 >
-                  <ArrowLeft size={20} aria-hidden /> Back
+                  Back
                 </button>
                 <button
                   type="button"
@@ -431,6 +433,16 @@ export default function TripDetailsAddExperiencesModal({
                 <div className="trip-details__add-food-toolbar">
                   <p className="trip-details__add-places-results">{experiences.length} results found</p>
                   <div className="trip-details__add-food-toolbar-actions">
+                    <select
+                      className="trip-details__add-places-sort-select"
+                      value={addModalCityFilter}
+                      onChange={(e) => setAddModalCityFilter(e.target.value)}
+                      aria-label="Filter by city"
+                    >
+                      {addModalCityOptions.map((city) => (
+                        <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
+                      ))}
+                    </select>
                     <select
                       className="trip-details__add-places-sort-select"
                       value={experienceTypeFilter}

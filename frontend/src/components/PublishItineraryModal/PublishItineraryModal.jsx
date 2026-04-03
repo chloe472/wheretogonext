@@ -47,8 +47,17 @@ function validateFile(file) {
  * @param {function} props.onClose
  * @param {object} props.itinerary — raw itinerary from API (must include _id)
  * @param {function} [props.onPublished]
+ * @param {number} [props.initialStep]
+ * @param {'publish'|'edit'} [props.mode]
  */
-export default function PublishItineraryModal({ open, onClose, itinerary, onPublished }) {
+export default function PublishItineraryModal({
+  open,
+  onClose,
+  itinerary,
+  onPublished,
+  initialStep = 1,
+  mode = 'publish',
+}) {
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false);
   const [title, setTitle] = useState('');
@@ -66,8 +75,9 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
 
   const resetFromItinerary = useCallback(() => {
     if (!itinerary) return;
-    setStep(1);
-    setFarthestStep(1);
+    const nextStep = initialStep === 2 ? 2 : 1;
+    setStep(nextStep);
+    setFarthestStep(nextStep);
     setSuccess(false);
     setTitle(String(itinerary.title || '').trim());
     setOverview(String(itinerary.overview || '').slice(0, MAX_OVERVIEW));
@@ -84,7 +94,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         }))
       : [];
     setImages(existing);
-  }, [itinerary]);
+  }, [itinerary, initialStep]);
 
   useEffect(() => {
     if (open && itinerary) {
@@ -217,18 +227,20 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
         }
       }
       await publishItinerary(String(itinerary._id), {
-        visibility: 'public',
+        visibility: itinerary?.published && itinerary?.visibility === 'public'
+          ? 'public'
+          : 'public',
         title: title.trim(),
         overview: overview.slice(0, MAX_OVERVIEW),
         categories,
         coverImages: coverUrls,
       });
-      toast.success('Itinerary published!');
+      toast.success(mode === 'edit' ? 'Published itinerary updated!' : 'Itinerary published!');
       setSuccess(true);
       onPublished?.();
     } catch (e) {
-      toast.error('Failed to publish');
-      setSubmitError(e?.message || 'Publish failed');
+      toast.error(mode === 'edit' ? 'Failed to update published itinerary' : 'Failed to publish');
+      setSubmitError(e?.message || (mode === 'edit' ? 'Update failed' : 'Publish failed'));
     } finally {
       setSubmitting(false);
     }
@@ -236,13 +248,20 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
 
   if (!open || !itinerary) return null;
 
+  const isEditMode = mode === 'edit';
+  const titleText = success
+    ? (isEditMode ? 'Updated' : 'Published')
+    : (isEditMode ? 'Edit Published Content' : 'Publish To Community');
+  const successText = isEditMode ? 'Your published itinerary is updated.' : 'Your itinerary is live.';
+  const submitLabel = isEditMode ? 'Save changes' : 'Publish';
+
   return (
     <div className="publish-modal" role="presentation">
       <button type="button" className="publish-modal__backdrop" aria-label="Close" onClick={onClose} />
       <div className="publish-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="publish-modal-title">
         <div className="publish-modal__head">
           <h2 id="publish-modal-title" className="publish-modal__title">
-            {success ? 'Published' : 'Publish To Community'}
+            {titleText}
           </h2>
           <button type="button" className="publish-modal__close" onClick={onClose} aria-label="Close">
             <X size={22} />
@@ -289,7 +308,7 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
             <div className="publish-modal__success-icon" aria-hidden>
               <Check size={40} strokeWidth={3} />
             </div>
-            <p className="publish-modal__success-text">Your itinerary is live.</p>
+            <p className="publish-modal__success-text">{successText}</p>
             <button type="button" className="publish-modal__btn publish-modal__btn--primary" onClick={onClose}>
               Done
             </button>
@@ -438,10 +457,10 @@ export default function PublishItineraryModal({ open, onClose, itinerary, onPubl
                   {submitting ? (
                     <>
                       <Loader2 className="publish-modal__spin" size={18} aria-hidden />
-                      Publishing…
+                      {isEditMode ? 'Saving…' : 'Publishing…'}
                     </>
                   ) : (
-                    'Publish'
+                    submitLabel
                   )}
                 </button>
               )}
