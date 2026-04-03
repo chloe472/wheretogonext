@@ -776,6 +776,158 @@ function normalizeGooglePlace(place, destination) {
   };
 }
 
+function normalizeLandmarkText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function landmarkTypeScore(types = []) {
+  const t = Array.isArray(types) ? types : [];
+  if (t.includes('tourist_attraction')) return 1.4;
+  if (t.includes('landmark')) return 1.35;
+  if (t.includes('monument')) return 1.3;
+  if (t.includes('museum')) return 1.1;
+  if (t.includes('point_of_interest')) return 1.0;
+  if (t.includes('church') || t.includes('mosque') || t.includes('hindu_temple')) return 1.08;
+  if (t.includes('shopping_mall') || t.includes('store') || t.includes('lodging')) return 0.55;
+  return 0.9;
+}
+
+function scorePhotoShape(photo = {}) {
+  const width = Number(photo?.width || 0);
+  const height = Number(photo?.height || 0);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 0;
+  }
+  const ratio = width / height;
+  const ratioScore = 1 - clamp(Math.abs(ratio - (16 / 9)) / 1.2, 0, 1);
+  const minSide = Math.min(width, height);
+  const sizeScore = clamp((minSide - 500) / 1200, 0, 1);
+  return (ratioScore * 0.7) + (sizeScore * 0.3);
+}
+
+function pickBestPhotoReference(photos = []) {
+  const list = Array.isArray(photos) ? photos : [];
+  let bestRef = '';
+  let bestScore = -Infinity;
+  for (const photo of list) {
+    const ref = String(photo?.photo_reference || '').trim();
+    if (!ref) continue;
+    const score = scorePhotoShape(photo);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRef = ref;
+    }
+  }
+  return bestRef;
+}
+
+function destinationNameScore(name = '', destination = '') {
+  const n = normalizeLandmarkText(name);
+  const d = normalizeLandmarkText(destination);
+  if (!n || !d) return 0;
+
+  const dTokens = d.split(' ').filter(Boolean);
+  const hitCount = dTokens.reduce((count, token) => (n.includes(token) ? count + 1 : count), 0);
+  return clamp(hitCount * 0.15, 0, 0.6);
+}
+
+function scoreLandmarkPlace(place = {}, destination = '') {
+  const typeScore = landmarkTypeScore(place.types);
+  const ratingScore = bayesianRatingScore(place.rating, place.reviewCount) * typeScore;
+  const popularityScore = clamp(Math.log10(Math.max(1, Number(place.reviewCount || 0))) / 4, 0, 1);
+  const nameScore = destinationNameScore(place.name, destination);
+  return ratingScore + popularityScore + nameScore;
+}
+
+async function resolveGoogleLandmarkCover(destination = '') {
+  const destinationRaw = String(destination || '').trim();
+  if (!destinationRaw || !GOOGLE_PLACES_API_KEY) return null;
+
+  const cacheKey = `landmark-cover-v1::${destinationRaw.toLowerCase()}`;
+  const cached = getTimedCache(IMAGE_RESOLVE_CACHE, cacheKey, IMAGE_RESOLVE_CACHE_TTL_MS);
+  if (cached?.image) return { ...cached, cached: true };
+
+  const geo = await googleGeocodeDestination(destinationRaw);
+  const queries = [
+    `${destinationRaw} iconic landmarks`,
+    `${destinationRaw} famous landmarks`,
+    `${destinationRaw} city skyline`,
+    `${destinationRaw} monument`,
+    `${destinationRaw} postcard view`,
+  ];
+
+  const aggregate = [];
+  for (const query of queries) {
+    const results = await fetchGoogleTextSearchPages({
+      query,
+      lat: geo.lat,
+      lon: geo.lon,
+      radius: 30000,
+      maxPages: 1,
+    });
+    if (Array.isArray(results) && results.length > 0) {
+      aggregate.push(...results);
+    }
+    await sleep(70);
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const place of aggregate) {
+    const id = String(place?.place_id || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(place);
+  }
+
+  let candidates = unique
+    .map((place) => normalizeGooglePlace(place, destinationRaw))
+    .filter(Boolean)
+    .filter((place) => place.photoReference)
+    .filter((place) => place.category === 'place');
+
+  if (candidates.length === 0) {
+    const nearby = await fetchGooglePlacesNearby(geo.lat, geo.lon, 18000, 120, destinationRaw);
+    candidates = (Array.isArray(nearby) ? nearby : [])
+      .map((place) => normalizeGooglePlace(place, destinationRaw))
+      .filter(Boolean)
+      .filter((place) => place.photoReference)
+      .filter((place) => place.category === 'place');
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => scoreLandmarkPlace(b, destinationRaw) - scoreLandmarkPlace(a, destinationRaw));
+
+  const shortlist = candidates.slice(0, 8);
+  const enriched = await Promise.all(shortlist.map(async (place) => {
+    const details = await fetchGooglePlaceDetails(place.googlePlaceId);
+    const detailPhotos = Array.isArray(details?.photos) ? details.photos : [];
+    const bestDetailRef = pickBestPhotoReference(detailPhotos);
+    return {
+      ...place,
+      score: scoreLandmarkPlace(place, destinationRaw),
+      bestRef: bestDetailRef || place.photoReference,
+      detailName: String(details?.name || place.name || '').trim(),
+    };
+  }));
+
+  enriched.sort((a, b) => b.score - a.score);
+  const top = enriched.find((item) => item.bestRef) || null;
+  if (!top) return null;
+
+  const value = {
+    image: `/api/discovery/photo?reference=${encodeURIComponent(top.bestRef)}&maxwidth=1400&lcv=1`,
+    placeName: top.detailName || top.name || destinationRaw,
+    placeId: top.googlePlaceId || '',
+  };
+  setTimedCache(IMAGE_RESOLVE_CACHE, cacheKey, value);
+  return value;
+}
+
 function normalizeElement(el, destinationName) {
   const tags = el.tags || {};
   const lat = Number(el.lat ?? el.center?.lat);
@@ -2373,6 +2525,35 @@ router.get('/city-suggestions', async (req, res) => {
     return res.status(502).json({
       message: 'Failed to fetch city suggestions right now.',
       suggestions: [],
+    });
+  }
+});
+
+router.get('/landmark-cover', async (req, res) => {
+  const destinationRaw = String(req.query.destination || '').trim();
+  if (!destinationRaw) {
+    return res.status(400).json({ error: 'destination query is required' });
+  }
+
+  try {
+    const cover = await resolveGoogleLandmarkCover(destinationRaw);
+    return res.json({
+      destination: destinationRaw,
+      image: cover?.image || '',
+      placeName: cover?.placeName || '',
+      placeId: cover?.placeId || '',
+      source: 'google-places',
+      cached: Boolean(cover?.cached),
+    });
+  } catch (error) {
+    console.error('Landmark cover lookup failed:', error.message);
+    return res.json({
+      destination: destinationRaw,
+      image: '',
+      placeName: '',
+      placeId: '',
+      source: 'google-places',
+      cached: false,
     });
   }
 });

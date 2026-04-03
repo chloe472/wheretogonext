@@ -85,3 +85,18 @@ export async function fetchDiscoveryData(destination, limit = 24) {
     throw error;
   }
 }
+
+export async function fetchLandmarkCoverForDestination(destination) {
+  const query = String(destination || '').trim();
+  if (!query) return '';
+
+  try {
+    const params = new URLSearchParams({ destination: query });
+    const res = await fetch(`${API_BASE}/api/discovery/landmark-cover?${params.toString()}`);
+    if (!res.ok) return '';
+    const data = await res.json().catch(() => ({}));
+    return String(data?.image || '').trim();
+  } catch {
+    return '';
+  }
+}
