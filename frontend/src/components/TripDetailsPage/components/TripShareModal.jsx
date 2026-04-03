@@ -1,4 +1,4 @@
-import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 
 function Avatar({ user }) {
   if (!user) return null;
@@ -18,20 +18,20 @@ function Avatar({ user }) {
   );
 }
 
-export default function ProfileShareTripModal({
+export default function TripShareModal({
   open,
-  shareTrip,
-  friendsList,
+  loading,
+  friends,
   onClose,
   onShareWithFriend,
   onCopy,
 }) {
   if (!open) return null;
 
-  const friends = Array.isArray(friendsList) ? friendsList : [];
+  const friendList = Array.isArray(friends) ? friends : [];
 
   return (
-    <div className="trip-share__overlay" role="dialog" aria-modal="true" aria-labelledby="share-trip-title">
+    <div className="trip-share__overlay" role="dialog" aria-modal="true" aria-labelledby="trip-share-title">
       <button
         type="button"
         className="trip-share__backdrop"
@@ -40,18 +40,17 @@ export default function ProfileShareTripModal({
       />
       <div className="trip-share__card">
         <div className="trip-share__head">
-          <h2 id="share-trip-title" className="trip-share__title">
-            {shareTrip?.title ? `Share "${shareTrip.title}"` : 'Share trip'}
-          </h2>
+          <h2 id="trip-share-title" className="trip-share__title">Share trip</h2>
           <button type="button" className="trip-share__close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         <div className="trip-share__body">
-          {friends.length > 0 ? (
+          {loading && <p className="trip-share__empty">Loading…</p>}
+          {!loading && friendList.length > 0 && (
             <div className="trip-share__friends-section">
               <p className="trip-share__label">Share with friends</p>
               <div className="trip-share__friends-grid">
-                {friends.map((friend) => (
+                {friendList.map((friend) => (
                   <button
                     key={friend.id}
                     type="button"
@@ -65,7 +64,8 @@ export default function ProfileShareTripModal({
                 ))}
               </div>
             </div>
-          ) : (
+          )}
+          {!loading && friendList.length === 0 && (
             <p className="trip-share__empty">Add friends to share trips with them.</p>
           )}
         </div>

@@ -138,6 +138,15 @@ export async function sendFriendRequestByIdentifier(identifier) {
   return handleJsonResponse(res);
 }
 
+export async function shareProfileWithFriends(friendIds) {
+  const res = await fetch(apiUrl('/api/profile/me/share'), {
+    method: 'POST',
+    headers: getBearerAuthHeaders(),
+    body: JSON.stringify({ friendIds }),
+  });
+  return handleJsonResponse(res);
+}
+
 export async function addMapDestination(payload) {
   const res = await fetch(apiUrl('/api/profile/me/map-destinations'), {
     method: 'POST',

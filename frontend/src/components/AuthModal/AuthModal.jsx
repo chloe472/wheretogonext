@@ -10,6 +10,7 @@ import {
   ArrowRight,
   User,
 } from 'lucide-react';
+import { apiUrl } from '../../api/apiConfig';
 import './AuthModal.css';
 
 export default function AuthModal({ onClose, onLoginSuccess }) {

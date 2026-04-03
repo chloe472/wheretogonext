@@ -401,22 +401,40 @@ async function enrichCollaboratorsInItineraries(docs) {
   const list = Array.isArray(docs) ? docs : docs ? [docs] : [];
   if (list.length === 0) return Array.isArray(docs) ? [] : docs;
 
+  const allCollaborators = list.flatMap((doc) =>
+    Array.isArray(doc?.collaborators) ? doc.collaborators : []
+  );
+
   const emails = Array.from(
     new Set(
-      list.flatMap((doc) =>
-        (Array.isArray(doc?.collaborators) ? doc.collaborators : [])
-          .map((c) => String(c?.email || '').trim().toLowerCase())
-          .filter(Boolean)
-      )
+      allCollaborators
+        .map((c) => String(c?.email || '').trim().toLowerCase())
+        .filter(Boolean)
     )
   );
 
-  if (emails.length === 0) return docs;
+  const userIdStrings = Array.from(
+    new Set(
+      allCollaborators
+        .filter((c) => !c?.email && c?.userId)
+        .map((c) => String(c.userId))
+        .filter((id) => mongoose.isValidObjectId(id))
+    )
+  );
 
-  const users = await User.find({ email: { $in: emails } })
-    .select('_id email name picture')
-    .lean();
-  const byEmail = new Map(users.map((u) => [String(u.email || '').trim().toLowerCase(), u]));
+  const [usersByEmail, usersById] = await Promise.all([
+    emails.length > 0
+      ? User.find({ email: { $in: emails } }).select('_id email name picture').lean()
+      : Promise.resolve([]),
+    userIdStrings.length > 0
+      ? User.find({ _id: { $in: userIdStrings } }).select('_id email name picture').lean()
+      : Promise.resolve([]),
+  ]);
+
+  const byEmail = new Map(usersByEmail.map((u) => [String(u.email || '').trim().toLowerCase(), u]));
+  const byId = new Map(usersById.map((u) => [String(u._id), u]));
+
+  if (byEmail.size === 0 && byId.size === 0) return docs;
 
   const enriched = list.map((doc) => {
     const collaborators = Array.isArray(doc?.collaborators) ? doc.collaborators : [];
@@ -424,7 +442,7 @@ async function enrichCollaboratorsInItineraries(docs) {
       ...doc,
       collaborators: collaborators.map((c) => {
         const email = String(c?.email || '').trim().toLowerCase();
-        const matched = byEmail.get(email);
+        const matched = byEmail.get(email) || (c?.userId ? byId.get(String(c.userId)) : null);
         if (!matched) return c;
         return {
           ...c,
@@ -1042,6 +1060,53 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(400).json({ error: msg });
     }
     return res.status(500).json({ error: 'Failed to create itinerary' });
+  }
+});
+
+/**
+ * POST /api/itineraries/:id/share
+ * Send share notifications to a list of friends — does not modify collaborators.
+ */
+router.post('/:id/share', requireAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) return res.status(503).json({ error: 'Database unavailable' });
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Invalid itinerary id' });
+
+    const itinerary = await Itinerary.findById(id).lean();
+    if (!itinerary) return res.status(404).json({ error: 'Itinerary not found' });
+    if (String(itinerary.creator) !== req.userId) return res.status(403).json({ error: 'Not allowed' });
+
+    const friendIds = Array.isArray(req.body?.friendIds) ? req.body.friendIds : [];
+    const validIds = friendIds
+      .map((fid) => String(fid || '').trim())
+      .filter((fid) => mongoose.isValidObjectId(fid) && fid !== req.userId);
+
+    if (validIds.length === 0) return res.json({ ok: true, sent: 0 });
+
+    const senderName = req.user?.name || 'Someone';
+    const tripTitle = itinerary.title || 'a trip';
+
+    const results = await Promise.allSettled(
+      validIds.map((recipientId) =>
+        createNotification({
+          recipientId,
+          actorId: req.userId,
+          type: 'itinerary_added',
+          title: `${senderName} shared a trip with you`,
+          message: `"${tripTitle}" — tap to view.`,
+          link: `/itineraries/${String(itinerary._id)}`,
+          meta: { itineraryId: String(itinerary._id) },
+        })
+      )
+    );
+
+    const sent = results.filter((r) => r.status === 'fulfilled' && r.value).length;
+    return res.json({ ok: true, sent });
+  } catch (err) {
+    console.error('POST /itineraries/:id/share error:', err);
+    return res.status(500).json({ error: 'Failed to share itinerary' });
   }
 });
 

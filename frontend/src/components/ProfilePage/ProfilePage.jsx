@@ -9,6 +9,7 @@ import ProfileOverview from './ProfileOverview';
 import ProfileTrips from './ProfileTrips';
 import ProfileFriends from './ProfileFriends';
 import ProfilePageModals from './ProfilePageModals';
+import ProfileShareModal from './ProfileShareModal';
 import { platformIcon } from './profileSocialUtils';
 import '../Dashboard/Dashboard.css';
 import './ProfilePage.css';
@@ -106,10 +107,6 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     setStatsListOpen,
     shareOpen,
     shareTrip,
-    shareLoading,
-    shareError,
-    shareEmail,
-    setShareEmail,
     isSelf,
     countries,
     countriesCount,
@@ -123,6 +120,13 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     declineRequest,
     handleFriendToggle,
     handleShare,
+    profileShareOpen,
+    setProfileShareOpen,
+    profileShareSelectedIds,
+    profileShareSending,
+    handleProfileShareToggleFriend,
+    handleProfileShareSend,
+    handleProfileShareCopyLink,
     getTripLink,
     refreshProfile,
     removeFriendFromList,
@@ -132,8 +136,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     handleItineraryOwnerMenu,
     applyRenameFromModal,
     closeShareTrip,
-    handleInviteCollaborator,
-    handleRemoveCollaborator,
+    handleShareWithFriend,
     handleCopyShareLink,
     commitSocialDraft,
     saveProfile,
@@ -358,13 +361,9 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
         shareModal={{
           open: shareOpen,
           shareTrip,
-          shareLoading,
-          shareError,
-          shareEmail,
-          setShareEmail,
+          friendsList,
           onClose: closeShareTrip,
-          onInvite: handleInviteCollaborator,
-          onRemove: handleRemoveCollaborator,
+          onShareWithFriend: handleShareWithFriend,
           onCopy: handleCopyShareLink,
         }}
         publishModal={{
@@ -395,6 +394,16 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
             closeDialog();
           },
         }}
+      />
+      <ProfileShareModal
+        open={profileShareOpen}
+        friends={friendsList}
+        selectedFriendIds={profileShareSelectedIds}
+        sending={profileShareSending}
+        onToggleFriend={handleProfileShareToggleFriend}
+        onSend={handleProfileShareSend}
+        onCopy={handleProfileShareCopyLink}
+        onClose={() => setProfileShareOpen(false)}
       />
     </div>
   );

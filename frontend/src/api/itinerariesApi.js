@@ -117,6 +117,18 @@ export async function updateItinerary(id, body) {
   return data.itinerary;
 }
 
+/** POST /api/itineraries/:id/share — notify friends, no collaborator change */
+export async function shareItineraryWithFriends(id, friendIds) {
+  const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}/share`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ friendIds }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to share itinerary');
+  return data;
+}
+
 /** GET /api/itineraries/:id/comments */
 export async function fetchItineraryComments(itineraryId, signal) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(itineraryId)}/comments`, {
