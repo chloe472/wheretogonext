@@ -4,11 +4,16 @@ import toast from 'react-hot-toast';
 import { ChevronDown } from 'lucide-react';
 import { fetchItineraryById, fetchMyItineraries, updateItinerary } from '../../../api/itinerariesApi';
 import TripDetailsAddToTripModal from '../../TripDetailsPage/components/TripDetailsAddToTripModal';
+import SocialImportLocationMismatchBanner from '../../SocialImportModal/SocialImportLocationMismatchBanner';
 import '../../TripDetailsPage/styles/trip-details-modal-shared.css';
 import '../../TripDetailsPage/styles/trip-details-custom-place-modal.css';
+import '../../TripDetailsPage/styles/trip-details-social-import-modal.css';
 import '../exploreAddToTrip.css';
+import { computeLocationInsight } from '../../TripDetailsPage/lib/tripLocationMismatch';
 import {
+  appendDestinationLabelToTripDoc,
   getDefaultStartTimeForDate,
+  getDestinationList,
   getTripDaysFromTrip,
   tryAppendItemToExpenseList,
 } from '../../TripDetailsPage/lib/tripDetailsPageHelpers';
@@ -53,6 +58,58 @@ export default function ExploreAddToExistingTripModal({
     [tripsWithDates, selectedTripId],
   );
   const selectedTripTitle = selectedTrip?.title?.trim() || 'Untitled trip';
+
+  const exploreLocationInsight = useMemo(() => {
+    if (!targetDoc || !addToTripItem?.data) return null;
+    const d = addToTripItem.data;
+    const sourceLabels = Array.isArray(addToTripItem.sourceItineraryDestinationLabels)
+      ? addToTripItem.sourceItineraryDestinationLabels.map((s) => String(s || '').trim()).filter(Boolean)
+      : [];
+    const locality = String(d.locality || '').trim();
+    const address = String(d.address || '').trim();
+    const tripLabels = getDestinationList(targetDoc.destination, targetDoc.locations);
+
+    if (locality || address) {
+      return computeLocationInsight([{ locality, address }], tripLabels);
+    }
+    if (sourceLabels.length > 0) {
+      return computeLocationInsight(
+        sourceLabels.map((lbl) => ({ locality: '', address: lbl })),
+        tripLabels,
+      );
+    }
+    return null;
+  }, [targetDoc, addToTripItem]);
+
+  const handleAddDetectedDestinationFromExplore = useCallback(
+    async (label) => {
+      if (!selectedTripId || !targetDoc) return;
+      const merged = appendDestinationLabelToTripDoc(targetDoc, label);
+      if (!merged.ok) {
+        if (merged.reason === 'duplicate') {
+          toast(merged.message || 'That destination is already on your trip.');
+        }
+        return;
+      }
+      try {
+        const updated = await updateItinerary(selectedTripId, {
+          destination: merged.destination,
+          locations: merged.locations,
+        });
+        if (updated) {
+          setTargetDoc(updated);
+        } else {
+          const doc = await fetchItineraryById(selectedTripId);
+          if (doc) setTargetDoc(doc);
+        }
+        const raw = String(label || '').trim();
+        toast.success(`Added ${raw.split(',')[0].trim()} to your destinations`);
+      } catch (e) {
+        toast.error(e?.message || 'Could not update trip');
+      }
+    },
+    [selectedTripId, targetDoc],
+  );
 
   const resetFormForTrip = useCallback(
     (doc) => {
@@ -316,6 +373,10 @@ export default function ExploreAddToExistingTripModal({
 
         {!tripLoading && selectedTripId && days.length > 0 ? (
           <div className="explore-add-to-trip-layer__modal-wrap">
+            <SocialImportLocationMismatchBanner
+              locationInsight={exploreLocationInsight}
+              onAddDetectedDestination={handleAddDetectedDestinationFromExplore}
+            />
             <TripDetailsAddToTripModal
               showBackdrop={false}
               submitting={saving}

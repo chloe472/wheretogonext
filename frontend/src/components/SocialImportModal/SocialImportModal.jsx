@@ -1,5 +1,6 @@
-import { X, Plus, Loader2, MapPin } from 'lucide-react';
+import { X, Plus, Loader2 } from 'lucide-react';
 import { placeKeySocialImport } from './socialImportUtils';
+import SocialImportLocationMismatchBanner from './SocialImportLocationMismatchBanner';
 
 /**
  * Multi-step modal: upload screenshots -> analyzing -> pick places.
@@ -133,26 +134,10 @@ export default function SocialImportModal({
 
         {step === 'results' && (
           <div className="trip-details__social-import-body">
-            {locationInsight?.mismatch && locationInsight.detectedLabel ? (
-              <div className="trip-details__social-import-location-banner" role="status">
-                <MapPin className="trip-details__social-import-location-banner-icon" size={18} aria-hidden />
-                <div className="trip-details__social-import-location-banner-main">
-                  <p className="trip-details__social-import-location-banner-title">Different city than your trip</p>
-                  <p className="trip-details__social-import-location-banner-desc">
-                    {locationInsight.message}
-                  </p>
-                  {locationInsight.canAddDetectedDestination && onAddDetectedDestination ? (
-                    <button
-                      type="button"
-                      className="trip-details__social-import-location-banner-btn"
-                      onClick={() => onAddDetectedDestination(locationInsight.detectedLabel)}
-                    >
-                      Add {locationInsight.detectedLabel} to trip destinations
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
+            <SocialImportLocationMismatchBanner
+              locationInsight={locationInsight}
+              onAddDetectedDestination={onAddDetectedDestination}
+            />
             <p className="trip-details__social-import-results-intro">
               {locationInsight?.mismatch
                 ? (

@@ -90,6 +90,7 @@ import {
   PLACE_SORT_OPTIONS,
   ROUTE_MATRIX_TRAVEL_MODE,
   ZERO_DECIMAL_CURRENCIES,
+  appendDestinationLabelToTripDoc,
   buildStayBookingDeepLink,
   currencyRate,
   estimateSmartStopDurationMinutes,
@@ -1061,21 +1062,18 @@ export default function TripDetailsPage({ user, onLogout }) {
   const handleAddDetectedDestinationFromSocial = useCallback(async (label) => {
     const raw = String(label || '').trim();
     if (!raw || !tripId) return;
-    const currentStr = trip?.locations || trip?.destination || '';
-    const parts = currentStr.split(';').map((s) => s.trim()).filter(Boolean);
-    const token = (s) => s.split(',')[0].trim().toLowerCase();
-    if (parts.some((p) => token(p) === token(raw))) {
-      toast('That destination is already on your trip.');
+    const merged = appendDestinationLabelToTripDoc(trip, label);
+    if (!merged.ok) {
+      if (merged.reason === 'duplicate') toast(merged.message || 'That destination is already on your trip.');
       return;
     }
-    const newLocations = [...parts, raw].join('; ');
-    const newDestination = parts.length > 0
-      ? extractPrimaryDestination(trip.destination || parts[0])
-      : raw.split(',')[0].trim();
-    setLocalDestination(newDestination);
-    setLocalLocations(newLocations);
+    setLocalDestination(merged.destination);
+    setLocalLocations(merged.locations);
     try {
-      const updated = await updateItinerary(tripId, { destination: newDestination, locations: newLocations });
+      const updated = await updateItinerary(tripId, {
+        destination: merged.destination,
+        locations: merged.locations,
+      });
       if (updated) setServerItinerary(updated);
       setLocationUpdateKey((k) => k + 1);
       toast.success(`Added ${raw.split(',')[0].trim()} to your destinations`);
