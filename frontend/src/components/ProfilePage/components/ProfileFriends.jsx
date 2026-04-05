@@ -1,5 +1,25 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { resolveImageUrl } from '../../../lib/imageFallback';
+
+function emailHandle(email) {
+  return email ? `@${email.split('@')[0]}` : '';
+}
+
+function FriendAvatar({ picture, name }) {
+  const [imgError, setImgError] = useState(false);
+  if (picture && !imgError) {
+    return (
+      <img
+        src={resolveImageUrl(picture)}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return <span>{(name || '?').charAt(0).toUpperCase()}</span>;
+}
 
 export default function ProfileFriends({
   isSelf,
@@ -41,16 +61,12 @@ export default function ProfileFriends({
                 <li key={req.id} className="profile-page__request-card">
                   <Link to={`/profile/${req.from.id}`} className="profile-page__friend-card">
                     <div className="profile-page__friend-avatar">
-                      {req.from.picture ? (
-                        <img src={resolveImageUrl(req.from.picture)} alt="" onError={applyImageFallback} />
-                      ) : (
-                        <span>{(req.from.name || '?').charAt(0).toUpperCase()}</span>
-                      )}
+                      <FriendAvatar picture={req.from.picture} name={req.from.name} />
                     </div>
                     <div className="profile-page__friend-info">
                       <span className="profile-page__friend-name">{req.from.name || 'Traveler'}</span>
                       <span className="profile-page__friend-handle">
-                        {req.from.email ? `@${req.from.email.split('@')[0]}` : ''}
+                        {req.from.email ? `@${emailHandle(req.from.email)}` : ''}
                       </span>
                     </div>
                   </Link>
@@ -81,16 +97,12 @@ export default function ProfileFriends({
                 <li key={req.id} className="profile-page__request-card">
                   <Link to={`/profile/${req.to.id}`} className="profile-page__friend-card">
                     <div className="profile-page__friend-avatar">
-                      {req.to.picture ? (
-                        <img src={resolveImageUrl(req.to.picture)} alt="" onError={applyImageFallback} />
-                      ) : (
-                        <span>{(req.to.name || '?').charAt(0).toUpperCase()}</span>
-                      )}
+                      <FriendAvatar picture={req.to.picture} name={req.to.name} />
                     </div>
                     <div className="profile-page__friend-info">
                       <span className="profile-page__friend-name">{req.to.name || 'Traveler'}</span>
                       <span className="profile-page__friend-handle">
-                        {req.to.email ? `@${req.to.email.split('@')[0]}` : ''}
+                        {emailHandle(req.to.email)}
                       </span>
                     </div>
                   </Link>
@@ -117,16 +129,12 @@ export default function ProfileFriends({
               <li key={friend.id}>
                 <Link to={`/profile/${friend.id}`} className="profile-page__friend-card">
                   <div className="profile-page__friend-avatar">
-                    {friend.picture ? (
-                      <img src={resolveImageUrl(friend.picture)} alt="" onError={applyImageFallback} />
-                    ) : (
-                      <span>{(friend.name || '?').charAt(0).toUpperCase()}</span>
-                    )}
+                    <FriendAvatar picture={friend.picture} name={friend.name} />
                   </div>
                   <div className="profile-page__friend-info">
                     <span className="profile-page__friend-name">{friend.name || 'Traveler'}</span>
                     <span className="profile-page__friend-handle">
-                      {friend.email ? `@${friend.email.split('@')[0]}` : ''}
+                      {emailHandle(friend.email)}
                     </span>
                   </div>
                 </Link>

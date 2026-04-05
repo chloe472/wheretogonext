@@ -1096,7 +1096,8 @@ router.post('/:id/share', requireAuth, async (req, res) => {
           type: 'itinerary_added',
           title: `${senderName} shared a trip with you`,
           message: `"${tripTitle}" — tap to view.`,
-          link: `/itineraries/${String(itinerary._id)}`,
+          // Send users to the kanban trip details view (editable) when a trip is shared.
+          link: `/trip/${String(itinerary._id)}`,
           meta: { itineraryId: String(itinerary._id) },
         })
       )

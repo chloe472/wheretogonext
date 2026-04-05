@@ -1,6 +1,6 @@
-import { platformIcon } from './profileSocialUtils';
-import { PUBLISH_CATEGORY_OPTIONS } from '../../data/communitySearchConstants';
-import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { platformIcon } from '../lib/profileSocialUtils';
+import { PUBLISH_CATEGORY_OPTIONS } from '../../../data/communitySearchConstants';
+import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 
 export default function ProfileEditModal({
   open,

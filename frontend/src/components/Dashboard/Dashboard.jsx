@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
 import SetCoverImageModal from './components/SetCoverImageModal';
 import FriendlyModal from '../FriendlyModal/FriendlyModal';
+import TripShareModal from '../TripDetailsPage/components/TripShareModal';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import {
   resolveTripStartDate,
@@ -50,9 +51,22 @@ export default function Dashboard({ user, onLogout }) {
     closeRenameModal,
     applyRenameFromModal,
     handleItineraryOwnerMenu,
+    shareModalOpen,
+    setShareModalOpen,
+    shareItinerary,
+    shareFriends,
+    shareLoading,
+    searchUsers,
+    handleShareInviteByEmail,
+    handleShareInviteByUser,
+    handleShareSendToFriends,
+    handleShareUpdateCollaborator,
+    handleShareRemoveCollaborator,
+    handleShareCopyLink,
   } = useDashboardTripActions({
     setMyTrips,
     refreshTrips,
+    user,
   });
 
   useEffect(() => {
@@ -262,6 +276,18 @@ export default function Dashboard({ user, onLogout }) {
           }
           closeDialog();
         }}
+      />
+      <TripShareModal
+        open={shareModalOpen}
+        loading={shareLoading}
+        friends={shareFriends}
+        collaborators={shareItinerary?.collaborators || []}
+        onClose={() => setShareModalOpen(false)}
+        onShareWithFriend={(friend) => handleShareSendToFriends([friend.id], { [friend.id]: 'viewer' })}
+        onInviteByEmail={handleShareInviteByEmail}
+        onInviteByUser={handleShareInviteByUser}
+        onSearchUsers={searchUsers}
+        onCopy={handleShareCopyLink}
       />
     </div>
   );

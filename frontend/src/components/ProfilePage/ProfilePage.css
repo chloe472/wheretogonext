@@ -652,7 +652,7 @@
 }
 
 .profile-page__modal-card--dest {
-  width: min(92vw, 420px);
+  width: min(92vw, 520px);
   max-height: none;
   overflow: visible;
 }
@@ -1280,10 +1280,13 @@
 
 .profile-page__dest-combobox {
   position: relative;
+  width: 100%;
 }
 
 .profile-page__dest-input {
   padding-right: 2.2rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .profile-page__dest-chevron {

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Pencil, Share2, UserMinus, UserPlus } from 'lucide-react';
 
 export default function ProfileHeader({
@@ -15,23 +16,28 @@ export default function ProfileHeader({
   incomingRequestId,
   onEdit,
   onAcceptRequest,
+  onDeclineRequest,
   onFriendToggle,
   onShare,
   resolveImageUrl,
-  applyImageFallback,
 }) {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [picture]);
+
   return (
     <header className="profile-page__header">
       <div className="profile-page__avatar-wrap">
         <div className="profile-page__avatar-border">
           <div className="profile-page__avatar-inner">
-            {picture ? (
+            {picture && !imgError ? (
               <img
                 src={resolveImageUrl(picture)}
                 alt=""
                 referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
-                onError={applyImageFallback}
+                onError={() => setImgError(true)}
               />
             ) : (
               <div className="profile-page__avatar-placeholder">
@@ -99,6 +105,13 @@ export default function ProfileHeader({
               onClick={() => onAcceptRequest(incomingRequestId)}
             >
               Accept
+            </button>
+            <button
+              type="button"
+              className="profile-page__btn profile-page__btn--ghost"
+              onClick={() => onDeclineRequest(incomingRequestId)}
+            >
+              Decline
             </button>
           </div>
         )}

@@ -1,5 +1,5 @@
-import countriesData from '../../data/countries.json';
-import { CITIES } from '../../data/cities';
+import countriesData from '../../../data/countries.json';
+import { CITIES } from '../../../data/cities';
 
 export default function ProfileAddDestinationModal({
   open,

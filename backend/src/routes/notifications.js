@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import Notification from '../models/Notification.js';
 import { requireAuth } from '../middleware/auth.js';
 import { serializeNotification } from '../services/notifications.js';
+import { addClient, removeClient } from '../lib/sseClients.js';
 
 const router = Router();
 
@@ -89,6 +91,51 @@ router.post('/:id/read', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /notifications/:id/read error:', err);
     return res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+/**
+ * SSE stream — authenticated via ?token=<jwt> query param because
+ * EventSource does not support custom request headers.
+ */
+router.get('/stream', async (req, res) => {
+  try {
+    const token = String(req.query.token || '').trim();
+    if (!token || !process.env.JWT_SECRET) {
+      return res.status(401).end();
+    }
+    let userId;
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded?.userId ? String(decoded.userId) : null;
+    } catch {
+      return res.status(401).end();
+    }
+    if (!userId) return res.status(401).end();
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    // Send an initial ping so the client knows the connection is live.
+    res.write('event: connected\ndata: {}\n\n');
+
+    addClient(userId, res);
+
+    // Keep-alive ping every 25 s to prevent proxy timeouts.
+    const ping = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch { /* ignore */ }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(ping);
+      removeClient(userId, res);
+    });
+  } catch (err) {
+    console.error('GET /notifications/stream error:', err);
+    return res.status(500).end();
   }
 });
 

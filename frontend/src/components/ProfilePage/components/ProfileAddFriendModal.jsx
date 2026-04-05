@@ -1,4 +1,4 @@
-import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
+import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 
 export default function ProfileAddFriendModal({
   open,

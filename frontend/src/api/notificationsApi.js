@@ -1,4 +1,13 @@
-import { apiUrl, getBearerAuthHeaders } from './apiConfig.js';
+import { apiUrl, getBearerAuthHeaders, TOKEN_STORAGE_KEY } from './apiConfig.js';
+
+/** Returns the SSE stream URL with the JWT token as a query param. */
+export function getNotificationStreamUrl() {
+  const token = typeof localStorage !== 'undefined'
+    ? (localStorage.getItem(TOKEN_STORAGE_KEY) || '')
+    : '';
+  const base = apiUrl('/api/notifications/stream');
+  return token ? `${base}?token=${encodeURIComponent(token)}` : null;
+}
 
 function authHeaders() {
   return getBearerAuthHeaders();

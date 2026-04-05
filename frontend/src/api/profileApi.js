@@ -105,6 +105,17 @@ export async function lookupUserByEmail(email, { signal } = {}) {
   return handleJsonResponse(res);
 }
 
+export async function searchUsers(q, { signal } = {}) {
+  const query = new URLSearchParams();
+  query.set('q', String(q || '').trim());
+  const res = await fetch(`${apiUrl('/api/profile/search')}?${query.toString()}`, {
+    method: 'GET',
+    headers: getBearerAuthHeaders(),
+    signal,
+  });
+  return handleJsonResponse(res);
+}
+
 export async function acceptFriendRequest(requestId) {
   const res = await fetch(`${apiUrl('/api/profile/requests')}/${encodeURIComponent(requestId)}/accept`, {
     method: 'POST',

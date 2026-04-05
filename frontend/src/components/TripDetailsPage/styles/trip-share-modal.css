@@ -67,6 +67,160 @@
   margin: 0 0 0.5rem;
 }
 
+/* Invite section */
+.trip-share__invite-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.trip-share__invite-field {
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--wtg-border, #e0ddd9);
+  border-radius: 12px;
+  padding: 0 0.75rem;
+  background: var(--wtg-surface, #fff);
+  height: 46px;
+  transition: border-color 0.15s;
+}
+
+.trip-share__invite-field:focus-within {
+  border-color: #1a1a1a;
+}
+
+.trip-share__invite-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.9375rem;
+  color: var(--wtg-text, #1c1917);
+  background: transparent;
+  min-width: 0;
+}
+
+.trip-share__invite-input::placeholder {
+  color: var(--wtg-text-muted, #a8a29e);
+}
+
+.trip-share__invite-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--wtg-border, #e0ddd9);
+  flex-shrink: 0;
+  margin: 0 0.5rem;
+}
+
+.trip-share__invite-role {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wtg-text, #1c1917);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.trip-share__send-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 46px;
+  padding: 0 1.1rem;
+  border: none;
+  border-radius: 12px;
+  background: #e8472d;
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.trip-share__send-btn:hover:not(:disabled) {
+  background: #d03d24;
+}
+
+.trip-share__send-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.trip-share__invite-error {
+  width: 100%;
+  font-size: 0.8125rem;
+  color: #b42318;
+  margin: 0;
+}
+
+.trip-share__invite-row-wrap {
+  position: relative;
+  display: flex;
+  gap: 0.625rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.trip-share__invite-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wtg-border, #e0ddd9);
+  border-top-color: var(--wtg-primary, #7c5c3e);
+  border-radius: 50%;
+  animation: tsm-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tsm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.trip-share__search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--wtg-surface, #fff);
+  border: 1px solid var(--wtg-border, #e0ddd9);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.trip-share__search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.875rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.trip-share__search-result:hover {
+  background: var(--wtg-hover, #f5f5f4);
+}
+
+.trip-share__search-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--wtg-text, #1c1917);
+}
+
 /* Friends section */
 .trip-share__friends-section {
   margin-bottom: 1.25rem;

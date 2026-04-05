@@ -1,11 +1,11 @@
-import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModal';
-import FriendlyModal from '../FriendlyModal/FriendlyModal';
+import PublishItineraryModal from '../../PublishItineraryModal/PublishItineraryModal';
+import FriendlyModal from '../../FriendlyModal/FriendlyModal';
 import ProfileEditModal from './ProfileEditModal';
 import ProfileAddFriendModal from './ProfileAddFriendModal';
 import ProfileDestinationsModal from './ProfileDestinationsModal';
 import ProfileAddDestinationModal from './ProfileAddDestinationModal';
 import ProfileRenameTripModal from './ProfileRenameTripModal';
-import ProfileShareTripModal from './ProfileShareTripModal';
+import TripShareModal from '../../TripDetailsPage/components/TripShareModal';
 
 export default function ProfilePageModals({
   editModal,
@@ -24,11 +24,13 @@ export default function ProfilePageModals({
       <ProfileDestinationsModal {...destinationsModal} />
       <ProfileAddDestinationModal {...addDestinationModal} />
       <ProfileRenameTripModal {...renameModal} />
-      <ProfileShareTripModal {...shareModal} />
+      <TripShareModal {...shareModal} />
       <PublishItineraryModal
         open={publishModal.open}
         onClose={publishModal.onClose}
         itinerary={publishModal.itinerary}
+        initialStep={publishModal.initialStep}
+        mode={publishModal.mode}
         onPublished={publishModal.onPublished}
       />
       <FriendlyModal

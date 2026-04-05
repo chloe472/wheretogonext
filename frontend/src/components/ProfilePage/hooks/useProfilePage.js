@@ -6,7 +6,7 @@ import {
   duplicateItinerary,
   deleteItinerary,
   shareItineraryWithFriends,
-} from '../../api/itinerariesApi';
+} from '../../../api/itinerariesApi';
 import {
   fetchMyProfile,
   fetchProfile,
@@ -19,13 +19,13 @@ import {
   fetchOutgoingFriendRequests,
   acceptFriendRequest,
   declineFriendRequest,
-  sendFriendRequestByIdentifier,
   searchUserByIdentifier,
   addMapDestination,
   shareProfileWithFriends,
-} from '../../api/profileApi';
-import countriesData from '../../data/countries.json';
-import { CITIES } from '../../data/cities';
+  lookupUserByEmail,
+} from '../../../api/profileApi';
+import countriesData from '../../../data/countries.json';
+import { CITIES } from '../../../data/cities';
 
 const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
 
@@ -68,6 +68,7 @@ export function useProfilePage({
   const [openOwnerMenuId, setOpenOwnerMenuId] = useState(null);
   const ownerMenuRef = useRef(null);
   const [publishTarget, setPublishTarget] = useState(null);
+  const [coverImageTarget, setCoverImageTarget] = useState(null);
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const DIALOG_CLOSED = {
@@ -133,6 +134,7 @@ export function useProfilePage({
   const [statsListOpen, setStatsListOpen] = useState(null); // 'countries' | 'cities' | null
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTrip, setShareTrip] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
 
   const isSelf = !profileId || (user?.id && String(profileId) === String(user.id));
 
@@ -545,8 +547,7 @@ export function useProfilePage({
   const profile = profileData || user || {};
   const displayName = profile?.name || 'Traveler';
   const picture = profile?.picture;
-  const incomingRequestId = viewerRequestId;
-  const shareUrl = profile?.id || profileId
+const shareUrl = profile?.id || profileId
     ? `${window.location.origin}/profile/${profile?.id || profileId}`
     : `${window.location.origin}/profile`;
   const interestsList = Array.isArray(profile?.interests) ? profile.interests : [];
@@ -594,6 +595,25 @@ export function useProfilePage({
   const handleShare = () => {
     setProfileShareSelectedIds([]);
     setProfileShareOpen(true);
+  };
+
+  const handleProfileShareInviteByEmail = async (email) => {
+    try {
+      const lookup = await lookupUserByEmail(email);
+      const userId = lookup?.user?.id ? String(lookup.user.id) : '';
+      if (!userId) throw new Error('No account found for that email.');
+      await shareProfileWithFriends([userId]);
+      toast.success('Profile shared!');
+    } catch (err) {
+      throw new Error(err?.message || 'Could not send invite.');
+    }
+  };
+
+  const handleProfileShareInviteByUser = async (searchUser) => {
+    const userId = String(searchUser?.id || '');
+    if (!userId) throw new Error('Invalid user.');
+    await shareProfileWithFriends([userId]);
+    toast.success('Profile shared!');
   };
 
   const handleProfileShareToggleFriend = (friendId) => {
@@ -678,12 +698,12 @@ export function useProfilePage({
         await refreshProfile();
       } else if (requestStatus === 'outgoing') {
         await removeFriend(profile.id);
-        await refreshProfile();
+        await Promise.all([refreshProfile(), refreshRequests()]);
       } else if (requestStatus === 'incoming') {
         await acceptRequest(viewerRequestId);
       } else {
         await addFriend(profile.id);
-        await refreshProfile();
+        await Promise.all([refreshProfile(), refreshRequests()]);
       }
     } catch (err) {
       setErrorMsg(err?.message || 'Could not update friend status.');
@@ -728,7 +748,7 @@ export function useProfilePage({
     setAddFriendError('');
     setAddFriendLoading(true);
     try {
-      const res = await sendFriendRequestByIdentifier(selected.email || selected.name);
+      const res = await addFriend(selected.id);
       if (res?.status === 'friends') {
         toast('You are already friends.');
       } else {
@@ -812,38 +832,41 @@ export function useProfilePage({
   const handleItineraryOwnerMenu = async (trip, action) => {
     if (!trip) return;
     if (action === 'share') {
-      const tripId = String(trip.id || '').trim();
-      if (!tripId) {
-        toast.error('Trip link is unavailable for this item.');
-        return;
-      }
-      const url = `${window.location.origin}/itineraries/${encodeURIComponent(tripId)}`;
-      try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(url);
-        } else {
-          const ta = document.createElement('textarea');
-          ta.value = url;
-          ta.setAttribute('readonly', '');
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          ta.style.pointerEvents = 'none';
-          document.body.appendChild(ta);
-          ta.select();
-          const ok = document.execCommand('copy');
-          document.body.removeChild(ta);
-          if (!ok) throw new Error('Copy command failed');
-        }
-        toast.success('Link copied to clipboard!');
-      } catch (e) {
-        toast.error(e?.message || 'Could not copy link.');
-      }
+      await openShareTrip(trip);
       return;
     }
     if (action === 'publish') {
+      if (trip.published && trip.visibility === 'public') {
+        try {
+          await updateItinerary(trip.id, { published: false, visibility: 'private', publishedAt: null });
+          setTrips((prev) => prev.map((t) => t.id === trip.id ? { ...t, published: false, visibility: 'private' } : t));
+          toast.success('Trip moved to private');
+        } catch (e) {
+          toast.error(e?.message || 'Could not make this trip private.');
+        }
+        return;
+      }
       try {
         const full = await fetchItineraryById(trip.id);
-        setPublishTarget(full);
+        setPublishTarget({ itinerary: full, initialStep: 1, mode: 'publish' });
+      } catch (e) {
+        toast.error(e?.message || 'Could not load trip.');
+      }
+      return;
+    }
+    if (action === 'edit-published-content') {
+      try {
+        const full = await fetchItineraryById(trip.id);
+        setPublishTarget({ itinerary: full, initialStep: 1, mode: 'edit' });
+      } catch (e) {
+        toast.error(e?.message || 'Could not load trip.');
+      }
+      return;
+    }
+    if (action === 'set-cover-page') {
+      try {
+        const full = await fetchItineraryById(trip.id);
+        setCoverImageTarget(full);
       } catch (e) {
         toast.error(e?.message || 'Could not load trip.');
       }
@@ -915,32 +938,164 @@ export function useProfilePage({
     }
   };
 
-  const openShareTrip = (trip) => {
-    if (!trip?.id) return;
-    setShareTrip({ ...trip });
-    setShareOpen(true);
-  };
 
   const closeShareTrip = () => {
     setShareOpen(false);
     setShareTrip(null);
   };
 
-  const handleShareWithFriend = async (friend) => {
-    if (!friend?.id || !shareTrip?.id) return;
+  const openShareTrip = async (trip) => {
+    const tripId = String(trip?.id || trip?._id || '').trim();
+    if (!tripId) {
+      toast.error('Trip link is unavailable for this item.');
+      return;
+    }
+    setShareOpen(true);
+    setShareLoading(true);
     try {
-      await shareItineraryWithFriends(shareTrip.id, [friend.id]);
-      toast.success(`Shared trip with ${friend.name || 'friend'}`);
-      setShareOpen(false);
-      setShareTrip(null);
+      const full = await fetchItineraryById(tripId);
+      setShareTrip(full || trip);
+    } catch (err) {
+      setShareTrip(trip);
+      toast.error(err?.message || 'Could not load trip details.');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleShareSendToFriends = async (friendIds, roleMap = {}) => {
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    try {
+      const currentCollabs = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+      const existingIds = new Set(
+        currentCollabs.map((c) => String(c?.user?.id || c?.userId || '')).filter(Boolean)
+      );
+      const toAdd = friendIds.filter((id) => !existingIds.has(String(id)));
+      const newCollabs = [
+        ...currentCollabs.map((c) => ({
+          userId: String(c?.user?.id || c?.userId || ''),
+          email: c?.email || '',
+          role: c?.role || 'editor',
+        })),
+        ...toAdd.map((id) => ({ userId: String(id), role: roleMap[id] || 'viewer' })),
+      ];
+      const updated = await updateItinerary(shareTripId, { collaborators: newCollabs });
+      setShareTrip(updated || shareTrip);
+      await shareItineraryWithFriends(shareTripId, toAdd);
+      toast.success(`Trip shared with ${toAdd.length} friend${toAdd.length !== 1 ? 's' : ''}`);
     } catch (err) {
       toast.error(err?.message || 'Could not share trip.');
     }
   };
 
+  const handleShareInviteByEmail = async (email, role = 'viewer') => {
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    try {
+      const lookup = await lookupUserByEmail(email);
+      const userMatch = lookup?.user || null;
+      const userId = userMatch?.id ? String(userMatch.id) : '';
+      if (!userId) throw new Error('No account found for that email.');
+      const currentCollabs = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+      const exists = currentCollabs.some((c) => {
+        const cId = String(c?.user?.id || c?.userId || '');
+        return cId && cId === userId;
+      });
+      if (exists) {
+        toast('This traveler already has access.');
+        return;
+      }
+      const newCollabs = [
+        ...currentCollabs.map((c) => ({
+          userId: String(c?.user?.id || c?.userId || ''),
+          email: c?.email || '',
+          role: c?.role || 'editor',
+        })),
+        { userId, email, role },
+      ];
+      const updated = await updateItinerary(shareTripId, { collaborators: newCollabs });
+      setShareTrip(updated || shareTrip);
+      await shareItineraryWithFriends(shareTripId, [userId]);
+      toast.success('Invite sent.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not send invite.');
+    }
+  };
+
+  const handleShareInviteByUser = async (searchUser, role = 'viewer') => {
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    const userId = String(searchUser?.id || '');
+    if (!userId) throw new Error('Invalid user.');
+    const currentCollabs = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+    const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
+    if (exists) { toast('This person already has access.'); return; }
+    const newCollabs = [
+      ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+      { userId, role },
+    ];
+    const updated = await updateItinerary(shareTripId, { collaborators: newCollabs });
+    setShareTrip(updated || shareTrip);
+    await shareItineraryWithFriends(shareTripId, [userId]);
+    toast.success('Invite sent.');
+  };
+
+  const handleUpdateShareCollaborator = async (collab, newRole) => {
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    try {
+      const collabId = String(collab?.user?.id || collab?.userId || '');
+      const currentCollabs = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+      const updated = await updateItinerary(shareTripId, {
+        collaborators: currentCollabs.map((c) => {
+          const cId = String(c?.user?.id || c?.userId || '');
+          const matchById = collabId && cId === collabId;
+          const matchByEmail = collab?.email && c.email === collab.email;
+          const payload = { role: matchById || matchByEmail ? newRole : (c?.role || 'editor') };
+          if (cId) payload.userId = cId;
+          if (c?.email) payload.email = c.email;
+          return payload;
+        }),
+      });
+      setShareTrip(updated || shareTrip);
+    } catch (err) {
+      toast.error(err?.message || 'Could not update access.');
+    }
+  };
+
+  const handleRemoveShareCollaborator = async (collab) => {
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    try {
+      const collabId = String(collab?.user?.id || collab?.userId || '');
+      const currentCollabs = Array.isArray(shareTrip?.collaborators) ? shareTrip.collaborators : [];
+      const updated = await updateItinerary(shareTripId, {
+        collaborators: currentCollabs
+          .filter((c) => {
+            const cId = String(c?.user?.id || c?.userId || '');
+            const matchById = collabId && cId === collabId;
+            const matchByEmail = collab?.email && c.email === collab.email;
+            return !matchById && !matchByEmail;
+          })
+          .map((c) => {
+            const cId = String(c?.user?.id || c?.userId || '');
+            const payload = { role: c?.role || 'editor' };
+            if (cId) payload.userId = cId;
+            if (c?.email) payload.email = c.email;
+            return payload;
+          }),
+      });
+      setShareTrip(updated || shareTrip);
+    } catch (err) {
+      toast.error(err?.message || 'Could not remove collaborator.');
+    }
+  };
+
   const handleCopyShareLink = async () => {
-    if (!shareTrip?.id) return;
-    const shareLink = `${window.location.origin}${getTripLink(shareTrip)}`;
+    const shareTripId = String(shareTrip?.id || shareTrip?._id || '').trim();
+    if (!shareTripId) return;
+    const shareLink = `${window.location.origin}/trip/${encodeURIComponent(shareTripId)}`;
     try {
       await navigator.clipboard.writeText(shareLink);
       toast.success('Link copied.');
@@ -970,17 +1125,12 @@ export function useProfilePage({
     setEditError('');
     setEditSaving(true);
     try {
+      let uploadedProfile = {};
       if (photoFile) {
         setPhotoUploading(true);
         const uploadRes = await uploadProfilePhoto(photoFile);
-        const uploadedProfile = uploadRes?.profile || {};
+        uploadedProfile = uploadRes?.profile || {};
         setProfileData((prev) => ({ ...prev, ...uploadedProfile }));
-        if (onUserUpdate) {
-          onUserUpdate({
-            ...user,
-            ...uploadedProfile,
-          });
-        }
       }
       const payload = {
         name: editDraft.name.trim(),
@@ -994,7 +1144,7 @@ export function useProfilePage({
       };
       const res = await updateMyProfile(payload);
       const nextProfile = res?.profile || payload;
-      const mergedProfile = { ...(profileData || user || {}), ...nextProfile };
+      const mergedProfile = { ...(profileData || user || {}), ...uploadedProfile, ...nextProfile };
       setProfileData(mergedProfile);
       if (photoPreview) URL.revokeObjectURL(photoPreview);
       setPhotoPreview(null);
@@ -1041,7 +1191,6 @@ export function useProfilePage({
   return {
     activeTab,
     setActiveTab,
-    profileId,
     profile,
     profileData,
     displayName,
@@ -1059,12 +1208,13 @@ export function useProfilePage({
     ownerMenuRef,
     publishTarget,
     setPublishTarget,
+    coverImageTarget,
+    setCoverImageTarget,
     renameTarget,
     setRenameTarget,
     renameTitleDraft,
     setRenameTitleDraft,
     dialog,
-    setDialog,
     friendsList,
     mapDestinations,
     isFriend,
@@ -1127,8 +1277,8 @@ export function useProfilePage({
     setStatsListOpen,
     shareOpen,
     shareTrip,
+    shareLoading,
     isSelf,
-    shareUrl,
     countries,
     countriesCount,
     citiesCount,
@@ -1145,6 +1295,8 @@ export function useProfilePage({
     setProfileShareOpen,
     profileShareSelectedIds,
     profileShareSending,
+    handleProfileShareInviteByEmail,
+    handleProfileShareInviteByUser,
     handleProfileShareToggleFriend,
     handleProfileShareSend,
     handleProfileShareCopyLink,
@@ -1158,7 +1310,11 @@ export function useProfilePage({
     handleItineraryOwnerMenu,
     applyRenameFromModal,
     closeShareTrip,
-    handleShareWithFriend,
+    handleShareSendToFriends,
+    handleShareInviteByEmail,
+    handleShareInviteByUser,
+    handleUpdateShareCollaborator,
+    handleRemoveShareCollaborator,
     handleCopyShareLink,
     commitSocialDraft,
     saveProfile,

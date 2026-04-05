@@ -32,7 +32,7 @@ import PublishItineraryModal from '../PublishItineraryModal/PublishItineraryModa
 import SetCoverImageModal from '../Dashboard/components/SetCoverImageModal';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { useSocialImport } from '../SocialImportModal/useSocialImport';
-import { fetchMyProfile } from '../../api/profileApi';
+import { fetchMyProfile, lookupUserByEmail, searchUsers } from '../../api/profileApi';
 import TripShareModal from './components/TripShareModal';
 import {
   TripDetailsPageLayout,
@@ -402,6 +402,44 @@ export default function TripDetailsPage({ user, onLogout }) {
       toast.error(err?.message || 'Could not share trip.');
     }
   }, [tripId]);
+
+  const handleInviteByEmail = useCallback(async (email, role = 'viewer') => {
+    try {
+      const lookup = await lookupUserByEmail(email);
+      const userMatch = lookup?.user || null;
+      const userId = userMatch?.id ? String(userMatch.id) : '';
+      if (!userId) throw new Error('No account found for that email.');
+      const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+      const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
+      if (exists) { toast('This person already has access.'); return; }
+      const newCollabs = [
+        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+        { userId, email, role },
+      ];
+      const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+      setServerItinerary((prev) => ({ ...prev, ...updated }));
+      await shareItineraryWithFriends(tripId, [userId]);
+      toast.success('Invite sent.');
+    } catch (err) {
+      throw new Error(err?.message || 'Could not send invite.');
+    }
+  }, [tripId, serverItinerary]);
+
+  const handleInviteByUser = useCallback(async (searchUser, role = 'viewer') => {
+    const userId = String(searchUser?.id || '');
+    if (!userId) throw new Error('Invalid user.');
+    const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+    const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
+    if (exists) { toast('This person already has access.'); return; }
+    const newCollabs = [
+      ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+      { userId, role },
+    ];
+    const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+    setServerItinerary((prev) => ({ ...prev, ...updated }));
+    await shareItineraryWithFriends(tripId, [userId]);
+    toast.success('Invite sent.');
+  }, [tripId, serverItinerary]);
 
   const handleShareCopyLink = useCallback(async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -1244,6 +1282,9 @@ export default function TripDetailsPage({ user, onLogout }) {
         friends={shareFriends}
         onClose={() => setShareModalOpen(false)}
         onShareWithFriend={handleShareWithFriend}
+        onInviteByEmail={handleInviteByEmail}
+        onInviteByUser={handleInviteByUser}
+        onSearchUsers={searchUsers}
         onCopy={handleShareCopyLink}
       />
 

@@ -288,7 +288,7 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
     );
 
     const accepter = await User.findById(req.userId).select('name email').lean();
-    await createNotification({
+    createNotification({
       recipientId: String(reqDoc.from),
       actorId: req.userId,
       type: 'friend_request_accepted',
@@ -296,45 +296,13 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       message: `${accepter?.name || accepter?.email || 'Someone'} accepted your friend request.`,
       link: '/profile?tab=friends&section=friends',
       meta: { acceptedByUserId: String(req.userId) },
-    });
+    }).catch((err) => console.error('Accept request notification error:', err));
 
     await FriendRequest.deleteOne({ _id: id });
     return res.json({ ok: true });
   } catch (err) {
     console.error('Accept request error:', err);
     return res.status(500).json({ error: 'Failed to accept request' });
-  }
-});
-
-router.get('/search', requireAuth, async (req, res) => {
-  try {
-    const raw = String(req.query?.q || '').trim();
-    if (!raw || raw.length < 2) return res.status(400).json({ error: 'Query too short.' });
-
-    let users = [];
-    if (raw.includes('@')) {
-      const u = await User.findOne({ email: raw.toLowerCase() }).select('name picture email').lean();
-      if (u) users = [u];
-    } else {
-      users = await User.find({ name: new RegExp(`^${escapeRegex(raw)}`, 'i') })
-        .select('name picture')
-        .limit(5)
-        .lean();
-    }
-
-    const meId = String(req.userId);
-    const result = users
-      .filter((u) => String(u._id) !== meId)
-      .map((u) => ({
-        id: String(u._id),
-        name: u.name || '',
-        picture: u.picture || '',
-      }));
-
-    return res.json({ users: result });
-  } catch (err) {
-    console.error('Search users error:', err);
-    return res.status(500).json({ error: 'Search failed' });
   }
 });
 
@@ -372,7 +340,7 @@ router.post('/requests/by-identifier', requireAuth, async (req, res) => {
     );
 
     if (Number(upsertResult?.upsertedCount || 0) > 0) {
-      await createNotification({
+      createNotification({
         recipientId: String(target._id),
         actorId: req.userId,
         type: 'friend_request_received',
@@ -380,7 +348,7 @@ router.post('/requests/by-identifier', requireAuth, async (req, res) => {
         message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
         link: '/profile?tab=friends&section=requests',
         meta: { fromUserId: String(req.userId) },
-      });
+      }).catch((err) => console.error('Friend request notification error:', err));
     }
 
     return res.status(201).json({
@@ -489,7 +457,7 @@ router.put('/me', requireAuth, async (req, res) => {
           .split(',')
           .map((x) => x.trim())
           .filter(Boolean);
-      updates.interests = list.slice(0, 10);
+      updates.interests = list.slice(0, 12);
     }
     if (socials !== undefined) {
       const raw = Array.isArray(socials) ? socials : [];
@@ -616,7 +584,7 @@ router.post('/:id/friends', requireAuth, async (req, res) => {
     );
 
     if (Number(upsertResult?.upsertedCount || 0) > 0) {
-      await createNotification({
+      createNotification({
         recipientId: id,
         actorId: req.userId,
         type: 'friend_request_received',
@@ -624,7 +592,7 @@ router.post('/:id/friends', requireAuth, async (req, res) => {
         message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
         link: '/profile?tab=friends&section=requests',
         meta: { fromUserId: String(req.userId) },
-      });
+      }).catch((err) => console.error('Friend request notification error:', err));
     }
 
     return res.status(201).json({ ok: true, status: 'pending' });

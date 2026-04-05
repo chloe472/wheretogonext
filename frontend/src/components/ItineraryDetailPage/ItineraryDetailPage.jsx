@@ -28,7 +28,14 @@ import {
   mapItineraryToCard,
   duplicateItinerary,
   fetchCustomizedCopyExists,
+  shareItineraryWithFriends,
 } from '../../api/itinerariesApi';
+import {
+  fetchMyProfile,
+  lookupUserByEmail,
+  searchUsers,
+} from '../../api/profileApi';
+import TripShareModal from '../TripDetailsPage/components/TripShareModal';
 import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import { formatViewCount } from '../../lib/formatViewCount';
 import { buildItineraryMapMarkers } from '../../lib/itineraryMapMarkers';
@@ -252,7 +259,9 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
-  const [shareDone, setShareDone] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareFriends, setShareFriends] = useState([]);
+  const [shareLoading, setShareLoading] = useState(false);
   const [customizeBusy, setCustomizeBusy] = useState(false);
   const [customizeConfirmOpen, setCustomizeConfirmOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
@@ -489,16 +498,53 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
   }, [customizeConfirmOpen]);
 
   const handleShare = async () => {
+    if (!user) {
+      onRequireLogin?.();
+      return;
+    }
+    setShareModalOpen(true);
+    setShareLoading(true);
+    try {
+      const profilePayload = await fetchMyProfile().catch(() => null);
+      const myId = String(user?.id || user?._id || '');
+      const allFriends = Array.isArray(profilePayload?.friends) ? profilePayload.friends : [];
+      setShareFriends(allFriends.filter((f) => f.id !== myId));
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleShareCopyLink = async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied to clipboard!');
-      setShareDone(true);
-      setTimeout(() => setShareDone(false), 2000);
+      toast.success('Link copied!');
     } catch {
-      setShareDone(false);
-      toast.error('Could not copy link');
+      toast.error('Could not copy link.');
     }
+  };
+
+  const handleShareWithFriend = async (friend) => {
+    if (!id) return;
+    await shareItineraryWithFriends(id, [friend.id]);
+    toast.success(`Shared with ${friend.name || 'friend'}`);
+  };
+
+  const handleShareInviteByEmail = async (email) => {
+    if (!id) return;
+    const lookup = await lookupUserByEmail(email);
+    const userId = lookup?.user?.id ? String(lookup.user.id) : '';
+    if (!userId) throw new Error('No account found for that email.');
+    await shareItineraryWithFriends(id, [userId]);
+    toast.success('Invite sent.');
+  };
+
+  const handleShareInviteByUser = async (searchUser) => {
+    if (!id) return;
+    const userId = String(searchUser?.id || '');
+    if (!userId) throw new Error('Invalid user.');
+    await shareItineraryWithFriends(id, [userId]);
+    toast.success('Invite sent.');
   };
 
   const openPublishedMapPlaceDetails = useCallback((marker) => {
@@ -637,7 +683,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
               </span>
               <button type="button" className="itinerary-detail__share" onClick={handleShare}>
                 <Share2 size={16} aria-hidden />
-                {shareDone ? 'Copied!' : 'Share'}
+                Share
               </button>
             </div>
             {tags.length > 0 && (
@@ -1102,6 +1148,19 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
           setExploreAddOpen(false);
           setExploreAddItem(null);
         }}
+      />
+
+      <TripShareModal
+        open={shareModalOpen}
+        loading={shareLoading}
+        friends={shareFriends}
+        collaborators={[]}
+        onClose={() => setShareModalOpen(false)}
+        onShareWithFriend={handleShareWithFriend}
+        onInviteByEmail={handleShareInviteByEmail}
+        onInviteByUser={handleShareInviteByUser}
+        onSearchUsers={searchUsers}
+        onCopy={handleShareCopyLink}
       />
     </div>
   );

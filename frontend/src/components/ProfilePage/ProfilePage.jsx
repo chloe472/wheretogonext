@@ -1,16 +1,18 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
-import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
-import { useProfilePage } from './useProfilePage';
-import ProfileHeader from './ProfileHeader';
-import ProfileStats from './ProfileStats';
-import ProfileTabs from './ProfileTabs';
-import ProfileOverview from './ProfileOverview';
-import ProfileTrips from './ProfileTrips';
-import ProfileFriends from './ProfileFriends';
-import ProfilePageModals from './ProfilePageModals';
-import ProfileShareModal from './ProfileShareModal';
-import { platformIcon } from './profileSocialUtils';
+import { resolveImageUrl } from '../../lib/imageFallback';
+import { useProfilePage } from './hooks/useProfilePage';
+import { searchUsers } from '../../api/profileApi';
+import ProfileHeader from './components/ProfileHeader';
+import ProfileStats from './components/ProfileStats';
+import ProfileTabs from './components/ProfileTabs';
+import ProfileOverview from './components/ProfileOverview';
+import ProfileTrips from './components/ProfileTrips';
+import ProfileFriends from './components/ProfileFriends';
+import ProfilePageModals from './components/ProfilePageModals';
+import ProfileShareModal from './components/ProfileShareModal';
+import SetCoverImageModal from '../Dashboard/components/SetCoverImageModal';
+import { platformIcon } from './lib/profileSocialUtils';
 import '../Dashboard/Dashboard.css';
 import './ProfilePage.css';
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {
@@ -42,6 +44,8 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     ownerMenuRef,
     publishTarget,
     setPublishTarget,
+    coverImageTarget,
+    setCoverImageTarget,
     renameTarget,
     setRenameTarget,
     renameTitleDraft,
@@ -107,6 +111,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     setStatsListOpen,
     shareOpen,
     shareTrip,
+    shareLoading,
     isSelf,
     countries,
     countriesCount,
@@ -124,6 +129,8 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     setProfileShareOpen,
     profileShareSelectedIds,
     profileShareSending,
+    handleProfileShareInviteByEmail,
+    handleProfileShareInviteByUser,
     handleProfileShareToggleFriend,
     handleProfileShareSend,
     handleProfileShareCopyLink,
@@ -136,23 +143,17 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     handleItineraryOwnerMenu,
     applyRenameFromModal,
     closeShareTrip,
-    handleShareWithFriend,
+    handleShareSendToFriends,
+    handleShareInviteByEmail,
+    handleShareInviteByUser,
+    handleUpdateShareCollaborator,
+    handleRemoveShareCollaborator,
     handleCopyShareLink,
     commitSocialDraft,
     saveProfile,
     removeProfilePhoto,
     closeDialog,
   } = profile;
-  const handleOwnerMenuToggle = (tripId) => {
-    setOpenOwnerMenuId((id) => (id === tripId ? null : tripId));
-  };
-  const handleStatusToggle = (tripId) => {
-    setOpenStatusDropdownId((id) => (id === tripId ? null : tripId));
-  };
-  const handleStatusSelect = (tripId, value) => {
-    setOpenStatusDropdownId(null);
-    setTripStatus(tripId, value);
-  };
   const handleOwnerAction = (trip, action) => {
     setOpenOwnerMenuId(null);
     handleItineraryOwnerMenu(trip, action);
@@ -220,10 +221,10 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               incomingRequestId={viewerRequestId}
               onEdit={openEdit}
               onAcceptRequest={acceptRequest}
+              onDeclineRequest={declineRequest}
               onFriendToggle={handleFriendToggle}
               onShare={handleShare}
               resolveImageUrl={resolveImageUrl}
-              applyImageFallback={applyImageFallback}
             />
 
             <ProfileStats stats={stats} />
@@ -256,10 +257,10 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                   statusDropdownRef={statusDropdownRef}
                   ownerMenuRef={ownerMenuRef}
                   tripStatuses={tripStatuses}
-                  onOwnerMenuToggle={handleOwnerMenuToggle}
-                  onStatusToggle={handleStatusToggle}
-                  onStatusSelect={handleStatusSelect}
-                  onOwnerAction={handleOwnerAction}
+                  setOpenOwnerMenuId={setOpenOwnerMenuId}
+                  setOpenStatusDropdownId={setOpenStatusDropdownId}
+                  setTripStatus={setTripStatus}
+                  handleItineraryOwnerMenu={handleOwnerAction}
                   onTripOpen={(link) => navigate(link)}
                   getTripLink={getTripLink}
                 />
@@ -360,16 +361,24 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
         }}
         shareModal={{
           open: shareOpen,
-          shareTrip,
-          friendsList,
+          loading: shareLoading,
+          friends: friendsList.filter((f) => f.id !== String(user?.id || user?._id || '')),
+          collaborators: shareTrip?.collaborators || [],
           onClose: closeShareTrip,
-          onShareWithFriend: handleShareWithFriend,
+          onSendToFriends: handleShareSendToFriends,
+          onInviteByEmail: handleShareInviteByEmail,
+          onInviteByUser: handleShareInviteByUser,
+          onSearchUsers: searchUsers,
+          onUpdateCollaborator: handleUpdateShareCollaborator,
+          onRemoveCollaborator: handleRemoveShareCollaborator,
           onCopy: handleCopyShareLink,
         }}
         publishModal={{
           open: Boolean(publishTarget),
           onClose: () => setPublishTarget(null),
-          itinerary: publishTarget,
+          itinerary: publishTarget?.itinerary ?? null,
+          initialStep: publishTarget?.initialStep ?? 1,
+          mode: publishTarget?.mode ?? 'publish',
           onPublished: async () => {
             try {
               await refreshProfile();
@@ -397,13 +406,22 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
       />
       <ProfileShareModal
         open={profileShareOpen}
-        friends={friendsList}
+        friends={friendsList.filter((f) => f.id !== String(user?.id || user?._id || ''))}
         selectedFriendIds={profileShareSelectedIds}
         sending={profileShareSending}
         onToggleFriend={handleProfileShareToggleFriend}
         onSend={handleProfileShareSend}
         onCopy={handleProfileShareCopyLink}
         onClose={() => setProfileShareOpen(false)}
+        onInviteByEmail={handleProfileShareInviteByEmail}
+        onInviteByUser={handleProfileShareInviteByUser}
+        onSearchUsers={searchUsers}
+      />
+      <SetCoverImageModal
+        open={Boolean(coverImageTarget)}
+        itinerary={coverImageTarget}
+        onClose={() => setCoverImageTarget(null)}
+        onSaved={() => refreshProfile()}
       />
     </div>
   );

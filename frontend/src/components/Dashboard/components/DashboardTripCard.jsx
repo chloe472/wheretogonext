@@ -78,7 +78,7 @@ export default function DashboardTripCard({
                   handleItineraryOwnerMenu(trip.raw, 'share');
                 }}
               >
-                Share link
+                Share
               </button>
               <button
                 type="button"

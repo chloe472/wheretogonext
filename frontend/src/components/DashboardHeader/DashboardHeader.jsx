@@ -6,6 +6,7 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  getNotificationStreamUrl,
 } from '../../api/notificationsApi';
 import './DashboardHeader.css';
 
@@ -61,13 +62,66 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       }
     }
 
+    function handleVisibilityChange() {
+      if (!cancelled && document.visibilityState === 'visible') {
+        loadLatest();
+      }
+    }
+
     loadLatest();
-    const intervalId = window.setInterval(loadLatest, 15000);
+
+    // SSE — server pushes new notifications instantly.
+    const streamUrl = getNotificationStreamUrl();
+    let es = null;
+    let reconnectTimer = null;
+    let reconnectDelay = 2000;
+
+    function connectSSE() {
+      if (cancelled || !streamUrl) return;
+      es = new EventSource(streamUrl);
+
+      es.addEventListener('connected', () => {
+        reconnectDelay = 2000; // reset backoff on successful connection
+      });
+
+      es.addEventListener('notification', (e) => {
+        if (cancelled) return;
+        try {
+          const notification = JSON.parse(e.data);
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === notification.id)) return prev;
+            return [notification, ...prev];
+          });
+          if (!notification.isRead) {
+            setUnreadCount((c) => c + 1);
+          }
+        } catch { /* ignore malformed event */ }
+      });
+
+      es.onerror = () => {
+        es.close();
+        if (!cancelled) {
+          reconnectTimer = setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+            connectSSE();
+          }, reconnectDelay);
+        }
+      };
+    }
+
+    connectSSE();
+
+    // Slow fallback poll (60 s) to catch anything missed while SSE was reconnecting.
+    const intervalId = window.setInterval(loadLatest, 60000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
       ac.abort();
+      if (es) es.close();
+      clearTimeout(reconnectTimer);
       window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [userId]);
 
@@ -116,13 +170,13 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
     const direct = String(n?.link || '').trim();
     if (direct) return direct;
     if (type === 'itinerary_commented' && n?.meta?.itineraryId) {
-      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}?tab=comments`;
+      return `/trip/${encodeURIComponent(String(n.meta.itineraryId))}?tab=comments`;
     }
     if (type === 'itinerary_added' && n?.meta?.itineraryId) {
-      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}`;
+      return `/trip/${encodeURIComponent(String(n.meta.itineraryId))}`;
     }
     if (type === 'itinerary_updated' && n?.meta?.itineraryId) {
-      return `/itineraries/${encodeURIComponent(String(n.meta.itineraryId))}`;
+      return `/trip/${encodeURIComponent(String(n.meta.itineraryId))}`;
     }
     return '/';
   };

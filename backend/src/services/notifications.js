@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
+import { pushToUser } from '../lib/sseClients.js';
 
 function toObjectIdOrNull(value) {
   if (!value) return null;
@@ -55,7 +56,13 @@ async function createNotificationDeduped(payload) {
     const exists = await Notification.findOne(filter).select('_id').lean();
     if (exists?._id) return null;
   }
-  return Notification.create(payload);
+  const doc = await Notification.create(payload);
+  if (doc) {
+    // Populate actor so the SSE payload matches what the REST endpoint returns.
+    const populated = await doc.populate('actor', 'name username picture');
+    pushToUser(String(doc.recipient), 'notification', serializeNotification(populated));
+  }
+  return doc;
 }
 
 export async function createNotification({ recipientId, actorId = null, type, title, message = '', link = '', meta = {} }) {
