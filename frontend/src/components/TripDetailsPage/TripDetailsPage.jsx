@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   Trash2,
@@ -121,6 +121,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [locationUpdateKey, setLocationUpdateKey] = useState(0);
   const { serverItinerary, setServerItinerary, tripLoading, tripLoadError } =
     useTripDetailsItineraryLoad(tripId, location?.state);
@@ -164,7 +165,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [dayTitles, setDayTitles] = useState({});
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [expenseSortBy, setExpenseSortBy] = useState('category');
-  const [viewMode, setViewMode] = useState('kanban');
+  const [viewMode, setViewMode] = useState(searchParams.get('view') === 'calendar' ? 'calendar' : 'kanban');
   const [dateRange, setDateRange] = useState(null);
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
