@@ -48,21 +48,25 @@
   background-color: rgba(41, 22, 22, 0.8);
 }
 
-/* Emoji reaction popup */
+.emoji-delete-row {
+  position: static;
+}
+
 .emoji-popup {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.6);
-  padding: 6px 10px;
-  border-radius: 20px;
   display: flex;
-  gap: 6px;
+  gap: 0.42rem;
+  padding: 0.4rem 0.62rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(4px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s;
-  z-index: 999;
+  transition: opacity 0.15s ease;
+  z-index: 14;
 }
 
 .pin:hover .emoji-popup {
@@ -70,9 +74,13 @@
   pointer-events: auto;
 }
 
-.emoji-popup span {
-  font-size: 1.5rem;
+.emoji-popup-btn {
+  border: 0;
+  background: transparent;
   cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0;
 }
 
 /* Emoji reaction badges */
@@ -86,11 +94,12 @@
   z-index: 10;
 }
 
-.pin-reactions span {
+.pin-reactions-badge {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2px 6px;
+  border: 0;
   background: rgba(255, 255, 255, 0.5);
   border-radius: 12px;
   font-size: 0.8rem;
@@ -99,6 +108,6 @@
   transition: background 0.2s;
 }
 
-.pin-reactions span:hover {
+.pin-reactions-badge:hover {
   background: rgba(255, 255, 255, 0.8);
 }

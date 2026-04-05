@@ -5,3 +5,4 @@ export { default as MoodboardUrlModal } from './MoodboardUrlModal';
 export { default as MoodboardDeleteImageModal } from './MoodboardDeleteImageModal';
 export { default as MoodboardFolderContent } from './MoodboardFolderContent';
 export { default as MoodboardFolderTripOverlays } from './MoodboardFolderTripOverlays';
+export { default as MoodboardReactionsModal } from './MoodboardReactionsModal';

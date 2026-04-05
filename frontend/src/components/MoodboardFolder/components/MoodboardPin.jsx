@@ -7,31 +7,32 @@ export default function MoodboardPin({
   idx,
   pinId,
   reactions,
-  user,
   onEmojiClick,
+  onOpenReactions,
   onDeleteClick,
 }) {
+  const reactionEntries = Object.entries(reactions[pinId] || {})
+    .filter(([, users]) => users.length > 0);
+
   return (
     <div className="pin" key={pinId}>
       <img src={img.url} alt={`img-${idx}`} />
       <div className="emoji-delete-row">
         <div className="emoji-popup">
           {EMOJIS.map((emoji) => (
-            <span
+            <button
+              type="button"
               key={emoji}
+              className="emoji-popup-btn"
               onClick={() => onEmojiClick(pinId, emoji, img.id)}
               title={(reactions[pinId]?.[emoji] || []).join(', ')}
-              style={{
-                cursor: 'pointer',
-                fontWeight: (reactions[pinId]?.[emoji] || []).includes(user?.name)
-                  ? 'bold'
-                  : 'normal',
-              }}
+              aria-label={`Toggle ${emoji} reaction`}
             >
               {emoji}
-            </span>
+            </button>
           ))}
         </div>
+
         <button
           className="pin-delete-btn"
           onClick={onDeleteClick}
@@ -41,13 +42,17 @@ export default function MoodboardPin({
         </button>
       </div>
       <div className="pin-reactions">
-        {Object.entries(reactions[pinId] || {})
-          .filter(([, users]) => users.length > 0)
-          .map(([emoji, users]) => (
-            <span key={emoji} title={users.join(', ')}>
+        {reactionEntries.map(([emoji, users]) => (
+          <button
+            key={emoji}
+            type="button"
+            className="pin-reactions-badge"
+            title={users.join(', ')}
+            onClick={onOpenReactions}
+          >
               {emoji} {users.length}
-            </span>
-          ))}
+          </button>
+        ))}
       </div>
     </div>
   );

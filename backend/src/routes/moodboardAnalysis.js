@@ -48,6 +48,32 @@ function citiesRoughlyMatch(a, b) {
   return false;
 }
 
+function parseLocationLabel(label) {
+  const parts = String(label || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return { city: '', country: '' };
+  if (parts.length === 1) return { city: parts[0], country: '' };
+  return {
+    city: parts[0],
+    country: parts[parts.length - 1],
+  };
+}
+
+function locationTokensMatch(a, b) {
+  const aParts = parseLocationLabel(a);
+  const bParts = parseLocationLabel(b);
+
+  if (citiesRoughlyMatch(aParts.city, bParts.city)) return true;
+  if (aParts.country && bParts.country && citiesRoughlyMatch(aParts.country, bParts.country)) return true;
+
+  if (aParts.city && bParts.country && citiesRoughlyMatch(aParts.city, bParts.country)) return true;
+  if (aParts.country && bParts.city && citiesRoughlyMatch(aParts.country, bParts.city)) return true;
+
+  return false;
+}
+
 function parseTripDestinations(rawTripDestinations, fallbackDestination) {
   if (Array.isArray(rawTripDestinations)) {
     return rawTripDestinations.map((s) => String(s || '').trim()).filter(Boolean);
@@ -65,29 +91,30 @@ function parseTripDestinations(rawTripDestinations, fallbackDestination) {
 }
 
 function computeLocationInsight(detectedPlaces, tripDestinations) {
-  const knownTripCities = (Array.isArray(tripDestinations) ? tripDestinations : [])
-    .map((d) => primaryCity(d))
+  const knownTripLabels = (Array.isArray(tripDestinations) ? tripDestinations : [])
+    .map((d) => String(d || '').trim())
     .filter(Boolean);
 
-  if (knownTripCities.length === 0 || !Array.isArray(detectedPlaces) || detectedPlaces.length === 0) return null;
+  if (knownTripLabels.length === 0 || !Array.isArray(detectedPlaces) || detectedPlaces.length === 0) return null;
 
   const mismatches = [];
   for (const p of detectedPlaces) {
-    const placeCity = primaryCity(p?.location);
-    if (!placeCity) continue;
-    if (knownTripCities.some((tripCity) => citiesRoughlyMatch(tripCity, placeCity))) continue;
+    const placeLabel = String(p?.location || '').trim();
+    const placeCity = primaryCity(placeLabel);
+    if (!placeLabel || !placeCity) continue;
+    if (knownTripLabels.some((tripLabel) => locationTokensMatch(tripLabel, placeLabel))) continue;
     mismatches.push(placeCity);
   }
 
   if (mismatches.length === 0) return null;
 
   const detectedLabel = mismatches[0];
-  const tripDisplay = knownTripCities.join(', ');
+  const tripDisplay = knownTripLabels.join(', ');
   const plural = mismatches.length > 1;
 
   return {
     mismatch: true,
-    tripDestinations: knownTripCities,
+    tripDestinations: knownTripLabels,
     detectedLabel,
     canAddDetectedDestination: true,
     message: plural

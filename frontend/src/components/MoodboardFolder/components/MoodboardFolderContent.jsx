@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import MoodboardPin from './MoodboardPin';
 import MoodboardFolderHeader from './MoodboardFolderHeader';
 import MoodboardAiModal from './MoodboardAiModal';
 import MoodboardUrlModal from './MoodboardUrlModal';
 import MoodboardDeleteImageModal from './MoodboardDeleteImageModal';
+import MoodboardReactionsModal from './MoodboardReactionsModal';
 
 export default function MoodboardFolderContent({
   showAiModal,
@@ -34,6 +36,15 @@ export default function MoodboardFolderContent({
   currentImageIdx,
   handleDeleteImage,
 }) {
+  const [activeReactionPin, setActiveReactionPin] = useState(null);
+
+  const activeReactionImage = useMemo(() => {
+    if (!activeReactionPin) return null;
+    const idx = Number(activeReactionPin?.idx);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= images.length) return null;
+    return images[idx] || null;
+  }, [activeReactionPin, images]);
+
   return (
     <>
       <MoodboardAiModal
@@ -78,6 +89,7 @@ export default function MoodboardFolderContent({
                 reactions={reactions}
                 user={user}
                 onEmojiClick={handleEmojiClick}
+                onOpenReactions={() => setActiveReactionPin({ pinId, idx })}
                 onDeleteClick={() => {
                   setCurrentImageIdx(idx);
                   setShowDeleteModal(true);
@@ -99,6 +111,19 @@ export default function MoodboardFolderContent({
           show={showDeleteModal && currentImageIdx !== null}
           onCancel={() => setShowDeleteModal(false)}
           onDelete={handleDeleteImage}
+        />
+
+        <MoodboardReactionsModal
+          show={Boolean(activeReactionPin)}
+          image={activeReactionImage}
+          pinId={activeReactionPin?.pinId}
+          reactions={reactions[activeReactionPin?.pinId] || {}}
+          currentUserName={user?.name || ''}
+          onClose={() => setActiveReactionPin(null)}
+          onToggleEmoji={(emoji) => {
+            if (!activeReactionPin || !activeReactionImage?.id) return;
+            handleEmojiClick(activeReactionPin.pinId, emoji, activeReactionImage.id);
+          }}
         />
       </div>
     </>
