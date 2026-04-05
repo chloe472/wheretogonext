@@ -243,7 +243,7 @@ export default function Moodboard({ user, onLogout }) {
           onOpenNotesModal={redirectToTripDetails}
           onOpenRouteIdeas={redirectToTripDetails}
           viewMode={viewMode}
-          setViewMode={() => redirectToTripDetails()}
+          setViewMode={(mode) => mode === 'calendar' ? navigate(`/trip/${tripId}?view=calendar`) : navigate(`/trip/${tripId}`)}
         />
       )}
 
