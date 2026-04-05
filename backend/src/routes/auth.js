@@ -124,6 +124,18 @@ router.post('/login', requireJwt, async (req, res) => {
   }
 });
 
+function shouldOverwritePicture(existingPicture, googlePicture) {
+  if (!googlePicture) return false;
+  if (!existingPicture) return true;
+  const existing = String(existingPicture);
+  if (existing.includes('googleusercontent.com')) return true;
+  if (existing.startsWith('https://lh3.googleusercontent.com')) return true;
+  if (existing.startsWith('https://lh4.googleusercontent.com')) return true;
+  if (existing.startsWith('https://lh5.googleusercontent.com')) return true;
+  if (existing.startsWith('https://lh6.googleusercontent.com')) return true;
+  return false;
+}
+
 router.post('/google', requireJwt, async (req, res) => {
   try {
     const { credential } = req.body;
@@ -145,14 +157,18 @@ router.post('/google', requireJwt, async (req, res) => {
       if (user) {
         user.googleId = googleId;
         user.name = name ?? user.name;
-        user.picture = picture ?? user.picture;
+        if (shouldOverwritePicture(user.picture, picture)) {
+          user.picture = picture ?? user.picture;
+        }
         await user.save();
       } else {
         user = await User.create({ googleId, email: emailTrim, name, picture });
       }
     } else {
       user.name = name ?? user.name;
-      user.picture = picture ?? user.picture;
+      if (shouldOverwritePicture(user.picture, picture)) {
+        user.picture = picture ?? user.picture;
+      }
       await user.save();
     }
 

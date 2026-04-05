@@ -65,7 +65,15 @@ export default function ProfileAddFriendModal({
                     >
                       <div className="add-friend-preview__avatar">
                         {u.picture
-                          ? <img src={resolveImageUrl(u.picture)} alt="" onError={applyImageFallback} />
+                          ? (
+                            <img
+                              src={resolveImageUrl(u.picture)}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              crossOrigin="anonymous"
+                              onError={applyImageFallback}
+                            />
+                          )
                           : <span>{(u.name || '?')[0].toUpperCase()}</span>
                         }
                       </div>
