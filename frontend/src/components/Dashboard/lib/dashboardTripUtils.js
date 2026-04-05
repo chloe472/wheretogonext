@@ -30,18 +30,23 @@ export function mapItineraryToTripRow(raw) {
 
 export function resolveDashboardTripImage(trip, destinationCover = '') {
   const cover0 = String(trip?.raw?.coverImages?.[0] || '').trim();
+  const explicitPrimary = String(trip?.raw?.image || '').trim();
   const primary = String(trip?.image || '').trim();
   if (cover0) {
     const resolvedCover = resolveImageUrl(cover0, trip?.title || 'Trip cover', 'trip');
     if (resolvedCover && !resolvedCover.startsWith('data:image/')) return resolvedCover;
   }
-  if (primary) {
-    const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
-    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
-  }
   if (destinationCover) {
     const resolvedDiscovery = resolveImageUrl(destinationCover, trip?.title || 'Trip cover', 'trip');
     if (resolvedDiscovery && !resolvedDiscovery.startsWith('data:image/')) return resolvedDiscovery;
+  }
+  if (explicitPrimary) {
+    const resolvedPrimary = resolveImageUrl(explicitPrimary, trip?.title || 'Trip cover', 'trip');
+    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
+  }
+  if (primary) {
+    const resolvedPrimary = resolveImageUrl(primary, trip?.title || 'Trip cover', 'trip');
+    if (resolvedPrimary && !resolvedPrimary.startsWith('data:image/')) return resolvedPrimary;
   }
   return resolveImageUrl('', trip?.title || 'Trip cover', 'trip');
 }

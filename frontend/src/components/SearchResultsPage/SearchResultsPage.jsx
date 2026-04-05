@@ -7,11 +7,12 @@ import {
   DURATIONS,
   SORT_OPTIONS,
 } from '../../data/communitySearchConstants';
+import { fetchMyProfile } from '../../api/profileApi';
 import {
   fetchPublicItineraries,
   mapItineraryToCard,
   mapSortToApiParam,
-  applyClientSort,
+  applyExploreOrdering,
 } from '../../api/itinerariesApi';
 import { EXPLORE_HERO_IMAGES } from '../../assets/exploreHeroImages';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
@@ -46,6 +47,7 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [error, setError] = useState('');
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [profileInterests, setProfileInterests] = useState([]);
   const searchRef = useRef(null);
   const suggestRef = useRef(null);
 
@@ -85,6 +87,29 @@ export default function SearchResultsPage({ user, onLogout }) {
   }, [searchInput]);
 
   useEffect(() => {
+    if (!user?.id) {
+      setProfileInterests([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const data = await fetchMyProfile({ signal: ac.signal });
+        if (cancelled) return;
+        const list = Array.isArray(data?.profile?.interests) ? data.profile.interests : [];
+        setProfileInterests(list);
+      } catch {
+        if (!cancelled) setProfileInterests([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     let cancelled = false;
     const ac = new AbortController();
 
@@ -104,7 +129,7 @@ export default function SearchResultsPage({ user, onLogout }) {
         );
         if (cancelled) return;
         let cards = raw.map(mapItineraryToCard);
-        cards = applyClientSort(cards, sortBy);
+        cards = applyExploreOrdering(cards, sortBy, profileInterests);
         setItineraries(cards);
       } catch (err) {
         if (err.name === 'AbortError') return;
@@ -120,7 +145,7 @@ export default function SearchResultsPage({ user, onLogout }) {
       cancelled = true;
       ac.abort();
     };
-  }, [q, sortBy, adventureType, duration]);
+  }, [q, sortBy, adventureType, duration, profileInterests]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -254,6 +279,12 @@ export default function SearchResultsPage({ user, onLogout }) {
           <p className="search-results__count">
             {loading ? 'Loading…' : `${itineraries.length} Itineraries for you`}
           </p>
+          {!loading && profileInterests.length > 0 && (
+            <p className="search-results__interest-hint">
+              Recommendations prioritize itineraries that match your profile interests ({profileInterests.slice(0, 3).join(', ')}
+              {profileInterests.length > 3 ? '…' : ''}).
+            </p>
+          )}
           <div className="search-results__filter">
             <label htmlFor="sort">Sort by:</label>
             <select id="sort" className="search-results__select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>

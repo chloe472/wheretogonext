@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchMyItineraries, fetchSharedWithMeItineraries } from '../../../api/itinerariesApi';
-import { fetchDiscoveryData } from '../../../api/discoveryApi';
+import { fetchLandmarkCoverForDestination } from '../../../api/discoveryApi';
+import { DEFAULT_TRIP_COVER_FALLBACK } from '../../../data/tripDestinationMeta';
 import {
   mapItineraryToTripRow,
   getTripDestinationQuery,
-  pickDiscoveryCoverImage,
 } from '../lib/dashboardTripUtils';
 
 function mergeDashboardTrips(mineRows, sharedRows) {
@@ -40,7 +40,7 @@ export default function useDashboardTrips() {
         (Array.isArray(myTrips) ? myTrips : [])
           .map((trip) => getTripDestinationQuery(trip))
           .map((q) => q.trim())
-          .filter((q) => q && !destinationCoverByQuery[q]),
+          .filter((q) => q && (!destinationCoverByQuery[q] || !String(destinationCoverByQuery[q]).includes('lcv=1'))),
       ),
     );
 
@@ -51,11 +51,10 @@ export default function useDashboardTrips() {
       await Promise.all(
         neededQueries.map(async (query) => {
           try {
-            const data = await fetchDiscoveryData(query, 8);
-            const cover = pickDiscoveryCoverImage(data);
-            if (cover) updates[query] = cover;
+            const landmarkCover = await fetchLandmarkCoverForDestination(query);
+            updates[query] = landmarkCover || DEFAULT_TRIP_COVER_FALLBACK;
           } catch {
-            // ignore cover lookup failures; destination fallback image remains in use
+            updates[query] = DEFAULT_TRIP_COVER_FALLBACK;
           }
         }),
       );

@@ -103,6 +103,27 @@ export function splitRouteLocationLabel(label = '') {
   return { city, country };
 }
 
+/**
+ * Merge a destination label into trip.destination / trip.locations (semicolon-separated route).
+ * Same rules as Trip Details "Add … to trip destinations" (social import / Explore add-to-trip).
+ * @returns {{ ok: true, destination: string, locations: string } | { ok: false, reason: string, message?: string }}
+ */
+export function appendDestinationLabelToTripDoc(trip, label) {
+  const raw = String(label || '').trim();
+  if (!raw) return { ok: false, reason: 'empty' };
+  const currentStr = trip?.locations || trip?.destination || '';
+  const parts = currentStr.split(';').map((s) => s.trim()).filter(Boolean);
+  const token = (s) => s.split(',')[0].trim().toLowerCase();
+  if (parts.some((p) => token(p) === token(raw))) {
+    return { ok: false, reason: 'duplicate', message: 'That destination is already on your trip.' };
+  }
+  const newLocations = [...parts, raw].join('; ');
+  const newDestination = parts.length > 0
+    ? extractPrimaryDestination(trip?.destination || parts[0])
+    : raw.split(',')[0].trim();
+  return { ok: true, destination: newDestination, locations: newLocations };
+}
+
 export function buildTripRouteSummary(destination = '', locations = '') {
   const routeLocations = getDestinationList(destination, locations);
   const uniqueLocations = [];
