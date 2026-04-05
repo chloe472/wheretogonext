@@ -123,19 +123,40 @@ export default function MoodboardFolder({ user }) {
       .replace(/[^a-z0-9, ]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    const primary = (s) => String(s || '').split(',')[0].trim();
+    const parseLabel = (s) => {
+      const parts = String(s || '')
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length === 0) return { city: '', country: '' };
+      if (parts.length === 1) return { city: parts[0], country: '' };
+      return { city: parts[0], country: parts[parts.length - 1] };
+    };
+    const roughMatch = (a, b) => {
+      const x = normalize(a);
+      const y = normalize(b);
+      if (!x || !y) return true;
+      if (x === y) return true;
+      if (x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x))) return true;
+      return false;
+    };
+    const labelsMatch = (a, b) => {
+      const aParts = parseLabel(a);
+      const bParts = parseLabel(b);
 
-    const tripPrimarySet = new Set(rawTripDestinations.map((d) => normalize(primary(d))).filter(Boolean));
-    const tripFullSet = new Set(rawTripDestinations.map((d) => normalize(d)).filter(Boolean));
+      if (roughMatch(aParts.city, bParts.city)) return true;
+      if (aParts.country && bParts.country && roughMatch(aParts.country, bParts.country)) return true;
+      if (aParts.city && bParts.country && roughMatch(aParts.city, bParts.country)) return true;
+      if (aParts.country && bParts.city && roughMatch(aParts.country, bParts.city)) return true;
+
+      return false;
+    };
 
     const mismatches = [];
     for (const place of places) {
       const label = String(place?.location || place?.address || '').trim();
       if (!label) continue;
-      const full = normalize(label);
-      const city = normalize(primary(label));
-      if (!full || !city) continue;
-      if (tripPrimarySet.has(city) || tripFullSet.has(full)) continue;
+      if (rawTripDestinations.some((tripLabel) => labelsMatch(tripLabel, label))) continue;
       mismatches.push(label);
     }
 
