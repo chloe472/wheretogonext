@@ -1,12 +1,31 @@
 import { apiUrl, getBearerAuthHeaders, TOKEN_STORAGE_KEY } from './apiConfig.js';
 
+function getNotificationStreamBaseUrl() {
+  const explicitBase = import.meta.env.VITE_API_BASE_URL;
+  if (explicitBase != null && String(explicitBase).trim() !== '') {
+    return String(explicitBase).replace(/\/$/, '');
+  }
+
+  if (import.meta.env.DEV) {
+    const proxyTarget = import.meta.env.VITE_API_PROXY_TARGET;
+    if (proxyTarget != null && String(proxyTarget).trim() !== '') {
+      return String(proxyTarget).replace(/\/$/, '');
+    }
+    return 'http://127.0.0.1:5000';
+  }
+
+  return '';
+}
+
 /** Returns the SSE stream URL with the JWT token as a query param. */
 export function getNotificationStreamUrl() {
   const token = typeof localStorage !== 'undefined'
     ? (localStorage.getItem(TOKEN_STORAGE_KEY) || '')
     : '';
-  const base = apiUrl('/api/notifications/stream');
-  return token ? `${base}?token=${encodeURIComponent(token)}` : null;
+  const base = getNotificationStreamBaseUrl();
+  const streamPath = '/api/notifications/stream';
+  const streamUrl = base ? `${base}${streamPath}` : apiUrl(streamPath);
+  return token ? `${streamUrl}?token=${encodeURIComponent(token)}` : null;
 }
 
 function authHeaders() {

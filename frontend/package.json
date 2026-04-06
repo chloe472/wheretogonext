@@ -17,7 +17,8 @@
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.30.3"
+    "react-router-dom": "^6.30.3",
+    "wheretogonext": "file:.."
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
