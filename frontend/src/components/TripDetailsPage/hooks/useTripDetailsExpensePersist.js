@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { updateItinerary } from '../../../api/itinerariesApi';
 
 export function useTripDetailsExpensePersist({
@@ -9,8 +9,11 @@ export function useTripDetailsExpensePersist({
   hydratedTripItemsForIdRef,
   expensePersistCountByTripRef,
 }) {
+  const tripDataRef = useRef(tripData);
+  tripDataRef.current = tripData;
+
   useEffect(() => {
-    if (tripLoading || !tripData) return;
+    if (tripLoading || !tripDataRef.current) return;
     if (hydratedTripItemsForIdRef.current !== tripId) return;
 
     const meta = expensePersistCountByTripRef.current;
@@ -35,12 +38,5 @@ export function useTripDetailsExpensePersist({
     return () => {
       cancelled = true;
     };
-  }, [
-    tripId,
-    tripData,
-    tripExpenseItems,
-    tripLoading,
-    hydratedTripItemsForIdRef,
-    expensePersistCountByTripRef,
-  ]);
+  }, [tripId, tripExpenseItems, tripLoading, hydratedTripItemsForIdRef, expensePersistCountByTripRef]);
 }

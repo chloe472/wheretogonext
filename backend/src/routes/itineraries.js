@@ -326,6 +326,33 @@ async function collaboratorRecipientIds(collaborators, excludeUserId = '') {
   return Array.from(ids);
 }
 
+/**
+ * True if user is listed as a collaborator with an editor-capable role (not viewer).
+ * Matches by collaborator userId or by email (resolved from User record).
+ */
+async function isCollaboratorEditorUser(userId, itineraryDoc) {
+  const uid = String(userId || '').trim();
+  if (!uid || !itineraryDoc) return false;
+
+  const collabs = Array.isArray(itineraryDoc.collaborators) ? itineraryDoc.collaborators : [];
+  if (collabs.length === 0) return false;
+
+  const me = await User.findById(uid).select('email').lean();
+  const myEmail = String(me?.email || '').trim().toLowerCase();
+
+  for (const c of collabs) {
+    const role = String(c?.role || 'editor').toLowerCase();
+    if (role === 'viewer') continue;
+
+    const cUid = c?.userId != null ? String(c.userId) : '';
+    if (cUid && cUid === uid) return true;
+
+    const cEmail = String(c?.email || '').trim().toLowerCase();
+    if (myEmail && cEmail && cEmail === myEmail) return true;
+  }
+  return false;
+}
+
 async function attachCollaboratorUserIds(collaborators) {
   if (!Array.isArray(collaborators) || collaborators.length === 0) return [];
 
@@ -1129,13 +1156,20 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'Itinerary not found' });
     }
-    if (String(existing.creator) !== req.userId) {
+
+    const creatorIdStr = String(existing.creator || '');
+    const isCreator = creatorIdStr === String(req.userId);
+    const isCollaboratorEditor = !isCreator && (await isCollaboratorEditorUser(req.userId, existing));
+    if (!isCreator && !isCollaboratorEditor) {
       return res.status(403).json({ error: 'Not allowed to edit this itinerary' });
     }
 
     const previousCollaboratorIds = await collaboratorRecipientIds(existing.collaborators, String(req.userId));
 
     const body = req.body || {};
+    if (!isCreator && body.collaborators != null) {
+      return res.status(403).json({ error: 'Not allowed to change collaborators' });
+    }
     if (body.title != null) existing.title = String(body.title).trim();
     if (body.overview != null) existing.overview = String(body.overview);
     if (body.destination != null) existing.destination = String(body.destination).trim();
@@ -1151,7 +1185,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.travelers != null && body.travelers !== '') {
       existing.travelers = Math.max(1, Number(body.travelers) || 1);
     }
-    if (body.collaborators != null) {
+    if (isCreator && body.collaborators != null) {
       const collaboratorsNormalized = normalizeCollaborators(body.collaborators);
       const creator = await User.findById(req.userId).select('email').lean();
       const collaboratorValidation = await validateCollaborators(
@@ -1191,12 +1225,14 @@ router.put('/:id', requireAuth, async (req, res) => {
     } else if (placesDerivedFromTripExpense || body.places != null) {
       existing.days = computeDaysFromPlaces(existing.places);
     }
-    if (body.published != null) existing.published = Boolean(body.published);
-    if (body.visibility === 'public' || body.visibility === 'private') {
-      existing.visibility = body.visibility;
-    }
-    if (body.publishedAt != null && body.publishedAt !== '') {
-      existing.publishedAt = new Date(body.publishedAt);
+    if (isCreator) {
+      if (body.published != null) existing.published = Boolean(body.published);
+      if (body.visibility === 'public' || body.visibility === 'private') {
+        existing.visibility = body.visibility;
+      }
+      if (body.publishedAt != null && body.publishedAt !== '') {
+        existing.publishedAt = new Date(body.publishedAt);
+      }
     }
 
     await existing.save();
@@ -1235,16 +1271,16 @@ router.put('/:id', requireAuth, async (req, res) => {
       );
     }
 
-    const creatorIdStr = String(existing.creator?._id ?? existing.creator ?? '').trim();
+    const creatorIdForNotify = String(existing.creator?._id ?? existing.creator ?? '').trim();
     const editorIdStr = String(req.userId || '').trim();
     if (
-      creatorIdStr
+      creatorIdForNotify
       && editorIdStr
-      && creatorIdStr !== editorIdStr
-      && mongoose.isValidObjectId(creatorIdStr)
+      && creatorIdForNotify !== editorIdStr
+      && mongoose.isValidObjectId(creatorIdForNotify)
     ) {
       await createNotification({
-        recipientId: creatorIdStr,
+        recipientId: creatorIdForNotify,
         actorId: req.userId,
         type: 'itinerary_updated',
         title: 'Travel planner updated',
