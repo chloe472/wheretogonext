@@ -1,3 +1,6 @@
+# Dev only: where Vite proxies /api (must match backend PORT, default 5000).
+# VITE_API_PROXY_TARGET=http://localhost:5000
+
 VITE_GOOGLE_CLIENT_ID=
 # Enable "Maps JavaScript API" in Google Cloud for this key (fixes ApiNotActivatedMapError).
 VITE_GOOGLE_MAPS_API_KEY=
