@@ -122,6 +122,7 @@ async function loadFriends(userId) {
     id: String(friend._id),
     name: friend.name || '',
     picture: friend.picture || '',
+    email: friend.email || '',
   }));
 }
 

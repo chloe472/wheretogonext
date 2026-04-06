@@ -111,19 +111,26 @@ export default function ProfileEditModal({
               <label className="profile-page__modal-label">
                 Interested in
               </label>
+              <p className="profile-page__interests-hint">
+                Select up to 12 interests ({editDraft.interests.length}/12)
+              </p>
               <div className="profile-page__interests-grid">
                 {PUBLISH_CATEGORY_OPTIONS.map((option) => {
                   const selected = editDraft.interests.includes(option);
+                  const atLimit = editDraft.interests.length >= 12;
                   return (
                     <button
                       key={option}
                       type="button"
-                      className={`profile-page__interest-pill${selected ? ' profile-page__interest-pill--selected' : ''}`}
+                      className={`profile-page__interest-pill${selected ? ' profile-page__interest-pill--selected' : ''}${!selected && atLimit ? ' profile-page__interest-pill--disabled' : ''}`}
+                      disabled={!selected && atLimit}
                       onClick={() => setEditDraft((prev) => ({
                         ...prev,
                         interests: selected
                           ? prev.interests.filter((i) => i !== option)
-                          : [...prev.interests, option],
+                          : prev.interests.length < 12
+                            ? [...prev.interests, option]
+                            : prev.interests,
                       }))}
                     >
                       {option}

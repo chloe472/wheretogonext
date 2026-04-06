@@ -465,30 +465,187 @@
   border-radius: 12px;
 }
 
-.new-trip__invite-input-row {
-  display: flex;
-  gap: 0.5rem;
+.new-trip__invite-search-wrap {
+  position: relative;
   margin-top: 0.5rem;
 }
 
-.new-trip__invite-input-row .new-trip__input {
+.new-trip__invite-field {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--wtg-border);
+  border-radius: 12px;
+  padding: 0 0.75rem;
+  background: var(--wtg-surface);
+  height: 46px;
+  transition: border-color 0.15s;
+}
+
+.new-trip__invite-field:focus-within {
+  border-color: var(--wtg-primary);
+  box-shadow: 0 0 0 3px rgba(92, 74, 61, 0.15);
+}
+
+.new-trip__invite-input {
   flex: 1;
-}
-
-.new-trip__invite-add-btn {
-  flex-shrink: 0;
-  padding: 0.875rem 1rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--wtg-surface);
-  background: var(--wtg-primary);
   border: none;
-  border-radius: 8px;
-  cursor: pointer;
+  outline: none;
+  font-size: 0.9375rem;
+  color: var(--wtg-text);
+  background: transparent;
+  min-width: 0;
 }
 
-.new-trip__invite-add-btn:hover {
-  background: #333;
+.new-trip__invite-input::placeholder {
+  color: var(--wtg-text-muted);
+}
+
+.new-trip__invite-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wtg-border);
+  border-top-color: var(--wtg-primary);
+  border-radius: 50%;
+  animation: ntf-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ntf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.new-trip__invite-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.new-trip__invite-dropdown-empty {
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  color: var(--wtg-text-muted);
+}
+
+.new-trip__invite-result {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.875rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.new-trip__invite-result:hover {
+  background: var(--wtg-hover);
+}
+
+.new-trip__invite-result--added {
+  background: color-mix(in srgb, var(--wtg-primary) 6%, transparent);
+}
+
+.new-trip__invite-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.new-trip__invite-avatar--placeholder {
+  background: var(--wtg-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.new-trip__invite-result-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.new-trip__invite-result-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-trip__invite-result-email {
+  font-size: 0.775rem;
+  color: var(--wtg-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-trip__invite-result-check {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wtg-primary);
+  flex-shrink: 0;
+}
+
+.new-trip__invited-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.new-trip__invited-avatar--placeholder {
+  background: var(--wtg-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.new-trip__invited-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.new-trip__invited-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-trip__invited-email {
+  font-size: 0.8125rem;
+  color: var(--wtg-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .new-trip__invited-list {
@@ -508,11 +665,6 @@
 
 .new-trip__invited-item:last-child {
   border-bottom: none;
-}
-
-.new-trip__invited-email {
-  font-size: 0.9375rem;
-  color: var(--wtg-text);
 }
 
 .new-trip__invited-remove {
@@ -580,7 +732,8 @@
   top: 100%;
   left: 0;
   margin-top: 4px;
-  min-width: 220px;
+  min-width: 260px;
+  max-width: 320px;
   padding: 0.75rem;
   background: var(--wtg-surface);
   border: 1px solid #e5e7eb;
@@ -593,6 +746,96 @@
   margin: 0;
   font-size: 0.8125rem;
   color: var(--wtg-text-muted);
+}
+
+.new-trip__friends-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wtg-text-muted);
+}
+
+.new-trip__friends-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.new-trip__friend-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  border: 1.5px solid var(--wtg-border);
+  border-radius: 10px;
+  background: var(--wtg-surface);
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 60px;
+}
+
+.new-trip__friend-card:hover {
+  border-color: var(--wtg-primary);
+  background: var(--wtg-hover);
+}
+
+.new-trip__friend-card--added {
+  border-color: var(--wtg-primary);
+  background: color-mix(in srgb, var(--wtg-primary) 10%, transparent);
+}
+
+.new-trip__friend-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.new-trip__friend-avatar--placeholder {
+  background: var(--wtg-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.new-trip__friend-name {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  text-align: center;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-trip__friend-check {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 0.6rem;
+  color: var(--wtg-primary);
+  font-weight: 700;
+}
+
+.new-trip__friends-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--wtg-primary);
+  border-radius: 999px;
 }
 
 .new-trip__submit {
