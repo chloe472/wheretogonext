@@ -665,7 +665,7 @@ export default function TripDetailsKanbanDayColumn({
         }}
       >
         <Plus size={16} aria-hidden />
-        Add things to do, hotels...
+        Add To Trip
       </button>
     </section>
   );

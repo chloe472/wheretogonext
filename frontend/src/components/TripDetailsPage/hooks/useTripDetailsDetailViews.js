@@ -12,15 +12,12 @@ export function useTripDetailsDetailViews({
   setAddPlacesOpen,
   setAddFoodOpen,
   setAddStaysOpen,
-  setAddExperiencesOpen,
   setPlaceDetailsView,
   setPlaceDetailsTab,
   setFoodDetailsView,
   setFoodDetailsTab,
   setStayDetailsView,
   setStayDetailsTab,
-  setExperienceDetailsView,
-  setExperienceDetailsTab,
   setItineraryDetailsView,
   setSelectedPlaceMarkerId,
   setEditPlaceItem,
@@ -32,11 +29,9 @@ export function useTripDetailsDetailViews({
     setAddPlacesOpen(false);
     setAddFoodOpen(false);
     setAddStaysOpen(false);
-    setAddExperiencesOpen(false);
     setPlaceDetailsView(null);
     setFoodDetailsView(null);
     setStayDetailsView(null);
-    setExperienceDetailsView(null);
 
     if (raw === 'food' || raw === 'food & beverage') {
       setFoodDetailsTab('overview');
@@ -54,14 +49,6 @@ export function useTripDetailsDetailViews({
       setStayDetailsTab('overview');
       setStayDetailsView(item);
       setAddStaysOpen(true);
-      setEditPlaceItem(null);
-      return;
-    }
-
-    if (raw === 'experiences' || raw === 'experience') {
-      setExperienceDetailsTab('overview');
-      setExperienceDetailsView(item);
-      setAddExperiencesOpen(true);
       setEditPlaceItem(null);
       return;
     }
@@ -121,14 +108,11 @@ export function useTripDetailsDetailViews({
     setAddPlacesOpen,
     setAddFoodOpen,
     setAddStaysOpen,
-    setAddExperiencesOpen,
     setPlaceDetailsView,
     setFoodDetailsView,
     setStayDetailsView,
-    setExperienceDetailsView,
     setFoodDetailsTab,
     setStayDetailsTab,
-    setExperienceDetailsTab,
     setPlaceDetailsTab,
     setSelectedPlaceMarkerId,
     setEditPlaceItem,
@@ -156,9 +140,7 @@ export function useTripDetailsDetailViews({
     };
 
     setAddFoodOpen(false);
-    setAddExperiencesOpen(false);
     setFoodDetailsView(null);
-    setExperienceDetailsView(null);
     setItineraryDetailsView(null);
     setPlaceDetailsTab('overview');
     setSelectedPlaceMarkerId(selected.id);
@@ -169,9 +151,7 @@ export function useTripDetailsDetailViews({
     discoveryData,
     filteredPlaces,
     setAddFoodOpen,
-    setAddExperiencesOpen,
     setFoodDetailsView,
-    setExperienceDetailsView,
     setItineraryDetailsView,
     setPlaceDetailsTab,
     setSelectedPlaceMarkerId,
@@ -195,10 +175,8 @@ export function useTripDetailsDetailViews({
 
   const openRouteIdeasBrowseAll = useCallback(() => {
     setAddFoodOpen(false);
-    setAddExperiencesOpen(false);
     setPlaceDetailsView(null);
     setFoodDetailsView(null);
-    setExperienceDetailsView(null);
     setPlaceDetailsTab('overview');
     const firstItinerary = Array.isArray(routeIdeas) ? routeIdeas[0] : null;
     if (firstItinerary) {
@@ -212,10 +190,8 @@ export function useTripDetailsDetailViews({
     routeIdeas,
     openRouteIdeaDetails,
     setAddFoodOpen,
-    setAddExperiencesOpen,
     setPlaceDetailsView,
     setFoodDetailsView,
-    setExperienceDetailsView,
     setPlaceDetailsTab,
     setItineraryDetailsView,
     setSelectedPlaceMarkerId,
@@ -230,7 +206,6 @@ export function useTripDetailsDetailViews({
       tags: Array.isArray(itineraryPlace.tags) ? itineraryPlace.tags : [],
     };
     setAddFoodOpen(false);
-    setAddExperiencesOpen(false);
     setAddPlacesOpen(true);
     setItineraryDetailsView(null);
     setPlaceDetailsTab('overview');
@@ -238,7 +213,6 @@ export function useTripDetailsDetailViews({
     setPlaceDetailsView(nextPlace);
   }, [
     setAddFoodOpen,
-    setAddExperiencesOpen,
     setAddPlacesOpen,
     setItineraryDetailsView,
     setPlaceDetailsTab,
@@ -298,16 +272,6 @@ export function useTripDetailsDetailViews({
     setStayDetailsTab('overview');
   }, [setStayDetailsView, setStayDetailsTab]);
 
-  const onCloseExperienceModal = useCallback(() => {
-    setAddExperiencesOpen(false);
-    setExperienceDetailsView(null);
-  }, [setAddExperiencesOpen, setExperienceDetailsView]);
-
-  const onBackExperienceDetail = useCallback(() => {
-    setExperienceDetailsView(null);
-    setExperienceDetailsTab('overview');
-  }, [setExperienceDetailsView, setExperienceDetailsTab]);
-
   return {
     openInternalItemOverview,
     openAddPlacesDetailsFromMapMarker,
@@ -324,7 +288,5 @@ export function useTripDetailsDetailViews({
     onCloseStayBackdrop,
     onCloseStayListHeader,
     onBackStayDetail,
-    onCloseExperienceModal,
-    onBackExperienceDetail,
   };
 }

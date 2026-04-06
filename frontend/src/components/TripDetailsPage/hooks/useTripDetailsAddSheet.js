@@ -16,13 +16,6 @@ export function useTripDetailsAddSheet({
   setStayStarFilter,
   setStaySortBy,
   setAddStaysOpen,
-  setAddExperiencesDay,
-  setExperienceSearchQuery,
-  setExperienceTypeFilter,
-  setExperiencePriceRange,
-  setExperienceDurationFilter,
-  setExperienceSortBy,
-  setAddExperiencesOpen,
   setAddTransportDay,
   setAddTransportOpen,
 }) {
@@ -54,14 +47,6 @@ export function useTripDetailsAddSheet({
       setStayStarFilter('All');
       setStaySortBy('Recommended');
       setAddStaysOpen(true);
-    } else if (id === 'experience') {
-      setAddExperiencesDay(addSheetDay ?? 1);
-      setExperienceSearchQuery('');
-      setExperienceTypeFilter('All');
-      setExperiencePriceRange('All');
-      setExperienceDurationFilter('All');
-      setExperienceSortBy('Recently added');
-      setAddExperiencesOpen(true);
     } else if (id === 'transportation') {
       setAddTransportDay(addSheetDay ?? 1);
       setAddTransportOpen(true);
@@ -89,13 +74,6 @@ export function useTripDetailsAddSheet({
     setStayStarFilter,
     setStaySortBy,
     setAddStaysOpen,
-    setAddExperiencesDay,
-    setExperienceSearchQuery,
-    setExperienceTypeFilter,
-    setExperiencePriceRange,
-    setExperienceDurationFilter,
-    setExperienceSortBy,
-    setAddExperiencesOpen,
     setAddTransportDay,
     setAddTransportOpen,
   ]);

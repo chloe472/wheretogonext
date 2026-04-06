@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Camera, Ticket, UtensilsCrossed } from 'lucide-react';
+import { Camera, UtensilsCrossed } from 'lucide-react';
 import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
 import { convertCurrencyToUsd, findTimeOverlapItem } from '../lib/tripDetailsPageHelpers';
 
@@ -14,7 +14,6 @@ export function useTripDetailsCustomItems({
 }) {
   const [addCustomPlaceOpen, setAddCustomPlaceOpen] = useState(false);
   const [addCustomFoodOpen, setAddCustomFoodOpen] = useState(false);
-  const [addCustomExperienceOpen, setAddCustomExperienceOpen] = useState(false);
 
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [customPlaceAddress, setCustomPlaceAddress] = useState('');
@@ -34,94 +33,12 @@ export function useTripDetailsCustomItems({
   const [customFoodDurationMins, setCustomFoodDurationMins] = useState(0);
   const [customPlaceNote, setCustomPlaceNote] = useState('');
   const [customFoodNote, setCustomFoodNote] = useState('');
-  const [customExperienceName, setCustomExperienceName] = useState('');
-  const [customExperienceType, setCustomExperienceType] = useState('Attraction');
-  const [customExperienceAddress, setCustomExperienceAddress] = useState('');
-  const [customExperienceDateKey, setCustomExperienceDateKey] = useState('');
-  const [customExperienceStartTime, setCustomExperienceStartTime] = useState('07:00');
-  const [customExperienceDurationHrs, setCustomExperienceDurationHrs] = useState(2);
-  const [customExperienceDurationMins, setCustomExperienceDurationMins] = useState(0);
-  const [customExperienceNote, setCustomExperienceNote] = useState('');
-  const [customExperienceCost, setCustomExperienceCost] = useState('');
-  const [customExperienceExternalLink, setCustomExperienceExternalLink] = useState('');
-  const [customExperienceTravelDocs, setCustomExperienceTravelDocs] = useState([]);
   const [customPlaceCost, setCustomPlaceCost] = useState('');
   const [customFoodCost, setCustomFoodCost] = useState('');
   const [customPlaceImage, setCustomPlaceImage] = useState(null);
   const [customFoodImage, setCustomFoodImage] = useState(null);
   const [customPlaceTravelDocs, setCustomPlaceTravelDocs] = useState([]);
   const [customFoodTravelDocs, setCustomFoodTravelDocs] = useState([]);
-
-  const onCloseAddCustomExperience = useCallback(() => {
-    setAddCustomExperienceOpen(false);
-  }, []);
-
-  const handleAddCustomExperienceSubmit = useCallback(
-    (e) => {
-      e.preventDefault();
-      const [fallbackLat, fallbackLng] = mapCenter;
-      const costNum = parseFloat(customExperienceCost) || 0;
-      const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
-      const overlapping = findTimeOverlapItem(tripExpenseItems, {
-        date: customExperienceDateKey,
-        startTime: customExperienceStartTime,
-        durationHrs: customExperienceDurationHrs,
-        durationMins: customExperienceDurationMins,
-      });
-      if (overlapping) {
-        showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
-        return;
-      }
-      setTripExpenseItems((prev) => [
-        ...prev,
-        {
-          id: `experience-${Date.now()}`,
-          name: customExperienceName,
-          total: costNumUsd,
-          categoryId: 'experiences',
-          category: 'Experience',
-          date: customExperienceDateKey,
-          detail: `${customExperienceType} · ${customExperienceAddress}`,
-          Icon: Ticket,
-          lat: fallbackLat,
-          lng: fallbackLng,
-          notes: customExperienceNote || '',
-          attachments: customExperienceTravelDocs.map((file, idx) => ({
-            id: `experience-doc-${Date.now()}-${idx}`,
-            name: file?.name || `Document ${idx + 1}`,
-            size: file?.size || 0,
-            type: file?.type || '',
-          })),
-          startTime: customExperienceStartTime,
-          durationHrs: customExperienceDurationHrs,
-          durationMins: customExperienceDurationMins,
-          externalLink: customExperienceExternalLink || '',
-          placeImageUrl: '',
-        },
-      ]);
-      showInAppNotice(`Added ${customExperienceName || 'experience'} to your trip.`, 'success');
-      setAddCustomExperienceOpen(false);
-    },
-    [
-      mapCenter,
-      customExperienceCost,
-      currency,
-      exchangeRates,
-      tripExpenseItems,
-      customExperienceDateKey,
-      customExperienceStartTime,
-      customExperienceDurationHrs,
-      customExperienceDurationMins,
-      customExperienceName,
-      customExperienceType,
-      customExperienceAddress,
-      customExperienceNote,
-      customExperienceExternalLink,
-      customExperienceTravelDocs,
-      showInAppNotice,
-      setTripExpenseItems,
-    ],
-  );
 
   const onCloseAddCustomPlace = useCallback(() => {
     setAddCustomPlaceOpen(false);
@@ -296,8 +213,6 @@ export function useTripDetailsCustomItems({
     setAddCustomPlaceOpen,
     addCustomFoodOpen,
     setAddCustomFoodOpen,
-    addCustomExperienceOpen,
-    setAddCustomExperienceOpen,
     customPlaceName,
     setCustomPlaceName,
     customPlaceAddress,
@@ -334,28 +249,6 @@ export function useTripDetailsCustomItems({
     setCustomPlaceNote,
     customFoodNote,
     setCustomFoodNote,
-    customExperienceName,
-    setCustomExperienceName,
-    customExperienceType,
-    setCustomExperienceType,
-    customExperienceAddress,
-    setCustomExperienceAddress,
-    customExperienceDateKey,
-    setCustomExperienceDateKey,
-    customExperienceStartTime,
-    setCustomExperienceStartTime,
-    customExperienceDurationHrs,
-    setCustomExperienceDurationHrs,
-    customExperienceDurationMins,
-    setCustomExperienceDurationMins,
-    customExperienceNote,
-    setCustomExperienceNote,
-    customExperienceCost,
-    setCustomExperienceCost,
-    customExperienceExternalLink,
-    setCustomExperienceExternalLink,
-    customExperienceTravelDocs,
-    setCustomExperienceTravelDocs,
     customPlaceCost,
     setCustomPlaceCost,
     customFoodCost,
@@ -368,8 +261,6 @@ export function useTripDetailsCustomItems({
     setCustomPlaceTravelDocs,
     customFoodTravelDocs,
     setCustomFoodTravelDocs,
-    onCloseAddCustomExperience,
-    handleAddCustomExperienceSubmit,
     onCloseAddCustomPlace,
     handleAddCustomPlaceSubmit,
     onCloseAddCustomFood,

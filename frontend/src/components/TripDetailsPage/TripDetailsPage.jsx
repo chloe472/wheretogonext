@@ -179,20 +179,16 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [addPlacesOpen, setAddPlacesOpen] = useState(false);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
-  const [addExperiencesOpen, setAddExperiencesOpen] = useState(false);
   const [addStaysOpen, setAddStaysOpen] = useState(false);
   const [placeDetailsView, setPlaceDetailsView] = useState(null);
   const [placeDetailsTab, setPlaceDetailsTab] = useState('overview');
   const [foodDetailsView, setFoodDetailsView] = useState(null);
   const [foodDetailsTab, setFoodDetailsTab] = useState('overview');
-  const [experienceDetailsView, setExperienceDetailsView] = useState(null);
-  const [experienceDetailsTab, setExperienceDetailsTab] = useState('overview');
   const [stayDetailsView, setStayDetailsView] = useState(null);
   const [stayDetailsTab, setStayDetailsTab] = useState('overview');
   const [itineraryDetailsView, setItineraryDetailsView] = useState(null);
   const [addPlacesDay, setAddPlacesDay] = useState(1);
   const [addFoodDay, setAddFoodDay] = useState(1);
-  const [addExperiencesDay, setAddExperiencesDay] = useState(1);
   const [placeSearchQuery, setPlaceSearchQuery] = useState('');
   const [placeFilterTag, setPlaceFilterTag] = useState('');
   const [placeSortBy, setPlaceSortBy] = useState('Recommended');
@@ -205,11 +201,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [stayTypeFilter, setStayTypeFilter] = useState('All');
   const [stayStarFilter, setStayStarFilter] = useState('All');
   const [staySortBy, setStaySortBy] = useState('Recommended');
-  const [experienceSearchQuery, setExperienceSearchQuery] = useState('');
-  const [experienceTypeFilter, setExperienceTypeFilter] = useState('All');
-  const [experiencePriceRange, setExperiencePriceRange] = useState('All');
-  const [experienceDurationFilter, setExperienceDurationFilter] = useState('All');
-  const [experienceSortBy, setExperienceSortBy] = useState('Recently added');
   const [addModalCityFilter, setAddModalCityFilter] = useState('All');
   const [tripExpenseItems, setTripExpenseItems] = useState([]);
   const [mapDayFilterOpen, setMapDayFilterOpen] = useState(false);
@@ -734,17 +725,14 @@ export default function TripDetailsPage({ user, onLogout }) {
     setTripExpenseItems,
     addPlacesDay,
     addFoodDay,
-    addExperiencesDay,
     showInAppNotice,
     setFriendlyDialog,
     setPlaceDetailsView,
     setFoodDetailsView,
     setStayDetailsView,
-    setExperienceDetailsView,
     setAddPlacesOpen,
     setAddFoodOpen,
     setAddStaysOpen,
-    setAddExperiencesOpen,
   });
 
   useEffect(() => {
@@ -759,7 +747,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   const {
     filteredPlaces,
     filteredFoods,
-    filteredExperiences,
     filteredStays,
     stayTypeOptions,
   } = useTripDetailsDiscoveryFilters({
@@ -771,11 +758,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     foodSearchQuery,
     foodDietaryFilter,
     foodSortBy,
-    experienceSearchQuery,
-    experienceTypeFilter,
-    experiencePriceRange,
-    experienceDurationFilter,
-    experienceSortBy,
     staySearchQuery,
     stayTypeFilter,
     stayStarFilter,
@@ -852,8 +834,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     onCloseStayBackdrop,
     onCloseStayListHeader,
     onBackStayDetail,
-    onCloseExperienceModal,
-    onBackExperienceDetail,
   } = useTripDetailsDetailViews({
     cityQuery,
     discoveryData,
@@ -862,15 +842,12 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddPlacesOpen,
     setAddFoodOpen,
     setAddStaysOpen,
-    setAddExperiencesOpen,
     setPlaceDetailsView,
     setPlaceDetailsTab,
     setFoodDetailsView,
     setFoodDetailsTab,
     setStayDetailsView,
     setStayDetailsTab,
-    setExperienceDetailsView,
-    setExperienceDetailsTab,
     setItineraryDetailsView,
     setSelectedPlaceMarkerId,
     setEditPlaceItem,
@@ -918,8 +895,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     setAddCustomPlaceOpen,
     addCustomFoodOpen,
     setAddCustomFoodOpen,
-    addCustomExperienceOpen,
-    setAddCustomExperienceOpen,
     customPlaceName,
     setCustomPlaceName,
     customPlaceAddress,
@@ -956,28 +931,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     setCustomPlaceNote,
     customFoodNote,
     setCustomFoodNote,
-    customExperienceName,
-    setCustomExperienceName,
-    customExperienceType,
-    setCustomExperienceType,
-    customExperienceAddress,
-    setCustomExperienceAddress,
-    customExperienceDateKey,
-    setCustomExperienceDateKey,
-    customExperienceStartTime,
-    setCustomExperienceStartTime,
-    customExperienceDurationHrs,
-    setCustomExperienceDurationHrs,
-    customExperienceDurationMins,
-    setCustomExperienceDurationMins,
-    customExperienceNote,
-    setCustomExperienceNote,
-    customExperienceCost,
-    setCustomExperienceCost,
-    customExperienceExternalLink,
-    setCustomExperienceExternalLink,
-    customExperienceTravelDocs,
-    setCustomExperienceTravelDocs,
     customPlaceCost,
     setCustomPlaceCost,
     customFoodCost,
@@ -990,8 +943,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     setCustomPlaceTravelDocs,
     customFoodTravelDocs,
     setCustomFoodTravelDocs,
-    onCloseAddCustomExperience,
-    handleAddCustomExperienceSubmit,
     onCloseAddCustomPlace,
     handleAddCustomPlaceSubmit,
     onCloseAddCustomFood,
@@ -1007,22 +958,6 @@ export default function TripDetailsPage({ user, onLogout }) {
   });
 
   const {
-    experienceBookingModalOpen,
-    setExperienceBookingModalOpen,
-    bookingExperience,
-    setBookingExperience,
-    bookingOption,
-    setBookingOption,
-    bookingDate,
-    setBookingDate,
-    bookingStartTime,
-    setBookingStartTime,
-    bookingTravellers,
-    setBookingTravellers,
-    bookingNotes,
-    setBookingNotes,
-    onCloseExperienceBooking,
-    handleExperienceBookingSubmit,
     stayBookingModalOpen,
     setStayBookingModalOpen,
     stayBookingTarget,
@@ -1047,8 +982,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     tripExpenseItems,
     setTripExpenseItems,
     showInAppNotice,
-    setExperienceDetailsView,
-    setAddExperiencesOpen,
   });
 
   const {
@@ -1110,13 +1043,6 @@ export default function TripDetailsPage({ user, onLogout }) {
     setStayStarFilter,
     setStaySortBy,
     setAddStaysOpen,
-    setAddExperiencesDay,
-    setExperienceSearchQuery,
-    setExperienceTypeFilter,
-    setExperiencePriceRange,
-    setExperienceDurationFilter,
-    setExperienceSortBy,
-    setAddExperiencesOpen,
     setAddTransportDay,
     setAddTransportOpen,
   });
@@ -1333,13 +1259,10 @@ export default function TripDetailsPage({ user, onLogout }) {
       />
 
       <TripDetailsModalStack
-        addCustomExperienceOpen={addCustomExperienceOpen}
         addCustomFoodOpen={addCustomFoodOpen}
         addCustomPlaceOpen={addCustomPlaceOpen}
         addCustomTransportOpen={addCustomTransportOpen}
         addEntireItineraryToTrip={addEntireItineraryToTrip}
-        addExperiencesDay={addExperiencesDay}
-        addExperiencesOpen={addExperiencesOpen}
         addFoodDay={addFoodDay}
         addFoodOpen={addFoodOpen}
         addPlacesDay={addPlacesDay}
@@ -1369,12 +1292,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         allDayNums={allDayNums}
         appendTransportTripItem={appendTransportTripItem}
         availableTransportCountries={availableTransportCountries}
-        bookingDate={bookingDate}
-        bookingExperience={bookingExperience}
-        bookingNotes={bookingNotes}
-        bookingOption={bookingOption}
-        bookingStartTime={bookingStartTime}
-        bookingTravellers={bookingTravellers}
         budgetModalOpen={budgetModalOpen}
         canOpenInternalItemOverview={canOpenInternalItemOverview}
         cityQuery={cityQuery}
@@ -1383,17 +1300,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         currencyModalOpen={currencyModalOpen}
         currencyOptions={currencyOptions}
         currencyOptionsForModal={currencyOptionsForModal}
-        customExperienceAddress={customExperienceAddress}
-        customExperienceCost={customExperienceCost}
-        customExperienceDateKey={customExperienceDateKey}
-        customExperienceDurationHrs={customExperienceDurationHrs}
-        customExperienceDurationMins={customExperienceDurationMins}
-        customExperienceExternalLink={customExperienceExternalLink}
-        customExperienceName={customExperienceName}
-        customExperienceNote={customExperienceNote}
-        customExperienceStartTime={customExperienceStartTime}
-        customExperienceTravelDocs={customExperienceTravelDocs}
-        customExperienceType={customExperienceType}
         customFoodAddress={customFoodAddress}
         customFoodAddressSuggestionsOpen={customFoodAddressSuggestionsOpen}
         customFoodCost={customFoodCost}
@@ -1426,17 +1332,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         editPlaceItem={editPlaceItem}
         exchangeRates={exchangeRates}
         expenseSortBy={expenseSortBy}
-        experienceBookingModalOpen={experienceBookingModalOpen}
-        experienceDetailsTab={experienceDetailsTab}
-        experienceDetailsView={experienceDetailsView}
-        experienceDurationFilter={experienceDurationFilter}
-        experiencePriceRange={experiencePriceRange}
-        experienceSearchQuery={experienceSearchQuery}
-        experienceSortBy={experienceSortBy}
-        experienceTypeFilter={experienceTypeFilter}
         addModalCityFilter={addModalCityFilter}
         addModalCityOptions={addModalCityOptions}
-        filteredExperiences={filteredExperiences}
         filteredFoods={filteredFoods}
         filteredPlaces={filteredPlaces}
         filteredStays={filteredStays}
@@ -1448,12 +1345,10 @@ export default function TripDetailsPage({ user, onLogout }) {
         friendlyDialog={friendlyDialog}
         generalAttachments={generalAttachments}
         generalNotes={generalNotes}
-        handleAddCustomExperienceSubmit={handleAddCustomExperienceSubmit}
         handleAddCustomFoodSubmit={handleAddCustomFoodSubmit}
         handleAddCustomPlaceSubmit={handleAddCustomPlaceSubmit}
         handleAddSheetOptionSelect={handleAddSheetOptionSelect}
         handleAddToTripSubmit={handleAddToTripSubmit}
-        handleExperienceBookingSubmit={handleExperienceBookingSubmit}
         handleImageError={handleImageError}
         handleStayBookingSubmit={handleStayBookingSubmit}
         handleWhereCityRangeInputChange={handleWhereCityRangeInputChange}
@@ -1467,10 +1362,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         notesModalOpen={notesModalOpen}
         notesSaving={notesSaving}
         onAddDetectedDestinationFromSocial={handleAddDetectedDestinationFromSocial}
-        onBackExperienceDetail={onBackExperienceDetail}
         onBackFoodDetail={onBackFoodDetail}
         onBackStayDetail={onBackStayDetail}
-        onCloseAddCustomExperience={onCloseAddCustomExperience}
         onCloseAddCustomFood={onCloseAddCustomFood}
         onCloseAddCustomPlace={onCloseAddCustomPlace}
         onCloseAddPlacesBackdrop={onCloseAddPlacesBackdrop}
@@ -1479,8 +1372,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         onCloseAddPlacesPlaceDetailHeader={onCloseAddPlacesPlaceDetailHeader}
         onCloseAddSheet={onCloseAddSheet}
         onCloseAddToTrip={onCloseAddToTrip}
-        onCloseExperienceBooking={onCloseExperienceBooking}
-        onCloseExperienceModal={onCloseExperienceModal}
         onCloseFoodBackdrop={onCloseFoodBackdrop}
         onCloseFoodListHeader={onCloseFoodListHeader}
         onCloseStayBackdrop={onCloseStayBackdrop}
@@ -1510,7 +1401,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         saveDayNotesAndDocuments={saveDayNotesAndDocuments}
         saveGeneralNotesAndDocuments={saveGeneralNotesAndDocuments}
         selectedPlaceMarkerId={selectedPlaceMarkerId}
-        setAddCustomExperienceOpen={setAddCustomExperienceOpen}
         setAddCustomFoodOpen={setAddCustomFoodOpen}
         setAddCustomPlaceOpen={setAddCustomPlaceOpen}
         setAddCustomTransportOpen={setAddCustomTransportOpen}
@@ -1531,26 +1421,9 @@ export default function TripDetailsPage({ user, onLogout }) {
         setAddToTripTravelDocs={setAddToTripTravelDocs}
         setAddModalCityFilter={setAddModalCityFilter}
         setAddTransportOpen={setAddTransportOpen}
-        setBookingDate={setBookingDate}
-        setBookingExperience={setBookingExperience}
-        setBookingNotes={setBookingNotes}
-        setBookingOption={setBookingOption}
-        setBookingStartTime={setBookingStartTime}
-        setBookingTravellers={setBookingTravellers}
         setBudgetModalOpen={setBudgetModalOpen}
         setCurrency={setCurrency}
         setCurrencyModalOpen={setCurrencyModalOpen}
-        setCustomExperienceAddress={setCustomExperienceAddress}
-        setCustomExperienceCost={setCustomExperienceCost}
-        setCustomExperienceDateKey={setCustomExperienceDateKey}
-        setCustomExperienceDurationHrs={setCustomExperienceDurationHrs}
-        setCustomExperienceDurationMins={setCustomExperienceDurationMins}
-        setCustomExperienceExternalLink={setCustomExperienceExternalLink}
-        setCustomExperienceName={setCustomExperienceName}
-        setCustomExperienceNote={setCustomExperienceNote}
-        setCustomExperienceStartTime={setCustomExperienceStartTime}
-        setCustomExperienceTravelDocs={setCustomExperienceTravelDocs}
-        setCustomExperienceType={setCustomExperienceType}
         setCustomFoodAddress={setCustomFoodAddress}
         setCustomFoodAddressSelection={setCustomFoodAddressSelection}
         setCustomFoodAddressSuggestionsOpen={setCustomFoodAddressSuggestionsOpen}
@@ -1578,14 +1451,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         setCustomTransportVehicle={setCustomTransportVehicle}
         setEditPlaceItem={setEditPlaceItem}
         setExpenseSortBy={setExpenseSortBy}
-        setExperienceBookingModalOpen={setExperienceBookingModalOpen}
-        setExperienceDetailsTab={setExperienceDetailsTab}
-        setExperienceDetailsView={setExperienceDetailsView}
-        setExperienceDurationFilter={setExperienceDurationFilter}
-        setExperiencePriceRange={setExperiencePriceRange}
-        setExperienceSearchQuery={setExperienceSearchQuery}
-        setExperienceSortBy={setExperienceSortBy}
-        setExperienceTypeFilter={setExperienceTypeFilter}
         setFoodDetailsTab={setFoodDetailsTab}
         setFoodDetailsView={setFoodDetailsView}
         setFoodDietaryFilter={setFoodDietaryFilter}

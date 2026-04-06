@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { Ticket } from 'lucide-react';
 import {
   addDays,
   buildStayBookingDeepLink,
@@ -15,17 +14,7 @@ export function useTripDetailsBookingModals({
   tripExpenseItems,
   setTripExpenseItems,
   showInAppNotice,
-  setExperienceDetailsView,
-  setAddExperiencesOpen,
 }) {
-  const [experienceBookingModalOpen, setExperienceBookingModalOpen] = useState(false);
-  const [bookingExperience, setBookingExperience] = useState(null);
-  const [bookingOption, setBookingOption] = useState(null);
-  const [bookingDate, setBookingDate] = useState('');
-  const [bookingStartTime, setBookingStartTime] = useState('07:00');
-  const [bookingTravellers, setBookingTravellers] = useState(2);
-  const [bookingNotes, setBookingNotes] = useState('');
-
   const [stayBookingModalOpen, setStayBookingModalOpen] = useState(false);
   const [stayBookingTarget, setStayBookingTarget] = useState(null);
   const [stayBookingCheckInDate, setStayBookingCheckInDate] = useState('');
@@ -54,84 +43,6 @@ export function useTripDetailsBookingModals({
     setStayBookingRooms(1);
     setStayBookingModalOpen(true);
   }, [days]);
-
-  const onCloseExperienceBooking = useCallback(() => {
-    setExperienceBookingModalOpen(false);
-  }, []);
-
-  const handleExperienceBookingSubmit = useCallback((e) => {
-    e.preventDefault();
-    if (!bookingExperience || !bookingOption) return;
-
-    const parsedDurationHours = Number(bookingExperience.durationHours);
-    const fallbackDurationHours =
-      Number.isFinite(parsedDurationHours) && parsedDurationHours > 0 ? parsedDurationHours : 2;
-    const fallbackDurationMins = Math.max(1, Math.round(fallbackDurationHours * 60));
-    const fallbackDurationParts = durationMinutesToParts(fallbackDurationMins);
-    const overlapping = findTimeOverlapItem(tripExpenseItems, {
-      date: bookingDate,
-      startTime: bookingStartTime,
-      durationHrs: fallbackDurationParts.durationHrs,
-      durationMins: fallbackDurationParts.durationMins,
-    });
-    if (overlapping) {
-      showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
-      return;
-    }
-
-    const optionLabel = bookingOption.option || bookingOption.name || bookingOption.type || 'Experience package';
-    const totalCost = bookingOption.price * bookingTravellers;
-    setTripExpenseItems((prev) => [
-      ...prev,
-      {
-        id: `experience-${bookingExperience.id}-${bookingOption.id}-${Date.now()}`,
-        name: bookingExperience.name,
-        total: totalCost,
-        categoryId: 'experiences',
-        category: 'Experience',
-        date: bookingDate,
-        detail: `${optionLabel} - ${bookingTravellers} traveller${bookingTravellers !== 1 ? 's' : ''}`,
-        Icon: Ticket,
-        lat: bookingExperience.lat,
-        lng: bookingExperience.lng,
-        notes: bookingNotes,
-        attachments: [],
-        startTime: bookingStartTime,
-        durationHrs: fallbackDurationParts.durationHrs,
-        durationMins: fallbackDurationParts.durationMins,
-        externalLink: '',
-        placeImageUrl: bookingExperience.image,
-        rating: bookingExperience.rating,
-        reviewCount: bookingExperience.reviewCount,
-        experienceType: bookingExperience.type,
-        bookingOption: optionLabel,
-        travellers: bookingTravellers,
-        pricePerTraveller: bookingOption.price,
-      },
-    ]);
-
-    setExperienceBookingModalOpen(false);
-    setExperienceDetailsView(null);
-    setAddExperiencesOpen(false);
-    setBookingExperience(null);
-    setBookingOption(null);
-    setBookingDate('');
-    setBookingStartTime('07:00');
-    setBookingTravellers(2);
-    setBookingNotes('');
-  }, [
-    bookingExperience,
-    bookingOption,
-    bookingDate,
-    bookingStartTime,
-    bookingTravellers,
-    bookingNotes,
-    tripExpenseItems,
-    showInAppNotice,
-    setTripExpenseItems,
-    setExperienceDetailsView,
-    setAddExperiencesOpen,
-  ]);
 
   const onCloseStayBooking = useCallback(() => {
     setStayBookingModalOpen(false);
@@ -169,22 +80,6 @@ export function useTripDetailsBookingModals({
   ]);
 
   return {
-    experienceBookingModalOpen,
-    setExperienceBookingModalOpen,
-    bookingExperience,
-    setBookingExperience,
-    bookingOption,
-    setBookingOption,
-    bookingDate,
-    setBookingDate,
-    bookingStartTime,
-    setBookingStartTime,
-    bookingTravellers,
-    setBookingTravellers,
-    bookingNotes,
-    setBookingNotes,
-    onCloseExperienceBooking,
-    handleExperienceBookingSubmit,
     stayBookingModalOpen,
     setStayBookingModalOpen,
     stayBookingTarget,

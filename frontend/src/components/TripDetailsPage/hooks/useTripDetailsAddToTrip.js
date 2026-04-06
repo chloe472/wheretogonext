@@ -3,7 +3,6 @@ import {
   Camera,
   UtensilsCrossed,
   Building2,
-  Ticket,
 } from 'lucide-react';
 import { resolveImageUrl } from '../../../lib/imageFallback';
 import {
@@ -29,17 +28,14 @@ export function useTripDetailsAddToTrip({
   setTripExpenseItems,
   addPlacesDay,
   addFoodDay,
-  addExperiencesDay,
   showInAppNotice,
   setFriendlyDialog,
   setPlaceDetailsView,
   setFoodDetailsView,
   setStayDetailsView,
-  setExperienceDetailsView,
   setAddPlacesOpen,
   setAddFoodOpen,
   setAddStaysOpen,
-  setAddExperiencesOpen,
 }) {
   const [addToTripModalOpen, setAddToTripModalOpen] = useState(false);
   const [addToTripItem, setAddToTripItem] = useState(null);
@@ -143,7 +139,7 @@ export function useTripDetailsAddToTrip({
       placeImageUrl: resolveImageUrl(
         data.image,
         data.name,
-        itemType === 'food' ? 'restaurant' : itemType === 'experience' ? 'activity' : itemType === 'stay' ? 'hotel' : 'landmark',
+        itemType === 'food' ? 'restaurant' : itemType === 'stay' ? 'hotel' : 'landmark',
       ),
       rating: data.rating,
       reviewCount: data.reviewCount,
@@ -172,11 +168,6 @@ export function useTripDetailsAddToTrip({
       categoryId = 'food';
       category = 'Food & Beverage';
       Icon = UtensilsCrossed;
-    } else if (markerType === 'experience') {
-      type = 'experience';
-      categoryId = 'experiences';
-      category = 'Experience';
-      Icon = Ticket;
     }
 
     const data = marker.originalData || {
@@ -193,14 +184,10 @@ export function useTripDetailsAddToTrip({
 
     const preferredDayNum = markerType === 'food'
       ? addFoodDay
-      : markerType === 'experience'
-        ? addExperiencesDay
-        : addPlacesDay;
+      : addPlacesDay;
     const day = days.find((d) => d.dayNum === preferredDayNum) || days.find((d) => d.dayNum === 1);
     const selectedDate = day?.date || days[0]?.date || '';
-    const sourceDurationMins = type === 'experience'
-      ? Math.max(1, Math.round((Number(data?.durationHours || 0) || 2) * 60))
-      : 60;
+    const sourceDurationMins = 60;
     const sourceDurationParts = durationMinutesToParts(sourceDurationMins);
 
     setAddToTripItem({ type, data, categoryId, category, Icon });
@@ -220,7 +207,6 @@ export function useTripDetailsAddToTrip({
   }, [
     cityQuery,
     addFoodDay,
-    addExperiencesDay,
     addPlacesDay,
     days,
     tripExpenseItems,
@@ -277,10 +263,6 @@ export function useTripDetailsAddToTrip({
       categoryId = 'food';
       category = 'Food & Beverage';
       Icon = UtensilsCrossed;
-    } else if (type === 'experience') {
-      categoryId = 'experiences';
-      category = 'Experience';
-      Icon = Ticket;
     }
 
     setAddToTripItem({
@@ -385,9 +367,6 @@ export function useTripDetailsAddToTrip({
     } else if (addToTripItem.type === 'stay') {
       setStayDetailsView(null);
       setAddStaysOpen(false);
-    } else if (addToTripItem.type === 'experience') {
-      setExperienceDetailsView(null);
-      setAddExperiencesOpen(false);
     }
   }, [
     addToTripItem,
@@ -410,11 +389,9 @@ export function useTripDetailsAddToTrip({
     setPlaceDetailsView,
     setFoodDetailsView,
     setStayDetailsView,
-    setExperienceDetailsView,
     setAddPlacesOpen,
     setAddFoodOpen,
     setAddStaysOpen,
-    setAddExperiencesOpen,
   ]);
 
   return {

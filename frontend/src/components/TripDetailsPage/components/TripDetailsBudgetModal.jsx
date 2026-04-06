@@ -14,9 +14,23 @@ export default function TripDetailsBudgetModal({
   expenseSortBy,
   setExpenseSortBy,
 }) {
+  const resolveSafeIcon = (iconCandidate) => {
+    if (typeof iconCandidate === 'function') return iconCandidate;
+    return Wallet;
+  };
+
   const breakdown = getBudgetBreakdown(trip, currency, tripExpenseItems);
   const total = breakdown.total;
   const withAmount = breakdown.byCategory.filter((c) => c.amount > 0);
+  const normalizedItems = [...(Array.isArray(breakdown.items) ? breakdown.items : [])].map((item, idx) => ({
+    ...item,
+    id: item?.id || `expense-${idx}`,
+    name: item?.name || 'Untitled item',
+    category: item?.category || 'Other',
+    detail: item?.detail || '',
+    total: Number(item?.total) || 0,
+    Icon: resolveSafeIcon(item?.Icon),
+  }));
   const pieStyle = total > 0 && withAmount.length > 0 ? {
     background: `conic-gradient(${withAmount.map((c, i) => {
       const start = withAmount.slice(0, i).reduce((s, x) => s + x.amount, 0) / total * 100;
@@ -24,7 +38,16 @@ export default function TripDetailsBudgetModal({
       return `${c.color} ${start}% ${end}%`;
     }).join(', ')})`,
   } : { background: '#e5e7eb' };
-  const sortedItems = [...breakdown.items].sort((a, b) => expenseSortBy === 'category' ? (a.category.localeCompare(b.category) || a.name.localeCompare(b.name)) : (b.total - a.total));
+  const sortedItems = normalizedItems.sort((a, b) => {
+    if (expenseSortBy === 'category') {
+      const aCategory = String(a.category || '');
+      const bCategory = String(b.category || '');
+      const aName = String(a.name || '');
+      const bName = String(b.name || '');
+      return aCategory.localeCompare(bCategory) || aName.localeCompare(bName);
+    }
+    return (Number(b.total) || 0) - (Number(a.total) || 0);
+  });
 
   return (
     <>
@@ -71,10 +94,12 @@ export default function TripDetailsBudgetModal({
             </select>
           </div>
           <ul className="trip-details__budget-item-list">
-            {sortedItems.map((item) => (
+            {sortedItems.map((item) => {
+              const ItemIcon = resolveSafeIcon(item.Icon);
+              return (
               <li key={item.id} className="trip-details__budget-item">
                 <span className="trip-details__budget-item-icon">
-                  <item.Icon size={20} aria-hidden />
+                  <ItemIcon size={20} aria-hidden />
                 </span>
                 <div className="trip-details__budget-item-body">
                   <span className="trip-details__budget-item-name">{item.name}</span>
@@ -86,7 +111,8 @@ export default function TripDetailsBudgetModal({
                   <span className="trip-details__budget-item-total">{formatUsdAsCurrency(item.total, currency, exchangeRates)}</span>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       </div>

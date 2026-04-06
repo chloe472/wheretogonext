@@ -1,8 +1,6 @@
 import TripDetailsAddPlacesModal from './TripDetailsAddPlacesModal';
 import TripDetailsAddFoodModal from './TripDetailsAddFoodModal';
 import TripDetailsAddStaysModal from './TripDetailsAddStaysModal';
-import TripDetailsAddExperiencesModal from './TripDetailsAddExperiencesModal';
-import TripDetailsAddCustomExperienceModal from './TripDetailsAddCustomExperienceModal';
 import TripDetailsAddCustomPlaceModal from './TripDetailsAddCustomPlaceModal';
 import TripDetailsAddCustomFoodModal from './TripDetailsAddCustomFoodModal';
 
@@ -110,58 +108,6 @@ export default function TripDetailsDiscoveryModals(props) {
     onCloseStayBackdrop,
     onCloseStayListHeader,
     onBackStayDetail,
-    addExperiencesOpen,
-    filteredExperiences,
-    experienceDetailsView,
-    setExperienceDetailsView,
-    experienceDetailsTab,
-    setExperienceDetailsTab,
-    experienceSearchQuery,
-    setExperienceSearchQuery,
-    experienceTypeFilter,
-    setExperienceTypeFilter,
-    experiencePriceRange,
-    setExperiencePriceRange,
-    experienceDurationFilter,
-    setExperienceDurationFilter,
-    experienceSortBy,
-    setExperienceSortBy,
-    addExperiencesDay,
-    setBookingExperience,
-    setBookingOption,
-    setBookingDate,
-    setBookingStartTime,
-    setBookingTravellers,
-    setBookingNotes,
-    setExperienceBookingModalOpen,
-    setCustomExperienceName,
-    setCustomExperienceType,
-    setCustomExperienceAddress,
-    setCustomExperienceDateKey,
-    setCustomExperienceStartTime,
-    setCustomExperienceDurationHrs,
-    setCustomExperienceDurationMins,
-    setCustomExperienceNote,
-    setCustomExperienceCost,
-    setCustomExperienceExternalLink,
-    setCustomExperienceTravelDocs,
-    setAddCustomExperienceOpen,
-    onCloseExperienceModal,
-    onBackExperienceDetail,
-    addCustomExperienceOpen,
-    onCloseAddCustomExperience,
-    handleAddCustomExperienceSubmit,
-    customExperienceName,
-    customExperienceType,
-    customExperienceAddress,
-    customExperienceDateKey,
-    customExperienceStartTime,
-    customExperienceDurationHrs,
-    customExperienceDurationMins,
-    customExperienceNote,
-    customExperienceCost,
-    customExperienceExternalLink,
-    customExperienceTravelDocs,
     addCustomPlaceOpen,
     onCloseAddCustomPlace,
     handleAddCustomPlaceSubmit,
@@ -354,98 +300,6 @@ export default function TripDetailsDiscoveryModals(props) {
           onCloseStayBackdrop={onCloseStayBackdrop}
           onCloseStayListHeader={onCloseStayListHeader}
           onBackStayDetail={onBackStayDetail}
-        />
-      )}
-
-      {addExperiencesOpen && (
-        <TripDetailsAddExperiencesModal
-          trip={trip}
-          days={days}
-          cityQuery={cityQuery}
-          destinationLabel={destinationLabel}
-          mapCenter={mapCenter}
-          allDayNums={allDayNums}
-          filteredExperiences={filteredExperiences}
-          addModalCityFilter={addModalCityFilter}
-          setAddModalCityFilter={setAddModalCityFilter}
-          addModalCityOptions={addModalCityOptions}
-          experienceDetailsView={experienceDetailsView}
-          setExperienceDetailsView={setExperienceDetailsView}
-          experienceDetailsTab={experienceDetailsTab}
-          setExperienceDetailsTab={setExperienceDetailsTab}
-          experienceSearchQuery={experienceSearchQuery}
-          setExperienceSearchQuery={setExperienceSearchQuery}
-          experienceTypeFilter={experienceTypeFilter}
-          setExperienceTypeFilter={setExperienceTypeFilter}
-          experiencePriceRange={experiencePriceRange}
-          setExperiencePriceRange={setExperiencePriceRange}
-          experienceDurationFilter={experienceDurationFilter}
-          setExperienceDurationFilter={setExperienceDurationFilter}
-          experienceSortBy={experienceSortBy}
-          setExperienceSortBy={setExperienceSortBy}
-          addExperiencesDay={addExperiencesDay}
-          discoveryError={discoveryError}
-          discoveryLoading={discoveryLoading}
-          discoveryData={discoveryData}
-          tripExpenseItems={tripExpenseItems}
-          setBookingExperience={setBookingExperience}
-          setBookingOption={setBookingOption}
-          setBookingDate={setBookingDate}
-          setBookingStartTime={setBookingStartTime}
-          setBookingTravellers={setBookingTravellers}
-          setBookingNotes={setBookingNotes}
-          setExperienceBookingModalOpen={setExperienceBookingModalOpen}
-          openAddToTripFromMapMarker={openAddToTripFromMapMarker}
-          openAddPlacesDetailsFromMapMarker={openAddPlacesDetailsFromMapMarker}
-          resetMapDays={resetMapDays}
-          setMapDayFilterOpen={setMapDayFilterOpen}
-          setCustomExperienceName={setCustomExperienceName}
-          setCustomExperienceType={setCustomExperienceType}
-          setCustomExperienceAddress={setCustomExperienceAddress}
-          setCustomExperienceDateKey={setCustomExperienceDateKey}
-          setCustomExperienceStartTime={setCustomExperienceStartTime}
-          setCustomExperienceDurationHrs={setCustomExperienceDurationHrs}
-          setCustomExperienceDurationMins={setCustomExperienceDurationMins}
-          setCustomExperienceNote={setCustomExperienceNote}
-          setCustomExperienceCost={setCustomExperienceCost}
-          setCustomExperienceExternalLink={setCustomExperienceExternalLink}
-          setCustomExperienceTravelDocs={setCustomExperienceTravelDocs}
-          setAddCustomExperienceOpen={setAddCustomExperienceOpen}
-          onCloseExperienceBackdrop={onCloseExperienceModal}
-          onCloseExperienceListHeader={onCloseExperienceModal}
-          onBackExperienceDetail={onBackExperienceDetail}
-        />
-      )}
-
-      {addCustomExperienceOpen && (
-        <TripDetailsAddCustomExperienceModal
-          onClose={onCloseAddCustomExperience}
-          onSubmit={handleAddCustomExperienceSubmit}
-          days={days}
-          tripExpenseItems={tripExpenseItems}
-          currency={currency}
-          customExperienceName={customExperienceName}
-          setCustomExperienceName={setCustomExperienceName}
-          customExperienceType={customExperienceType}
-          setCustomExperienceType={setCustomExperienceType}
-          customExperienceAddress={customExperienceAddress}
-          setCustomExperienceAddress={setCustomExperienceAddress}
-          customExperienceDateKey={customExperienceDateKey}
-          setCustomExperienceDateKey={setCustomExperienceDateKey}
-          customExperienceStartTime={customExperienceStartTime}
-          setCustomExperienceStartTime={setCustomExperienceStartTime}
-          customExperienceDurationHrs={customExperienceDurationHrs}
-          setCustomExperienceDurationHrs={setCustomExperienceDurationHrs}
-          customExperienceDurationMins={customExperienceDurationMins}
-          setCustomExperienceDurationMins={setCustomExperienceDurationMins}
-          customExperienceNote={customExperienceNote}
-          setCustomExperienceNote={setCustomExperienceNote}
-          customExperienceCost={customExperienceCost}
-          setCustomExperienceCost={setCustomExperienceCost}
-          customExperienceExternalLink={customExperienceExternalLink}
-          setCustomExperienceExternalLink={setCustomExperienceExternalLink}
-          customExperienceTravelDocs={customExperienceTravelDocs}
-          setCustomExperienceTravelDocs={setCustomExperienceTravelDocs}
         />
       )}
 

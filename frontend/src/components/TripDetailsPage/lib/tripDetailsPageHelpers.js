@@ -1296,20 +1296,30 @@ export function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) 
   const prefix = currencyCode === 'USD' ? 'US' : currencyCode;
   const symbol = currencyCode === 'USD' ? 'US$' : `${currencyCode} `;
   const byCategory = EXPENSE_CATEGORIES.map((c) => ({ ...c, amount: 0 }));
+  const normalizeAmount = (value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const raw = String(value ?? '').trim();
+    if (!raw) return 0;
+    const cleaned = raw.replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
   const merged = (Array.isArray(extraItems) ? extraItems : []).map((i, idx) => ({
     ...i,
     id: i.id || `expense-${idx}`,
-    total: Number(i.total) || 0,
+    total: normalizeAmount(i.total),
   }));
 
   merged.forEach((item) => {
-    const raw = String(item.categoryId || item.category || '').toLowerCase();
-    const key = raw === 'place' ? 'places'
-      : raw === 'experience' ? 'experiences'
-      : raw === 'transportation' ? 'transportations'
+    const raw = String(item.categoryId || item.category || '').toLowerCase().trim();
+    const key = raw === 'place' || raw === 'places' ? 'places'
+      : raw === 'experience' || raw === 'experiences' ? 'experiences'
+      : raw === 'transportation' || raw === 'transportations' || raw === 'transport' ? 'transportations'
+      : raw === 'food' || raw === 'food & beverage' || raw === 'food & beverages' ? 'food'
+      : raw === 'stay' || raw === 'stays' ? 'stays'
       : raw;
     const category = byCategory.find((c) => c.id === key);
-    if (category) category.amount += Number(item.total) || 0;
+    if (category) category.amount += normalizeAmount(item.total);
   });
 
   const total = byCategory.reduce((sum, c) => sum + c.amount, 0);
@@ -1319,6 +1329,7 @@ export function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) 
 export function formatExpenseDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\//g, ' ');
 }
 

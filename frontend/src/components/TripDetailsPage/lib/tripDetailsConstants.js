@@ -38,13 +38,6 @@ export const ADD_TO_TRIP_OPTIONS = [
     color: '#ea580c',
   },
   {
-    id: 'experience',
-    label: 'Experience',
-    description: 'Tours, Cruises, Indoor & Outdoor Activities...',
-    Icon: Ticket,
-    color: '#7c3aed',
-  },
-  {
     id: 'social',
     label: 'Import from social media',
     description: 'Import places and posts from Instagram, Pinterest, TikTok...',

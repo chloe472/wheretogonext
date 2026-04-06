@@ -49,11 +49,6 @@ export function useTripDetailsDiscoveryFilters({
   foodSearchQuery,
   foodDietaryFilter,
   foodSortBy,
-  experienceSearchQuery,
-  experienceTypeFilter,
-  experiencePriceRange,
-  experienceDurationFilter,
-  experienceSortBy,
   staySearchQuery,
   stayTypeFilter,
   stayStarFilter,
@@ -160,67 +155,6 @@ export function useTripDetailsDiscoveryFilters({
     return results;
   }, [discoveryData?.foods, foodSearchQuery, foodDietaryFilter, foodSortBy, cityFilter, cityQuery]);
 
-  const filteredExperiences = useMemo(() => {
-    const source = Array.isArray(discoveryData?.experiences) ? discoveryData.experiences : [];
-    let results = source;
-    if (experienceSearchQuery.trim()) {
-      const q = experienceSearchQuery.trim().toLowerCase();
-      results = results.filter((e) =>
-        (e.name || '').toLowerCase().includes(q)
-        || (e.description || '').toLowerCase().includes(q)
-        || (e.type || '').toLowerCase().includes(q),
-      );
-    }
-    if (experienceTypeFilter && experienceTypeFilter !== 'All') {
-      const type = experienceTypeFilter.toLowerCase();
-      results = results.filter((e) => (e.type || '').toLowerCase().includes(type));
-    }
-    if (experiencePriceRange && experiencePriceRange !== 'All') {
-      const normalizedPriceFilter = String(experiencePriceRange).toLowerCase();
-      results = results.filter((e) => {
-        const price = Number(e.price || 0);
-        if (normalizedPriceFilter.includes('0') && normalizedPriceFilter.includes('50')) return price < 50;
-        if (normalizedPriceFilter.includes('50') && normalizedPriceFilter.includes('100')) return price >= 50 && price < 100;
-        if (normalizedPriceFilter.includes('100') && normalizedPriceFilter.includes('200')) return price >= 100 && price < 200;
-        if (normalizedPriceFilter.includes('200+')) return price >= 200;
-        return true;
-      });
-    }
-    if (experienceDurationFilter && experienceDurationFilter !== 'All') {
-      const normalizedDurationFilter = String(experienceDurationFilter).toLowerCase();
-      results = results.filter((e) => {
-        const hrs = Number(e.durationHours || 0);
-        if (normalizedDurationFilter.includes('under 4') || normalizedDurationFilter.includes('less than 4')) return hrs < 4;
-        if (normalizedDurationFilter.includes('4-8')) return hrs >= 4 && hrs <= 8;
-        if (normalizedDurationFilter.includes('8-12')) return hrs > 8 && hrs <= 12;
-        if (normalizedDurationFilter.includes('12+') || normalizedDurationFilter.includes('full day')) return hrs > 12;
-        return true;
-      });
-    }
-    results = results.filter((e) => matchesCityFilter(e, cityFilter, cityQuery));
-    if (experienceSortBy === 'Price: Low to High') {
-      results = [...results].sort((a, b) => (a.price || 0) - (b.price || 0));
-    } else if (experienceSortBy === 'Price: High to Low') {
-      results = [...results].sort((a, b) => (b.price || 0) - (a.price || 0));
-    } else if (experienceSortBy === 'Highest Rated' || experienceSortBy === 'Rating') {
-      results = [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    } else if (experienceSortBy === 'Most reviewed') {
-      results = [...results].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
-    } else if (experienceSortBy === 'Duration') {
-      results = [...results].sort((a, b) => (a.durationHours || 0) - (b.durationHours || 0));
-    }
-    return results;
-  }, [
-    discoveryData?.experiences,
-    experienceSearchQuery,
-    experienceTypeFilter,
-    experiencePriceRange,
-    experienceDurationFilter,
-    experienceSortBy,
-    cityFilter,
-    cityQuery,
-  ]);
-
   const filteredStays = useMemo(() => {
     const source = Array.isArray(discoveryData?.stays) ? discoveryData.stays : [];
     let results = source;
@@ -281,7 +215,6 @@ export function useTripDetailsDiscoveryFilters({
   return {
     filteredPlaces,
     filteredFoods,
-    filteredExperiences,
     filteredStays,
     stayTypeOptions,
   };
