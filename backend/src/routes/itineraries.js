@@ -114,6 +114,21 @@ function parseDurationFilter(durationParam) {
   return null;
 }
 
+function normalizeDayTitles(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const next = {};
+  Object.entries(input).forEach(([rawKey, rawValue]) => {
+    if (rawValue == null) return;
+    const value = String(rawValue).trim();
+    if (!value) return;
+    const keyNum = Number(rawKey);
+    const key = Number.isFinite(keyNum) && keyNum >= 1 ? String(keyNum) : String(rawKey).trim();
+    if (!key) return;
+    next[key] = value;
+  });
+  return next;
+}
+
 /**
  * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
  */
@@ -1051,6 +1066,7 @@ router.post('/', requireAuth, async (req, res) => {
       categories: normalizeCategories(req.body?.categories),
       coverImages: coverImagesFinal,
       tripExpenseItems: tripExpenseItemsIn,
+      dayTitles: normalizeDayTitles(req.body?.dayTitles),
       generalNotes: req.body?.generalNotes != null ? String(req.body.generalNotes) : '',
       generalAttachments: Array.isArray(req.body?.generalAttachments) ? req.body.generalAttachments : [],
       places: placesFinal,
@@ -1215,6 +1231,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.generalAttachments != null && Array.isArray(body.generalAttachments)) {
       existing.generalAttachments = body.generalAttachments;
     }
+    if (body.dayTitles != null) existing.dayTitles = normalizeDayTitles(body.dayTitles);
     if (body.categories != null) existing.categories = normalizeCategories(body.categories);
     if (body.coverImages != null) existing.coverImages = normalizeCoverImages(body.coverImages);
     if (body.places != null && !placesDerivedFromTripExpense) {

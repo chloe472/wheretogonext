@@ -116,7 +116,8 @@ import {
   rangesOverlap,
   toHHmmLocal,
 } from './lib/tripDetailsPageHelpers';
-import { isCurrentUserTripCollaborator } from './lib/tripCollaborationAccess';
+import { isCurrentUserTripCollaborator, getCurrentUserCollaboratorRole } from './lib/tripCollaborationAccess';
+import { TripAccessContext } from './lib/TripAccessContext';
 
 export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
@@ -237,6 +238,9 @@ export default function TripDetailsPage({ user, onLogout }) {
   const [optimizeRouteDay, setOptimizeRouteDay] = useState(null);
   const [optimizeRouteStartId, setOptimizeRouteStartId] = useState('');
   const [optimizeRouteEndId, setOptimizeRouteEndId] = useState('');
+  const dayTitlesHydratedRef = useRef({ tripId: null, key: '' });
+  const dayTitlesPersistTimerRef = useRef(null);
+  const dayTitlesPersistKeyRef = useRef({ tripId: null, key: '' });
   const skipExpenseSaveToastUntilRef = useRef(0);
 
   const whereModalDisplayStart = dateRange?.startDate ?? trip?.startDate;
@@ -441,6 +445,26 @@ export default function TripDetailsPage({ user, onLogout }) {
     }
   }, [tripId, serverItinerary]);
 
+  const handleRemoveCollaborator = useCallback(async (userId) => {
+    const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+    const newCollabs = currentCollabs
+      .filter((c) => String(c?.user?.id || c?.userId || '') !== String(userId))
+      .map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' }));
+    const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+    setServerItinerary((prev) => ({ ...prev, ...updated }));
+  }, [tripId, serverItinerary, setServerItinerary]);
+
+  // pendingRoles: { [userId]: role } — only entries that changed
+  const handleSaveCollaboratorRoles = useCallback(async (pendingRoles) => {
+    const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+    const newCollabs = currentCollabs.map((c) => {
+      const cId = String(c?.user?.id || c?.userId || '');
+      return { userId: cId, role: pendingRoles[cId] ?? c?.role ?? 'viewer' };
+    });
+    const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+    setServerItinerary((prev) => ({ ...prev, ...updated }));
+  }, [tripId, serverItinerary, setServerItinerary]);
+
   const handleInviteByUser = useCallback(async (searchUser, role = 'viewer') => {
     const userId = String(searchUser?.id || '');
     if (!userId) throw new Error('Invalid user.');
@@ -576,6 +600,76 @@ export default function TripDetailsPage({ user, onLogout }) {
   const setDayTitle = (dayNum, value) => {
     setDayTitles((prev) => ({ ...prev, [dayNum]: value }));
   };
+
+  const normalizeDayTitles = useCallback((input) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const next = {};
+    Object.entries(input).forEach(([rawKey, rawValue]) => {
+      if (rawValue == null) return;
+      const value = String(rawValue).trim();
+      if (!value) return;
+      const keyNum = Number(rawKey);
+      const key = Number.isFinite(keyNum) && keyNum >= 1 ? String(keyNum) : String(rawKey).trim();
+      if (!key) return;
+      next[key] = value;
+    });
+    return next;
+  }, []);
+
+  const accessInfo = useMemo(() => {
+    const userId = String(user?.id || user?._id || '').trim();
+    const creatorId = String(
+      serverItinerary?.creator?._id ||
+      serverItinerary?.creator?.id ||
+      serverItinerary?.creator ||
+      ''
+    ).trim();
+    const isCreator = Boolean(userId && creatorId && userId === creatorId);
+    const collaboratorRole = isCreator ? null : getCurrentUserCollaboratorRole(user, serverItinerary?.collaborators);
+    const readOnly = !isCreator && collaboratorRole === 'viewer';
+    return { userId, creatorId, isCreator, collaboratorRole, readOnly };
+  }, [user, serverItinerary]);
+
+  const serverDayTitles = useMemo(
+    () => normalizeDayTitles(serverItinerary?.dayTitles),
+    [serverItinerary?.dayTitles, normalizeDayTitles],
+  );
+
+  useEffect(() => {
+    const key = JSON.stringify(serverDayTitles);
+    if (dayTitlesHydratedRef.current.tripId !== tripId || dayTitlesHydratedRef.current.key !== key) {
+      setDayTitles(serverDayTitles);
+      dayTitlesHydratedRef.current = { tripId, key };
+    }
+  }, [tripId, serverDayTitles]);
+
+  useEffect(() => {
+    if (!tripId || accessInfo.readOnly) return;
+    const nextPayload = normalizeDayTitles(dayTitles);
+    const payloadKey = JSON.stringify(nextPayload);
+    const serverKey = JSON.stringify(serverDayTitles);
+    if (payloadKey === serverKey) return;
+    if (dayTitlesPersistKeyRef.current.tripId === tripId && dayTitlesPersistKeyRef.current.key === payloadKey) return;
+    if (dayTitlesPersistTimerRef.current) {
+      clearTimeout(dayTitlesPersistTimerRef.current);
+    }
+    dayTitlesPersistTimerRef.current = setTimeout(async () => {
+      try {
+        const updated = await updateItinerary(tripId, { dayTitles: nextPayload });
+        setServerItinerary((prev) => (
+          prev ? { ...prev, dayTitles: updated?.dayTitles ?? nextPayload } : prev
+        ));
+        dayTitlesPersistKeyRef.current = { tripId, key: payloadKey };
+      } catch (err) {
+        showInAppNotice(err?.message || 'Failed to save day titles.', 'error');
+      }
+    }, 600);
+    return () => {
+      if (dayTitlesPersistTimerRef.current) {
+        clearTimeout(dayTitlesPersistTimerRef.current);
+      }
+    };
+  }, [accessInfo.readOnly, dayTitles, normalizeDayTitles, serverDayTitles, setServerItinerary, showInAppNotice, tripId]);
 
   const reorderKanbanDays = useCallback((sourceDayNum, targetDayNum) => {
     const fromDayNum = Number(sourceDayNum);
@@ -1110,13 +1204,13 @@ export default function TripDetailsPage({ user, onLogout }) {
     );
   }
 
-  const userId = String(user?.id || user?._id || '').trim();
-  const creatorId = String(
-    serverItinerary?.creator?._id ||
-    serverItinerary?.creator?.id ||
-    serverItinerary?.creator ||
-    ''
-  ).trim();
+  const {
+    userId,
+    creatorId,
+    isCreator,
+    collaboratorRole,
+    readOnly,
+  } = accessInfo;
   if (
     userId
     && creatorId
@@ -1128,6 +1222,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   }
 
   return (
+    <TripAccessContext.Provider value={{ readOnly }}>
     <div className="trip-details">
       <TripDetailsPageLayout
         trip={trip}
@@ -1233,6 +1328,9 @@ export default function TripDetailsPage({ user, onLogout }) {
         open={shareModalOpen}
         loading={shareLoading}
         friends={shareFriends}
+        collaborators={serverItinerary?.collaborators}
+        onSaveCollaboratorRoles={handleSaveCollaboratorRoles}
+        onRemoveCollaborator={handleRemoveCollaborator}
         onClose={() => setShareModalOpen(false)}
         onShareWithFriend={handleShareWithFriend}
         onInviteByEmail={handleInviteByEmail}
@@ -1528,5 +1626,6 @@ export default function TripDetailsPage({ user, onLogout }) {
         whereTotalTripDays={whereTotalTripDays}
       />
     </div>
+    </TripAccessContext.Provider>
   );
 }
