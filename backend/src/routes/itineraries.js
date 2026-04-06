@@ -13,43 +13,22 @@ const router = Router();
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'itineraries');
 fs.mkdirSync(uploadDir, { recursive: true });
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg';
-    cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`);
-  },
+  filename: (req, file, cb) => { const ext = path.extname(file.originalname || '').toLowerCase(); const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg'; cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`); }
 });
+const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
 
-const ALLOWED_IMAGE_MIME = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-]);
-
-const uploadMw = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_IMAGE_MIME.has(file.mimetype)) return cb(null, true);
-    cb(new Error('Invalid file type. Use SVG, PNG, JPG, WEBP, or GIF.'));
-  },
-});
-
-
+const uploadMw = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => { if (ALLOWED_IMAGE_MIME.has(file.mimetype)) return cb(null, true); cb(new Error('Invalid file type. Use SVG, PNG, JPG, WEBP, or GIF.')); } });
 const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
 const recentViewHits = new Map();
 
 function shouldCountView(req, itineraryId) {
   const ip = String(
     req.headers['x-forwarded-for']
-    || req.socket?.remoteAddress
-    || req.ip
-    || ''
+      || req.socket?.remoteAddress
+      || req.ip
+      || ''
   ).split(',')[0].trim();
   const ua = String(req.headers['user-agent'] || '').trim();
   const viewerKey = req.userId ? `u:${req.userId}` : `a:${ip}|${ua}`;
@@ -57,7 +36,7 @@ function shouldCountView(req, itineraryId) {
   const now = Date.now();
   const last = recentViewHits.get(key) || 0;
 
-
+  
   if (recentViewHits.size > 5000) {
     for (const [hitKey, ts] of recentViewHits.entries()) {
       if (now - ts > VIEW_DEDUPE_WINDOW_MS) {
@@ -164,85 +143,13 @@ function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
 
 
 
-function placesFromTripExpenseItems(items, startDateStr) {
-  if (!Array.isArray(items)) return [];
-  const raw = [];
-  for (const it of items) {
-    const cid = String(it?.categoryId || '').toLowerCase();
-    if (!EXPENSE_ITEM_CATEGORIES_FOR_PLACES.has(cid)) continue;
+const placesFromTripExpenseItems = (items, startDateStr) => { if (!Array.isArray(items)) return []; const raw = []; for (const it of items) { const cid = String(it?.categoryId || '').toLowerCase(); if (!EXPENSE_ITEM_CATEGORIES_FOR_PLACES.has(cid)) continue; const name = String(it?.name || '').trim(); if (!name) continue; const itemDate = cid === 'stays' ? (it.checkInDate || it.date || '') : (it.date || ''); const dayNumber = dayNumberFromStartAndItemDate(startDateStr, itemDate); raw.push({ name, category: String(it?.category != null ? it.category : it?.categoryId || ''), address: String(it?.detail != null ? it.detail : it?.address || ''), timeSlot: formatTimeRange(it?.startTime, it?.durationHrs, it?.durationMins), notes: String(it?.notes != null ? it.notes : ''), image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''), rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null, reviewCount: it?.reviewCount != null && it.reviewCount !== '' ? Number(it.reviewCount) : null, dayNumber, lat: it?.lat, lng: it?.lng }); } return normalizePlaces(raw); };
 
-    const name = String(it?.name || '').trim();
-    if (!name) continue;
+const normalizePlaces = (raw) => !Array.isArray(raw) ? [] : raw.map((p) => ({ name: p?.name != null ? String(p.name) : '', category: p?.category != null ? String(p.category) : '', address: p?.address != null ? String(p.address) : '', timeSlot: p?.timeSlot != null ? String(p.timeSlot) : '', notes: p?.notes != null ? String(p.notes) : '', image: p?.image != null ? String(p.image) : '', rating: p?.rating != null && p.rating !== '' ? Number(p.rating) : null, reviewCount: p?.reviewCount != null && p.reviewCount !== '' ? Number(p.reviewCount) : null, dayNumber: Math.max(1, Number(p?.dayNumber) || 1), lat: p?.lat != null && p.lat !== '' && Number.isFinite(Number(p.lat)) ? Number(p.lat) : null, lng: p?.lng != null && p.lng !== '' && Number.isFinite(Number(p.lng)) ? Number(p.lng) : null }));
 
-    const itemDate = cid === 'stays' ? (it.checkInDate || it.date || '') : (it.date || '');
-    const dayNumber = dayNumberFromStartAndItemDate(startDateStr, itemDate);
+const serializeComment = (c, currentUserId) => { const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : []; const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false; let userIdStr = ''; let userPicture = ''; if (c.userId && typeof c.userId === 'object' && c.userId._id) { userIdStr = String(c.userId._id); userPicture = c.userId.picture != null ? String(c.userId.picture).trim() : ''; } else if (c.userId) { userIdStr = String(c.userId); } return { id: String(c._id), itineraryId: String(c.itineraryId), userId: userIdStr, userName: c.userName || '', userPicture, body: c.body, parentId: c.parentId ? String(c.parentId) : null, likeCount: likes.length, likedByMe, createdAt: c.createdAt, updatedAt: c.updatedAt }; };
 
-    raw.push({
-      name,
-      category: String(it?.category != null ? it.category : it?.categoryId || ''),
-      address: String(it?.detail != null ? it.detail : it?.address || ''),
-      timeSlot: formatTimeRange(it?.startTime, it?.durationHrs, it?.durationMins),
-      notes: String(it?.notes != null ? it.notes : ''),
-      image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''),
-      rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null,
-      reviewCount: it?.reviewCount != null && it.reviewCount !== '' ? Number(it.reviewCount) : null,
-      dayNumber,
-      lat: it?.lat,
-      lng: it?.lng,
-    });
-  }
-  return normalizePlaces(raw);
-}
-
-function normalizePlaces(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((p) => ({
-    name: p?.name != null ? String(p.name) : '',
-    category: p?.category != null ? String(p.category) : '',
-    address: p?.address != null ? String(p.address) : '',
-    timeSlot: p?.timeSlot != null ? String(p.timeSlot) : '',
-    notes: p?.notes != null ? String(p.notes) : '',
-    image: p?.image != null ? String(p.image) : '',
-    rating: p?.rating != null && p.rating !== '' ? Number(p.rating) : null,
-    reviewCount: p?.reviewCount != null && p.reviewCount !== '' ? Number(p.reviewCount) : null,
-    dayNumber: Math.max(1, Number(p?.dayNumber) || 1),
-    lat: p?.lat != null && p.lat !== '' && Number.isFinite(Number(p.lat)) ? Number(p.lat) : null,
-    lng: p?.lng != null && p.lng !== '' && Number.isFinite(Number(p.lng)) ? Number(p.lng) : null,
-  }));
-}
-
-function serializeComment(c, currentUserId) {
-  const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : [];
-  const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false;
-
-  let userIdStr = '';
-  let userPicture = '';
-  if (c.userId && typeof c.userId === 'object' && c.userId._id) {
-    userIdStr = String(c.userId._id);
-    userPicture = c.userId.picture != null ? String(c.userId.picture).trim() : '';
-  } else if (c.userId) {
-    userIdStr = String(c.userId);
-  }
-
-  return {
-    id: String(c._id),
-    itineraryId: String(c.itineraryId),
-    userId: userIdStr,
-    userName: c.userName || '',
-    userPicture,
-    body: c.body,
-    parentId: c.parentId ? String(c.parentId) : null,
-    likeCount: likes.length,
-    likedByMe,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-  };
-}
-
-function normalizeCategories(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((c) => String(c).trim()).filter(Boolean);
-}
+const normalizeCategories = (raw) => !Array.isArray(raw) ? [] : raw.map((c) => String(c).trim()).filter(Boolean);
 
 function normalizeCitySegments(raw) {
   if (!Array.isArray(raw)) return [];
@@ -503,15 +410,7 @@ async function enrichCollaboratorsInItineraries(docs) {
   return Array.isArray(docs) ? enriched : enriched[0];
 }
 
-function toAbsoluteAssetUrl(req, rawUrl) {
-  const u = String(rawUrl || '').trim();
-  if (!u) return '';
-  if (/^(https?:)?\/\//i.test(u) || u.startsWith('data:')) return u;
-  if (!u.startsWith('/')) return u;
-  const host = req.get('host') || 'localhost:5000';
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  return `${proto}://${host}${u}`;
-}
+const toAbsoluteAssetUrl = (req, rawUrl) => { const u = String(rawUrl || '').trim(); if (!u) return ''; if (/^(https?:)?\/\//i.test(u) || u.startsWith('data:')) return u; if (!u.startsWith('/')) return u; const host = req.get('host') || 'localhost:5000'; const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'; return `${proto}://${host}${u}`; };
 
 
 
@@ -646,9 +545,7 @@ router.post('/upload', requireAuth, (req, res, next) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     const rel = `/uploads/itineraries/${req.file.filename}`;
-    const host = req.get('host') || 'localhost:5000';
-    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const url = `${proto}://${host}${rel}`;
+    const url = toAbsoluteAssetUrl(req, rel);
     return res.status(201).json({ url, path: rel });
   });
 });

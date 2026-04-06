@@ -5,7 +5,8 @@ VITE_GOOGLE_CLIENT_ID=
 # Enable "Maps JavaScript API" in Google Cloud for this key (fixes ApiNotActivatedMapError).
 VITE_GOOGLE_MAPS_API_KEY=
 VITE_AIRLABS_API_KEY=
-# Social-import AI (screenshots) is implemented on the BACKEND — set these in backend/.env, not here:
-# GEMINI_API_KEY=
-# OPENAI_API_KEY=
+# Required for social media image analysis
+GEMINI_API_KEY=
+OPENAI_API_KEY=
+# Optional:
 # GEMINI_MODEL=gemini-2.0-flash
