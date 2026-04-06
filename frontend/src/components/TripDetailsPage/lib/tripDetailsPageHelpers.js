@@ -1,6 +1,5 @@
 import { Footprints, Bike, Car, Train } from 'lucide-react';
 import { resolveImageUrl } from '../../../lib/imageFallback';
-import { searchLocations } from './tripDetailsLocationData';
 
 export const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -296,13 +295,25 @@ export function isCityWhereLocation(loc) {
 export function findExactWhereLocationMatch(query) {
   const value = String(query || '').trim();
   if (!value) return null;
-  return searchLocations(value, 50).find((loc) => {
-    const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
-    return (
-      String(loc.name || '').toLowerCase() === value.toLowerCase()
-      || String(full || '').toLowerCase() === value.toLowerCase()
-    );
-  }) || null;
+
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  if (parts.length > 1) {
+    return {
+      id: `where-${parts[0].toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      name: parts[0],
+      country: parts.slice(1).join(', '),
+      type: 'City',
+    };
+  }
+
+  return {
+    id: `where-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    name: value,
+    country: undefined,
+    type: 'City',
+  };
 }
 
 export const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND']);

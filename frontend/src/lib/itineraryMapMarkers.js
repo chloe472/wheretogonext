@@ -1,5 +1,3 @@
-import { getMapCenterForDestination } from '../data/mockPlaces';
-
 /** Same mappable stop categories as trip planning / backend `placesFromTripExpenseItems`. */
 const MAP_CATEGORY_IDS = new Set(['places', 'food', 'experiences', 'stays']);
 
@@ -106,7 +104,7 @@ export function buildItineraryMapMarkers(itinerary) {
   if (markers.length > 0) {
     center = [markers[0].lat, markers[0].lng];
   } else {
-    center = getMapCenterForDestination(itinerary.destination || itinerary.locations);
+    center = [20, 0];
   }
 
   return { markers, center };

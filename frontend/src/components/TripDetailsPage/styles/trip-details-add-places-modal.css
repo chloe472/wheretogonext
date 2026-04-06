@@ -126,10 +126,13 @@
 }
 
 .trip-details__add-places-sort {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.trip-details__add-places-sort--push {
+  margin-left: auto;
 }
 
 .trip-details__add-places-sort label {
@@ -143,6 +146,84 @@
   border: 1px solid var(--wtg-border);
   border-radius: 6px;
   background: var(--wtg-surface);
+}
+
+.trip-details__add-places-dropdown {
+  position: relative;
+}
+
+.trip-details__add-places-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--wtg-text);
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.trip-details__add-places-filter-btn:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.trip-details__add-places-filter-btn--open {
+  border-color: var(--wtg-accent);
+}
+
+.trip-details__add-places-filter-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(125, 107, 90, 0.18), 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.trip-details__add-places-filter-btn-text {
+  line-height: 1;
+}
+
+.trip-details__add-places-filter-chevron {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.trip-details__add-places-filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  min-width: 140px;
+  padding: 0.5rem 0;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(61, 52, 40, 0.12);
+  z-index: 100;
+}
+
+.trip-details__add-places-filter-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wtg-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.trip-details__add-places-filter-option:hover {
+  background: var(--wtg-hover);
+}
+
+.trip-details__add-places-filter-option--active {
+  font-weight: 700;
 }
 
 .trip-details__add-places-grid {

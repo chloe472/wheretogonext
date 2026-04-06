@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Bell, User, Search } from 'lucide-react';
-import { searchLocations } from '../../data/mockLocations';
+import { fetchCitySuggestions } from '../../api/locationsApi';
 import {
   fetchNotifications,
   markNotificationRead,
@@ -18,6 +18,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -28,7 +29,30 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
   const notificationsRef = useRef(null);
   const userId = String(user?.id || user?._id || '').trim();
 
-  const searchSuggestions = searchLocations(searchQuery);
+  useEffect(() => {
+    const trimmed = String(searchQuery || '').trim();
+    if (!trimmed) {
+      setSearchSuggestions([]);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      try {
+        const next = await fetchCitySuggestions(trimmed, { signal: controller.signal, limit: 8 });
+        setSearchSuggestions(Array.isArray(next) ? next : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setSearchSuggestions([]);
+        }
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     function handleClickOutside(e) {

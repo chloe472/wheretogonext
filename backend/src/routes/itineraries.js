@@ -40,16 +40,16 @@ const uploadMw = multer({
   },
 });
 
-// Prevent accidental double-counts from rapid duplicate requests (e.g., StrictMode/dev double-fetch).
+
 const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
 const recentViewHits = new Map();
 
 function shouldCountView(req, itineraryId) {
   const ip = String(
     req.headers['x-forwarded-for']
-      || req.socket?.remoteAddress
-      || req.ip
-      || ''
+    || req.socket?.remoteAddress
+    || req.ip
+    || ''
   ).split(',')[0].trim();
   const ua = String(req.headers['user-agent'] || '').trim();
   const viewerKey = req.userId ? `u:${req.userId}` : `a:${ip}|${ua}`;
@@ -57,7 +57,7 @@ function shouldCountView(req, itineraryId) {
   const now = Date.now();
   const last = recentViewHits.get(key) || 0;
 
-  // Opportunistic cleanup to keep memory bounded.
+
   if (recentViewHits.size > 5000) {
     for (const [hitKey, ts] of recentViewHits.entries()) {
       if (now - ts > VIEW_DEDUPE_WINDOW_MS) {
@@ -82,7 +82,7 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Max day number from places; default 1. */
+
 function computeDaysFromPlaces(places) {
   if (!Array.isArray(places) || places.length === 0) return 1;
   const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1);
@@ -90,7 +90,7 @@ function computeDaysFromPlaces(places) {
   return Math.max(1, ...nums);
 }
 
-/** Inclusive calendar-day count from YYYY-MM-DD strings (avoids TZ edge cases at noon UTC). */
+
 function computeDaysFromDateRange(startStr, endStr) {
   const a = String(startStr || '').trim();
   const b = String(endStr || '').trim();
@@ -143,7 +143,7 @@ function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
   return Math.max(1, diff + 1);
 }
 
-/** Kanban categories that represent mappable / publishable stops (not transport-only rows). */
+
 const EXPENSE_ITEM_CATEGORIES_FOR_PLACES = new Set(['places', 'food', 'experiences', 'stays']);
 
 function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
@@ -161,9 +161,9 @@ function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
   return end !== start ? `${start} - ${end}` : start;
 }
 
-/**
- * Build Itinerary.places[] from tripExpenseItems for Explore / public views.
- */
+
+
+
 function placesFromTripExpenseItems(items, startDateStr) {
   if (!Array.isArray(items)) return [];
   const raw = [];
@@ -341,10 +341,10 @@ async function collaboratorRecipientIds(collaborators, excludeUserId = '') {
   return Array.from(ids);
 }
 
-/**
- * True if user is listed as a collaborator with an editor-capable role (not viewer).
- * Matches by collaborator userId or by email (resolved from User record).
- */
+
+
+
+
 async function isCollaboratorEditorUser(userId, itineraryDoc) {
   const uid = String(userId || '').trim();
   if (!uid || !itineraryDoc) return false;
@@ -513,11 +513,11 @@ function toAbsoluteAssetUrl(req, rawUrl) {
   return `${proto}://${host}${u}`;
 }
 
-/**
- * GET /api/itineraries
- * Public community list: published + public only.
- * Query: sort, categories, duration, search
- */
+
+
+
+
+
 router.get('/', async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -576,9 +576,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/mine
- */
+
+
+
 router.get('/mine', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -599,9 +599,9 @@ router.get('/mine', requireAuth, async (req, res) => {
 });
 
 
-/**
- * GET /api/itineraries/shared-with-me
- */
+
+
+
 router.get('/shared-with-me', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -634,9 +634,9 @@ router.get('/shared-with-me', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/upload - single image (multipart field name: file)
- */
+
+
+
 router.post('/upload', requireAuth, (req, res, next) => {
   uploadMw.single('file')(req, res, (err) => {
     if (err) {
@@ -653,9 +653,9 @@ router.post('/upload', requireAuth, (req, res, next) => {
   });
 });
 
-/**
- * GET /api/itineraries/:id/comments
- */
+
+
+
 router.get('/:id/comments', optionalAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -681,9 +681,9 @@ router.get('/:id/comments', optionalAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/comments
- */
+
+
+
 router.post('/:id/comments', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -749,9 +749,9 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/comments/:commentId/like
- */
+
+
+
 router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -785,11 +785,11 @@ router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/duplicate
- * Copy an itinerary into the current user's account as a new private, unpublished trip.
- * Source must be public+published (community) or owned by the user.
- */
+
+
+
+
+
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -889,10 +889,10 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/:id/customized-copy
- * Whether the current user already has a trip duplicated from this source itinerary.
- */
+
+
+
+
 router.get('/:id/customized-copy', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -921,10 +921,10 @@ router.get('/:id/customized-copy', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/:id
- * Increments viewCount only for public itineraries viewed by non-owners.
- */
+
+
+
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -969,9 +969,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries
- */
+
+
+
 router.post('/', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1106,10 +1106,10 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/share
- * Send share notifications to a list of friends — does not modify collaborators.
- */
+
+
+
+
 router.post('/:id/share', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) return res.status(503).json({ error: 'Database unavailable' });
@@ -1139,7 +1139,7 @@ router.post('/:id/share', requireAuth, async (req, res) => {
           type: 'itinerary_added',
           title: `${senderName} shared a trip with you`,
           message: `"${tripTitle}" — tap to view.`,
-          // Send users to the kanban trip details view (editable) when a trip is shared.
+
           link: `/trip/${String(itinerary._id)}`,
           meta: { itineraryId: String(itinerary._id) },
         })
@@ -1154,9 +1154,9 @@ router.post('/:id/share', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * PUT /api/itineraries/:id
- */
+
+
+
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1323,9 +1323,9 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/itineraries/:id
- */
+
+
+
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1353,9 +1353,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/publish
- */
+
+
+
 router.post('/:id/publish', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
