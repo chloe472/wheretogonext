@@ -53,8 +53,19 @@ function dedupeFilterFromPayload(payload) {
 async function createNotificationDeduped(payload) {
   const filter = dedupeFilterFromPayload(payload);
   if (filter) {
-    const exists = await Notification.findOne(filter).select('_id').lean();
-    if (exists?._id) return null;
+    const exists = await Notification.findOne(filter).lean();
+    if (exists?._id) {
+      // Skip creating a duplicate DB record but still push the SSE event so
+      // tripmates receive real-time updates even if they haven't read the
+      // previous notification yet.
+      const populated = await Notification.findById(exists._id)
+        .populate('actor', 'name username picture')
+        .lean();
+      if (populated) {
+        pushToUser(String(populated.recipient), 'notification', serializeNotification(populated));
+      }
+      return null;
+    }
   }
   const doc = await Notification.create(payload);
   if (doc) {

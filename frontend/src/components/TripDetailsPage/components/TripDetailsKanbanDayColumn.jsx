@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTripAccess } from '../lib/TripAccessContext';
 import {
   Bed,
   Camera,
@@ -90,6 +91,7 @@ export default function TripDetailsKanbanDayColumn({
 }) {
   const NOTE_COLLAPSE_CHAR_LIMIT = 120;
   const [expandedNotesByItem, setExpandedNotesByItem] = useState({});
+  const { readOnly } = useTripAccess();
 
   // Icon render break fix
   const isRenderableIcon = (candidate) => (
@@ -112,16 +114,17 @@ export default function TripDetailsKanbanDayColumn({
       className={`trip-details__day-col${kanbanDraggingDayNum === day.dayNum ? ' trip-details__day-col--dragging' : ''}${kanbanDragOverDayNum === day.dayNum && kanbanDraggingDayNum !== day.dayNum ? ' trip-details__day-col--drag-over' : ''}`}
       style={{ width: getDayColumnWidth(day.dayNum), flexBasis: getDayColumnWidth(day.dayNum) }}
       onDragOver={(e) => {
-        if (kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
+        if (readOnly || kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       }}
       onDragEnter={(e) => {
-        if (kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
+        if (readOnly || kanbanDraggingDayNum == null || kanbanDraggingDayNum === day.dayNum) return;
         e.preventDefault();
         handleKanbanDayDragEnter(day.dayNum);
       }}
       onDrop={(e) => {
+        if (readOnly) return;
         e.preventDefault();
         handleKanbanDayDrop(day.dayNum);
       }}
@@ -129,15 +132,15 @@ export default function TripDetailsKanbanDayColumn({
       <div className="trip-details__day-header">
         <div
           className="trip-details__day-heading"
-          draggable
-          onDragStart={(e) => {
+          draggable={!readOnly}
+          onDragStart={readOnly ? undefined : (e) => {
             handleKanbanDayDragStart(day.dayNum);
             if (e.dataTransfer) {
               e.dataTransfer.effectAllowed = 'move';
               e.dataTransfer.setData('text/plain', String(day.dayNum));
             }
           }}
-          onDragEnd={handleKanbanDayDragEnd}
+          onDragEnd={readOnly ? undefined : handleKanbanDayDragEnd}
           aria-label={`Drag Day ${day.dayNum} to reorder`}
         >
           <GripVertical size={14} className="trip-details__grip" aria-hidden />
@@ -146,34 +149,38 @@ export default function TripDetailsKanbanDayColumn({
           </h2>
         </div>
         <div className="trip-details__day-header-actions" data-day-menu>
-          <button
-            type="button"
-            className="trip-details__day-optimize-btn"
-            aria-label="Optimize route"
-            title={dayItemsCount < 2 ? 'Add at least 2 places to optimize route' : 'Optimize route'}
-            disabled={dayItemsCount < 2}
-            onClick={() => {
-              const items = getSortedDayItems(tripExpenseItems, day.date)
-                .filter((item) => !isStayItem(item));
-              if (items.length < 2) return;
-              setOptimizeRouteDay(day);
-              setOptimizeRouteStartId(items[0]?.id ?? '');
-              setOptimizeRouteEndId(items[items.length - 1]?.id ?? '');
-              setOptimizeRouteModalOpen(true);
-            }}
-          >
-            <Route size={16} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="trip-details__day-menu"
-            aria-label="Day options"
-            aria-expanded={isDayMenuOpen}
-            aria-haspopup="menu"
-            onClick={() => { setOpenDayMenuKey(isDayMenuOpen ? null : day.dayNum); setDayColorPickerDay(null); }}
-          >
-            <MoreVertical size={16} aria-hidden />
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="trip-details__day-optimize-btn"
+              aria-label="Optimize route"
+              title={dayItemsCount < 2 ? 'Add at least 2 places to optimize route' : 'Optimize route'}
+              disabled={dayItemsCount < 2}
+              onClick={() => {
+                const items = getSortedDayItems(tripExpenseItems, day.date)
+                  .filter((item) => !isStayItem(item));
+                if (items.length < 2) return;
+                setOptimizeRouteDay(day);
+                setOptimizeRouteStartId(items[0]?.id ?? '');
+                setOptimizeRouteEndId(items[items.length - 1]?.id ?? '');
+                setOptimizeRouteModalOpen(true);
+              }}
+            >
+              <Route size={16} aria-hidden />
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              className="trip-details__day-menu"
+              aria-label="Day options"
+              aria-expanded={isDayMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => { setOpenDayMenuKey(isDayMenuOpen ? null : day.dayNum); setDayColorPickerDay(null); }}
+            >
+              <MoreVertical size={16} aria-hidden />
+            </button>
+          )}
           {isDayMenuOpen && (
             <div className="trip-details__day-dropdown" role="menu">
               <button
@@ -400,7 +407,11 @@ export default function TripDetailsKanbanDayColumn({
         className="trip-details__day-input"
         placeholder="Add day title..."
         value={dayTitles[day.dayNum] ?? ''}
-        onChange={(e) => setDayTitle(day.dayNum, e.target.value)}
+        onChange={(e) => {
+          if (readOnly) return;
+          setDayTitle(day.dayNum, e.target.value);
+        }}
+        disabled={readOnly}
       />
       <div className="trip-details__day-content">
         {dayStayItems.map((stayItem) => {
@@ -477,7 +488,7 @@ export default function TripDetailsKanbanDayColumn({
                 role="button"
                 tabIndex={0}
                 onClick={() => {
-                  if (isEditableItineraryItem(item)) {
+                  if (!readOnly && isEditableItineraryItem(item)) {
                     setEditPlaceItem(item);
                     return;
                   }
@@ -486,7 +497,7 @@ export default function TripDetailsKanbanDayColumn({
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' && e.key !== ' ') return;
                   e.preventDefault();
-                  if (isEditableItineraryItem(item)) {
+                  if (!readOnly && isEditableItineraryItem(item)) {
                     setEditPlaceItem(item);
                     return;
                   }
@@ -586,7 +597,7 @@ export default function TripDetailsKanbanDayColumn({
                     </div>
                   ) : null}
                 </div>
-                {!isTransportItem ? (
+                {!isTransportItem && !readOnly ? (
                   <button
                     type="button"
                     className="trip-details__itinerary-edit-btn"
@@ -652,19 +663,21 @@ export default function TripDetailsKanbanDayColumn({
           );
         })}
       </div>
-      <button
-        type="button"
-        className="trip-details__add-btn"
-        onClick={(e) => {
-          setAddSheetFromCalendar(false);
-          setAddSheetDay(day.dayNum);
-          const rect = e.currentTarget.getBoundingClientRect();
-          setAddSheetAnchor({ top: rect.top, left: rect.left, width: rect.width });
-        }}
-      >
-        <Plus size={16} aria-hidden />
-        Add To Trip
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          className="trip-details__add-btn"
+          onClick={(e) => {
+            setAddSheetFromCalendar(false);
+            setAddSheetDay(day.dayNum);
+            const rect = e.currentTarget.getBoundingClientRect();
+            setAddSheetAnchor({ top: rect.top, left: rect.left, width: rect.width });
+          }}
+        >
+          <Plus size={16} aria-hidden />
+          Add To Trip
+        </button>
+      )}
     </section>
   );
 }

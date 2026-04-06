@@ -23,14 +23,60 @@ const uploadMw = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFi
 const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
 const recentViewHits = new Map();
 
-const shouldCountView = (req, itineraryId) => { const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '').split(',')[0].trim(); const ua = String(req.headers['user-agent'] || '').trim(); const viewerKey = req.userId ? `u:${req.userId}` : `a:${ip}|${ua}`; const key = `${String(itineraryId)}::${viewerKey}`; const now = Date.now(); const last = recentViewHits.get(key) || 0; if (recentViewHits.size > 5000) { for (const [hitKey, ts] of recentViewHits.entries()) { if (now - ts > VIEW_DEDUPE_WINDOW_MS) { recentViewHits.delete(hitKey); } } } if (now - last < VIEW_DEDUPE_WINDOW_MS) return false; recentViewHits.set(key, now); return true; };
+function shouldCountView(req, itineraryId) {
+  const ip = String(
+    req.headers['x-forwarded-for']
+      || req.socket?.remoteAddress
+      || req.ip
+      || ''
+  ).split(',')[0].trim();
+  const ua = String(req.headers['user-agent'] || '').trim();
+  const viewerKey = req.userId ? `u:${req.userId}` : `a:${ip}|${ua}`;
+  const key = `${String(itineraryId)}::${viewerKey}`;
+  const now = Date.now();
+  const last = recentViewHits.get(key) || 0;
 
-const isDbReady = () => mongoose.connection.readyState === 1;
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  if (recentViewHits.size > 5000) {
+    for (const [hitKey, ts] of recentViewHits.entries()) {
+      if (now - ts > VIEW_DEDUPE_WINDOW_MS) {
+        recentViewHits.delete(hitKey);
+      }
+    }
+  }
+
+  if (now - last < VIEW_DEDUPE_WINDOW_MS) {
+    return false;
+  }
+
+  recentViewHits.set(key, now);
+  return true;
+}
+
+function isDbReady() {
+  return mongoose.connection.readyState === 1;
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 
-const computeDaysFromPlaces = (places) => { if (!Array.isArray(places) || places.length === 0) return 1; const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1); return nums.length === 0 ? 1 : Math.max(1, ...nums); };
-const computeDaysFromDateRange = (startStr, endStr) => { const a = String(startStr || '').trim(); const b = String(endStr || '').trim(); if (!a || !b) return 1; const start = new Date(`${a}T12:00:00`); const end = new Date(`${b}T12:00:00`); if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 1;
+function computeDaysFromPlaces(places) {
+  if (!Array.isArray(places) || places.length === 0) return 1;
+  const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1);
+  if (nums.length === 0) return 1;
+  return Math.max(1, ...nums);
+}
+
+
+function computeDaysFromDateRange(startStr, endStr) {
+  const a = String(startStr || '').trim();
+  const b = String(endStr || '').trim();
+  if (!a || !b) return 1;
+  const start = new Date(`${a}T12:00:00`);
+  const end = new Date(`${b}T12:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 1;
   const diff = Math.round((end - start) / 86400000) + 1;
   return Math.max(1, diff);
 }
@@ -47,9 +93,24 @@ function parseDurationFilter(durationParam) {
   return null;
 }
 
+function normalizeDayTitles(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const next = {};
+  Object.entries(input).forEach(([rawKey, rawValue]) => {
+    if (rawValue == null) return;
+    const value = String(rawValue).trim();
+    if (!value) return;
+    const keyNum = Number(rawKey);
+    const key = Number.isFinite(keyNum) && keyNum >= 1 ? String(keyNum) : String(rawKey).trim();
+    if (!key) return;
+    next[key] = value;
+  });
+  return next;
+}
 
-
-
+/**
+ * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
+ */
 function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
   const s = String(startDateStr || '').trim().slice(0, 10);
   const d = String(itemDateStr || '').trim().slice(0, 10);
@@ -902,6 +963,7 @@ router.post('/', requireAuth, async (req, res) => {
       categories: normalizeCategories(req.body?.categories),
       coverImages: coverImagesFinal,
       tripExpenseItems: tripExpenseItemsIn,
+      dayTitles: normalizeDayTitles(req.body?.dayTitles),
       generalNotes: req.body?.generalNotes != null ? String(req.body.generalNotes) : '',
       generalAttachments: Array.isArray(req.body?.generalAttachments) ? req.body.generalAttachments : [],
       places: placesFinal,
@@ -974,7 +1036,7 @@ router.post('/:id/share', requireAuth, async (req, res) => {
           type: 'itinerary_added',
           title: `${senderName} shared a trip with you`,
           message: `"${tripTitle}" — tap to view.`,
-          
+
           link: `/trip/${String(itinerary._id)}`,
           meta: { itineraryId: String(itinerary._id) },
         })
@@ -1066,6 +1128,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.generalAttachments != null && Array.isArray(body.generalAttachments)) {
       existing.generalAttachments = body.generalAttachments;
     }
+    if (body.dayTitles != null) existing.dayTitles = normalizeDayTitles(body.dayTitles);
     if (body.categories != null) existing.categories = normalizeCategories(body.categories);
     if (body.coverImages != null) existing.coverImages = normalizeCoverImages(body.coverImages);
     if (body.places != null && !placesDerivedFromTripExpense) {

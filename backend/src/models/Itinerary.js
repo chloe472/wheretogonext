@@ -67,6 +67,8 @@ const itinerarySchema = new mongoose.Schema(
     coverImages: { type: [String], default: [] },
     /** Kanban/calendar line items (places, transport, etc.) � rich objects from TripDetailsPage. */
     tripExpenseItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    /** Per-day title overrides keyed by day number (stringified). */
+    dayTitles: { type: mongoose.Schema.Types.Mixed, default: {} },
     /** Notes & Documents modal: general trip-level notes. */
     generalNotes: { type: String, default: '' },
     /** Notes & Documents modal: general attachments metadata. */

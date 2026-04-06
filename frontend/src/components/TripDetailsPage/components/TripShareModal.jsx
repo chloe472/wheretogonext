@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
 
 function Avatar({ user }) {
@@ -23,6 +23,9 @@ export default function TripShareModal({
   open,
   loading,
   friends,
+  collaborators,
+  onSaveCollaboratorRoles,
+  onRemoveCollaborator,
   onClose,
   onShareWithFriend,
   onInviteByEmail,
@@ -40,6 +43,42 @@ export default function TripShareModal({
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
   const wrapRef = useRef(null);
+  const [roleSaving, setRoleSaving] = useState(false);
+
+  // Local role edits: userId → role
+  const [pendingRoles, setPendingRoles] = useState({});
+
+  // Reset pending roles when the modal opens or closes
+  useEffect(() => {
+    if (!open) setPendingRoles({});
+  }, [open]);
+
+  const originalRoles = useMemo(() => {
+    const map = {};
+    (Array.isArray(collaborators) ? collaborators : []).forEach((c) => {
+      const uid = String(c?.user?.id || c?.userId || '');
+      if (uid) map[uid] = c?.role || 'viewer';
+    });
+    return map;
+  }, [collaborators]);
+
+  const hasRoleChanges = Object.keys(pendingRoles).some(
+    (uid) => pendingRoles[uid] !== originalRoles[uid],
+  );
+
+  const handleSaveRoles = async () => {
+    if (!hasRoleChanges) {
+      onClose?.();
+      return;
+    }
+    setRoleSaving(true);
+    try {
+      await onSaveCollaboratorRoles(pendingRoles);
+      setPendingRoles({});
+    } finally {
+      setRoleSaving(false);
+    }
+  };
 
   // Debounced search as user types
   useEffect(() => {
@@ -216,14 +255,58 @@ export default function TripShareModal({
           {!loading && friendList.length === 0 && (
             <p className="trip-share__empty">Add friends to share trips with them.</p>
           )}
+
+          {!loading && Array.isArray(collaborators) && collaborators.length > 0 && (
+            <div className="trip-share__collab-section">
+              <p className="trip-share__label">People with access</p>
+              <ul className="trip-share__collab-list">
+                {collaborators.map((collab) => {
+                  const user = collab?.user || {};
+                  const userId = String(user?.id || collab?.userId || '');
+                  const currentRole = pendingRoles[userId] ?? collab?.role ?? 'viewer';
+                  return (
+                    <li key={userId} className="trip-share__collab-item">
+                      <Avatar user={user} />
+                      <div className="trip-share__collab-info">
+                        <span className="trip-share__collab-name">{user?.name || 'Tripmate'}</span>
+                        {user?.email && <span className="trip-share__collab-sub">{user.email}</span>}
+                      </div>
+                      <select
+                        className="trip-share__invite-role"
+                        value={currentRole}
+                        onChange={(e) => setPendingRoles((prev) => ({ ...prev, [userId]: e.target.value }))}
+                        aria-label={`Access level for ${user?.name || 'tripmate'}`}
+                      >
+                        <option value="viewer">Can View</option>
+                        <option value="editor">Can Edit</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="trip-share__collab-remove"
+                        onClick={() => onRemoveCollaborator(userId)}
+                        aria-label={`Remove ${user?.name || 'tripmate'}`}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="trip-share__footer">
-          <button type="button" className="trip-share__footer-btn trip-share__footer-btn--ghost" onClick={onClose}>
-            Close
-          </button>
           <button type="button" className="trip-share__footer-btn trip-share__footer-btn--primary" onClick={onCopy}>
             Copy link
+          </button>
+          <button
+            type="button"
+            className="trip-share__footer-btn trip-share__footer-btn--primary"
+            onClick={handleSaveRoles}
+            disabled={roleSaving}
+          >
+            {roleSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
