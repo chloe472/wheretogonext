@@ -1,5 +1,6 @@
 export { useTripDetailsMapPanelProps } from './useTripDetailsMapPanelProps';
 export { useTripDetailsItineraryLoad } from './useTripDetailsItineraryLoad';
+export { useTripDetailsPlannerNotificationStream } from './useTripDetailsPlannerNotificationStream';
 export { useTripDetailsExchangeRates } from './useTripDetailsExchangeRates';
 export { useTripDetailsLocalTrip } from './useTripDetailsLocalTrip';
 export { useTripDetailsTripCurrency } from './useTripDetailsTripCurrency';
