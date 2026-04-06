@@ -80,7 +80,9 @@ export default function TripDetailsAddCustomPlaceModal({
           </div>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
-              Place name <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Place name <span className="trip-details__custom-place-required">*</span>
+              </span>
               <input
                 type="text"
                 className="trip-details__custom-place-input"
@@ -91,7 +93,9 @@ export default function TripDetailsAddCustomPlaceModal({
               />
             </label>
             <label className="trip-details__custom-place-label">
-              Address <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Address <span className="trip-details__custom-place-required">*</span>
+              </span>
               <span className="trip-details__custom-place-input-wrap trip-details__custom-transport-autofill-wrap">
                 <MapPin size={18} className="trip-details__custom-place-input-icon" aria-hidden />
                 <input
@@ -133,7 +137,9 @@ export default function TripDetailsAddCustomPlaceModal({
           </div>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
-              Date <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Date <span className="trip-details__custom-place-required">*</span>
+              </span>
               <select
                 className="trip-details__custom-place-select"
                 value={customPlaceDateKey}
@@ -149,7 +155,9 @@ export default function TripDetailsAddCustomPlaceModal({
               </select>
             </label>
             <label className="trip-details__custom-place-label">
-              Start time <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Start time <span className="trip-details__custom-place-required">*</span>
+              </span>
               <span className="trip-details__custom-place-input-wrap">
                 <Clock size={18} className="trip-details__custom-place-input-icon" aria-hidden />
                 <input
@@ -163,7 +171,9 @@ export default function TripDetailsAddCustomPlaceModal({
             </label>
           </div>
           <label className="trip-details__custom-place-label">
-            Duration <span className="trip-details__custom-place-required">*</span>
+            <span className="trip-details__custom-place-label-heading">
+              Duration <span className="trip-details__custom-place-required">*</span>
+            </span>
             <div className="trip-details__custom-place-duration">
               <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customPlaceDurationHrs} onChange={(e) => setCustomPlaceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
               <span> hr </span>

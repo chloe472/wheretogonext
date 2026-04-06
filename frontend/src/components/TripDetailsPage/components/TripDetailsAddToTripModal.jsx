@@ -91,7 +91,9 @@ export default function TripDetailsAddToTripModal({
             <div className="trip-details__custom-place-field-row">
               <div className="trip-details__custom-place-field">
                 <label htmlFor="add-to-trip-checkin-date" className="trip-details__custom-place-label">
-                  Check-in date <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-label-heading">
+                    Check-in date <span className="trip-details__custom-place-required">*</span>
+                  </span>
                 </label>
                 <input
                   type="date"
@@ -105,7 +107,9 @@ export default function TripDetailsAddToTripModal({
 
               <div className="trip-details__custom-place-field">
                 <label htmlFor="add-to-trip-checkin-time" className="trip-details__custom-place-label">
-                  Check-in time <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-label-heading">
+                    Check-in time <span className="trip-details__custom-place-required">*</span>
+                  </span>
                 </label>
                 <input
                   type="time"
@@ -119,7 +123,9 @@ export default function TripDetailsAddToTripModal({
 
               <div className="trip-details__custom-place-field">
                 <label htmlFor="add-to-trip-checkout-date" className="trip-details__custom-place-label">
-                  Check-out date <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-label-heading">
+                    Check-out date <span className="trip-details__custom-place-required">*</span>
+                  </span>
                 </label>
                 <input
                   type="date"
@@ -133,7 +139,9 @@ export default function TripDetailsAddToTripModal({
 
               <div className="trip-details__custom-place-field">
                 <label htmlFor="add-to-trip-checkout-time" className="trip-details__custom-place-label">
-                  Check-out time <span className="trip-details__custom-place-required">*</span>
+                  <span className="trip-details__custom-place-label-heading">
+                    Check-out time <span className="trip-details__custom-place-required">*</span>
+                  </span>
                 </label>
                 <input
                   type="time"
@@ -150,7 +158,9 @@ export default function TripDetailsAddToTripModal({
               <div className="trip-details__custom-place-field-row">
                 <div className="trip-details__custom-place-field">
                   <label htmlFor="add-to-trip-date" className="trip-details__custom-place-label">
-                    Date <span className="trip-details__custom-place-required">*</span>
+                    <span className="trip-details__custom-place-label-heading">
+                      Date <span className="trip-details__custom-place-required">*</span>
+                    </span>
                   </label>
                   <select
                     id="add-to-trip-date"
@@ -177,7 +187,9 @@ export default function TripDetailsAddToTripModal({
 
                 <div className="trip-details__custom-place-field">
                   <label htmlFor="add-to-trip-start-time" className="trip-details__custom-place-label">
-                    Start time <span className="trip-details__custom-place-required">*</span>
+                    <span className="trip-details__custom-place-label-heading">
+                      Start time <span className="trip-details__custom-place-required">*</span>
+                    </span>
                   </label>
                   <input
                     type="time"
@@ -191,7 +203,9 @@ export default function TripDetailsAddToTripModal({
 
                 <div className="trip-details__custom-place-field">
                   <label htmlFor="add-to-trip-duration" className="trip-details__custom-place-label">
-                    Duration <span className="trip-details__custom-place-required">*</span>
+                    <span className="trip-details__custom-place-label-heading">
+                      Duration <span className="trip-details__custom-place-required">*</span>
+                    </span>
                   </label>
                   <div className="trip-details__custom-place-duration-wrap">
                     <input

@@ -45,11 +45,15 @@ export default function TripDetailsAddCustomExperienceModal({
         <form className="trip-details__custom-place-form" onSubmit={onSubmit}>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
-              Experience name <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Experience name <span className="trip-details__custom-place-required">*</span>
+              </span>
               <input type="text" className="trip-details__custom-place-input" placeholder="Enter experience name" value={customExperienceName} onChange={(e) => setCustomExperienceName(e.target.value)} required />
             </label>
             <label className="trip-details__custom-place-label">
-              Experience type <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Experience type <span className="trip-details__custom-place-required">*</span>
+              </span>
               <select className="trip-details__custom-place-select" value={customExperienceType} onChange={(e) => setCustomExperienceType(e.target.value)} required>
                 {EXPERIENCE_TYPES.filter((type) => type !== 'All').map((type) => (
                   <option key={type} value={type}>
@@ -60,12 +64,16 @@ export default function TripDetailsAddCustomExperienceModal({
             </label>
           </div>
           <label className="trip-details__custom-place-label">
-            Address / meeting point <span className="trip-details__custom-place-required">*</span>
+            <span className="trip-details__custom-place-label-heading">
+              Address / meeting point <span className="trip-details__custom-place-required">*</span>
+            </span>
             <input type="text" className="trip-details__custom-place-input" placeholder="Enter meeting point or location" value={customExperienceAddress} onChange={(e) => setCustomExperienceAddress(e.target.value)} required />
           </label>
           <div className="trip-details__custom-place-row">
             <label className="trip-details__custom-place-label">
-              Date <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Date <span className="trip-details__custom-place-required">*</span>
+              </span>
               <select
                 className="trip-details__custom-place-select"
                 value={customExperienceDateKey}
@@ -88,12 +96,16 @@ export default function TripDetailsAddCustomExperienceModal({
               </select>
             </label>
             <label className="trip-details__custom-place-label">
-              Start time <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Start time <span className="trip-details__custom-place-required">*</span>
+              </span>
               <input type="time" className="trip-details__custom-place-input" value={customExperienceStartTime} onChange={(e) => setCustomExperienceStartTime(e.target.value)} required />
             </label>
           </div>
           <label className="trip-details__custom-place-label">
-            Duration <span className="trip-details__custom-place-required">*</span>
+            <span className="trip-details__custom-place-label-heading">
+              Duration <span className="trip-details__custom-place-required">*</span>
+            </span>
             <div className="trip-details__custom-place-duration">
               <input type="number" min={0} max={23} className="trip-details__custom-place-duration-input" value={customExperienceDurationHrs} onChange={(e) => setCustomExperienceDurationHrs(Number(e.target.value) || 0)} aria-label="Hours" />
               <span> hr </span>

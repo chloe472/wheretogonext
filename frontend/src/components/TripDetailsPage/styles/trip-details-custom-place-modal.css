@@ -116,6 +116,14 @@
   color: var(--wtg-text);
 }
 
+/* Keeps "Label *" on one row; parent label stays column so controls sit below. */
+.trip-details__custom-place-label-heading {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.125rem;
+}
+
 .trip-details__custom-place-required {
   color: #dc2626;
 }

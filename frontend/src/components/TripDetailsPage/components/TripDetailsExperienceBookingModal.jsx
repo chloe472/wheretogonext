@@ -68,7 +68,9 @@ export default function TripDetailsExperienceBookingModal({
 
           <div className="trip-details__custom-place-field">
             <label htmlFor="booking-date" className="trip-details__custom-place-label">
-              Date <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Date <span className="trip-details__custom-place-required">*</span>
+              </span>
             </label>
             <select
               id="booking-date"
@@ -98,7 +100,9 @@ export default function TripDetailsExperienceBookingModal({
 
           <div className="trip-details__custom-place-field">
             <label htmlFor="booking-start-time" className="trip-details__custom-place-label">
-              Start time <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Start time <span className="trip-details__custom-place-required">*</span>
+              </span>
             </label>
             <input
               type="time"
@@ -112,7 +116,9 @@ export default function TripDetailsExperienceBookingModal({
 
           <div className="trip-details__custom-place-field">
             <label htmlFor="booking-travellers" className="trip-details__custom-place-label">
-              Number of travellers <span className="trip-details__custom-place-required">*</span>
+              <span className="trip-details__custom-place-label-heading">
+                Number of travellers <span className="trip-details__custom-place-required">*</span>
+              </span>
             </label>
             <input
               type="number"
