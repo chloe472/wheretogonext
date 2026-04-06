@@ -1394,13 +1394,13 @@ function isAddressLikeQuery(query) {
   return /\d/.test(q) || q.includes(',') || q.split(/\s+/).length >= 4;
 }
 
-function toPrediction(main, secondary, placeIdPrefix = 'derived', index = 0) {
+function toPrediction(main, secondary, placeIdPrefix = 'derived', index = 0, lat = null, lng = null) {
   const mainText = String(main || '').trim();
   const secondaryText = String(secondary || '').trim();
   if (!mainText) return null;
 
   const slug = mainText.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  return {
+  const prediction = {
     place_id: `${placeIdPrefix}-${index}-${slug}`,
     description: secondaryText ? `${mainText}, ${secondaryText}` : mainText,
     structured_formatting: {
@@ -1408,6 +1408,15 @@ function toPrediction(main, secondary, placeIdPrefix = 'derived', index = 0) {
       secondary_text: secondaryText || 'Location',
     },
   };
+
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+    prediction.lat = latNum;
+    prediction.lng = lngNum;
+  }
+
+  return prediction;
 }
 
 function dedupePredictions(predictions) {
@@ -1457,7 +1466,7 @@ async function fetchGlobalGeocodingPredictions(query) {
       .slice(0, 8)
       .map((s) => {
         const { city, admin, index } = s;
-        return toPrediction(city, admin, 'geocode', s.item.id || index);
+        return toPrediction(city, admin, 'geocode', s.item.id || index, s.item.latitude, s.item.longitude);
       })
       .filter(Boolean);
   } catch {
@@ -1492,7 +1501,10 @@ async function fetchPhotonPredictions(query) {
           props.country,
         ].filter(Boolean);
         const secondary = secondaryParts.join(', ');
-        return toPrediction(main, secondary, 'photon', props.osm_id || index);
+        const coords = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
+        const lng = coords.length >= 1 ? coords[0] : null;
+        const lat = coords.length >= 2 ? coords[1] : null;
+        return toPrediction(main, secondary, 'photon', props.osm_id || index, lat, lng);
       })
       .filter(Boolean);
   } catch {
@@ -1585,7 +1597,9 @@ function fetchNearbyLandmarksFromLatLng(latLng) {
       const mapped = results.slice(0, 8).map((item, index) => {
         const main = item.name || '';
         const secondary = item.vicinity || item.formatted_address || '';
-        return toPrediction(main, secondary, 'nearby', item.place_id || index);
+        const lat = item?.geometry?.location?.lat?.();
+        const lng = item?.geometry?.location?.lng?.();
+        return toPrediction(main, secondary, 'nearby', item.place_id || index, lat, lng);
       }).filter(Boolean);
 
       resolve(mapped);
@@ -1622,7 +1636,9 @@ function fetchLandmarksByAddressText(query) {
         .map((item, index) => {
           const main = item.name || '';
           const secondary = item.formatted_address || item.vicinity || '';
-          return toPrediction(main, secondary, 'text-landmark', item.place_id || index);
+          const lat = item?.geometry?.location?.lat?.();
+          const lng = item?.geometry?.location?.lng?.();
+          return toPrediction(main, secondary, 'text-landmark', item.place_id || index, lat, lng);
         })
         .filter(Boolean);
 

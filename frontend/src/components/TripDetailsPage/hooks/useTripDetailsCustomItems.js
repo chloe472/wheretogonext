@@ -1,6 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Camera, UtensilsCrossed } from 'lucide-react';
-import { convertCurrencyToUsd, findTimeOverlapItem, createAttachmentFromFile } from '../lib/tripDetailsPageHelpers';
+import { loadGoogleMapsScript } from '../../../lib/loadGoogleMaps';
+import {
+  convertCurrencyToUsd,
+  findTimeOverlapItem,
+  createAttachmentFromFile,
+  getDefaultStartTimeForDate,
+} from '../lib/tripDetailsPageHelpers';
 
 function fileToDataUrl(file) {
   if (!(file instanceof File)) return Promise.resolve('');
@@ -10,6 +16,120 @@ function fileToDataUrl(file) {
     reader.onerror = () => reject(new Error('Failed to read image file'));
     reader.readAsDataURL(file);
   });
+}
+
+async function geocodeAddressWithGoogle(address) {
+  const q = String(address || '').trim();
+  if (!q) return null;
+
+  try {
+    if (!window.google?.maps?.Geocoder) {
+      await loadGoogleMapsScript();
+    }
+  } catch {
+    // Fall back to non-Google geocoding below.
+  }
+
+  if (!window.google?.maps?.Geocoder) return null;
+
+  return new Promise((resolve) => {
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ address: q }, (results, status) => {
+      const okStatus = window.google?.maps?.GeocoderStatus?.OK || 'OK';
+      if (status !== okStatus && status !== 'OK') {
+        resolve(null);
+        return;
+      }
+      const loc = results?.[0]?.geometry?.location;
+      if (!loc || typeof loc.lat !== 'function' || typeof loc.lng !== 'function') {
+        resolve(null);
+        return;
+      }
+      resolve({ lat: loc.lat(), lng: loc.lng() });
+    });
+  });
+}
+
+async function geocodeAddressWithOpenMeteo(address) {
+  const q = String(address || '').trim();
+  if (!q) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const first = Array.isArray(data?.results) ? data.results[0] : null;
+    if (!first || typeof first.latitude !== 'number' || typeof first.longitude !== 'number') return null;
+    return { lat: first.latitude, lng: first.longitude };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveCoordsFromPlaceId(placeId) {
+  const id = String(placeId || '').trim();
+  if (!id) return null;
+
+  try {
+    if (!window.google?.maps?.places?.PlacesService) {
+      await loadGoogleMapsScript();
+    }
+  } catch {
+    return null;
+  }
+
+  if (!window.google?.maps?.places?.PlacesService) return null;
+
+  return new Promise((resolve) => {
+    const div = document.createElement('div');
+    div.style.display = 'none';
+    document.body.appendChild(div);
+    const service = new window.google.maps.places.PlacesService(div);
+
+    service.getDetails({ placeId: id, fields: ['geometry.location'] }, (result, status) => {
+      try {
+        div.remove();
+      } catch {
+        // no-op cleanup
+      }
+
+      if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
+        resolve(null);
+        return;
+      }
+      const loc = result?.geometry?.location;
+      if (!loc || typeof loc.lat !== 'function' || typeof loc.lng !== 'function') {
+        resolve(null);
+        return;
+      }
+      resolve({ lat: loc.lat(), lng: loc.lng() });
+    });
+  });
+}
+
+async function resolveAddressCoordinates(address, existingSelection, fallbackLat, fallbackLng) {
+  const selectedLat = existingSelection?.lat;
+  const selectedLng = existingSelection?.lng;
+  if (Number.isFinite(selectedLat) && Number.isFinite(selectedLng)) {
+    return { lat: selectedLat, lng: selectedLng };
+  }
+
+  const placeIdCoords = await resolveCoordsFromPlaceId(existingSelection?.id);
+  if (placeIdCoords) return placeIdCoords;
+
+  const googleCoords = await geocodeAddressWithGoogle(address);
+  if (googleCoords) return googleCoords;
+
+  const openMeteoCoords = await geocodeAddressWithOpenMeteo(address);
+  if (openMeteoCoords) return openMeteoCoords;
+
+  return { lat: fallbackLat, lng: fallbackLng };
 }
 
 export function useTripDetailsCustomItems({
@@ -49,6 +169,20 @@ export function useTripDetailsCustomItems({
   const [customPlaceTravelDocs, setCustomPlaceTravelDocs] = useState([]);
   const [customFoodTravelDocs, setCustomFoodTravelDocs] = useState([]);
 
+  useEffect(() => {
+    if (!customPlaceDateKey) return;
+    const desiredMinutes = (Number(customPlaceDurationHrs) || 0) * 60 + (Number(customPlaceDurationMins) || 0);
+    const next = getDefaultStartTimeForDate(tripExpenseItems, customPlaceDateKey, '07:00', desiredMinutes || 60);
+    setCustomPlaceStartTime(next);
+  }, [customPlaceDateKey, customPlaceDurationHrs, customPlaceDurationMins, tripExpenseItems]);
+
+  useEffect(() => {
+    if (!customFoodDateKey) return;
+    const desiredMinutes = (Number(customFoodDurationHrs) || 0) * 60 + (Number(customFoodDurationMins) || 0);
+    const next = getDefaultStartTimeForDate(tripExpenseItems, customFoodDateKey, '07:00', desiredMinutes || 60);
+    setCustomFoodStartTime(next);
+  }, [customFoodDateKey, customFoodDurationHrs, customFoodDurationMins, tripExpenseItems]);
+
   const onCloseAddCustomPlace = useCallback(() => {
     setAddCustomPlaceOpen(false);
   }, []);
@@ -66,6 +200,12 @@ export function useTripDetailsCustomItems({
         lng: fallbackLng,
         source: 'Manual input',
       };
+      const resolvedCoords = await resolveAddressCoordinates(
+        customPlaceAddress || resolvedAddress?.address,
+        resolvedAddress,
+        fallbackLat,
+        fallbackLng,
+      );
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customPlaceDateKey,
         startTime: customPlaceStartTime,
@@ -98,8 +238,8 @@ export function useTripDetailsCustomItems({
           date: customPlaceDateKey,
           detail: resolvedAddress?.address || customPlaceAddress || 'Custom place',
           Icon: Camera,
-          lat: resolvedAddress?.lat ?? fallbackLat,
-          lng: resolvedAddress?.lng ?? fallbackLng,
+          lat: resolvedCoords.lat,
+          lng: resolvedCoords.lng,
           notes: customPlaceNote || '',
           attachments,
           startTime: customPlaceStartTime,
@@ -163,6 +303,12 @@ export function useTripDetailsCustomItems({
         lng: fallbackLng,
         source: 'Manual input',
       };
+      const resolvedCoords = await resolveAddressCoordinates(
+        customFoodAddress || resolvedAddress?.address,
+        resolvedAddress,
+        fallbackLat,
+        fallbackLng,
+      );
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customFoodDateKey,
         startTime: customFoodStartTime,
@@ -195,8 +341,8 @@ export function useTripDetailsCustomItems({
           date: customFoodDateKey,
           detail: resolvedAddress?.address || customFoodAddress || 'Custom food & beverage',
           Icon: UtensilsCrossed,
-          lat: resolvedAddress?.lat ?? fallbackLat,
-          lng: resolvedAddress?.lng ?? fallbackLng,
+          lat: resolvedCoords.lat,
+          lng: resolvedCoords.lng,
           notes: customFoodNote || '',
           attachments,
           startTime: customFoodStartTime,

@@ -178,9 +178,11 @@ export default function TripDetailsAddCustomPlaceModal({
                               setCustomPlaceAddressSelection({
                                 id: prediction.place_id,
                                 name,
-                                address,
+                                address: prediction.description || address,
                                 description: prediction.description || name,
                                 source: 'Google Places',
+                                lat: Number.isFinite(Number(prediction.lat)) ? Number(prediction.lat) : null,
+                                lng: Number.isFinite(Number(prediction.lng)) ? Number(prediction.lng) : null,
                               });
                               setCustomPlaceAddressSuggestionsOpen(false);
                               setPlacePredictions([]);
