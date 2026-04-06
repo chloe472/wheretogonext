@@ -71,6 +71,7 @@ import {
   useTripDetailsMapData,
   useTripDetailsNotes,
   useTripDetailsTransport,
+  useTripDetailsPlannerNotificationStream,
 } from './hooks';
 import { useTripDetailsAddToTrip } from './hooks/useTripDetailsAddToTrip';
 import {
@@ -115,7 +116,7 @@ import {
   rangesOverlap,
   toHHmmLocal,
 } from './lib/tripDetailsPageHelpers';
-
+import { isCurrentUserTripCollaborator } from './lib/tripCollaborationAccess';
 
 export default function TripDetailsPage({ user, onLogout }) {
   const { tripId } = useParams();
@@ -123,8 +124,16 @@ export default function TripDetailsPage({ user, onLogout }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [locationUpdateKey, setLocationUpdateKey] = useState(0);
-  const { serverItinerary, setServerItinerary, tripLoading, tripLoadError } =
-    useTripDetailsItineraryLoad(tripId, location?.state);
+  const {
+    serverItinerary,
+    setServerItinerary,
+    tripLoading,
+    tripLoadError,
+    refetchItineraryIfNewer,
+  } = useTripDetailsItineraryLoad(tripId, location?.state);
+
+  const plannerUserId = String(user?.id || user?._id || '').trim();
+  useTripDetailsPlannerNotificationStream(tripId, plannerUserId, refetchItineraryIfNewer);
 
   const tripData = useMemo(() => itineraryDocToTrip(serverItinerary), [serverItinerary]);
   const { trip, setLocalDestination, setLocalLocations } = useTripDetailsLocalTrip(tripData);
@@ -395,15 +404,29 @@ export default function TripDetailsPage({ user, onLogout }) {
   }, [tripId]);
 
   const handleShareWithFriend = useCallback(async (friend) => {
-    if (!friend?.id) return;
+    const userId = friend?.id ? String(friend.id) : '';
+    if (!userId) return;
     try {
-      await shareItineraryWithFriends(tripId, [friend.id]);
+      const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+      const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
+      if (exists) {
+        toast('This person already has access.');
+        return;
+      }
+      const email = friend?.email ? String(friend.email).trim().toLowerCase() : undefined;
+      const newCollabs = [
+        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+        email ? { userId, email, role: 'viewer' } : { userId, role: 'viewer' },
+      ];
+      const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+      setServerItinerary((prev) => ({ ...prev, ...updated }));
+      await shareItineraryWithFriends(tripId, [userId]);
       toast.success(`Shared trip with ${friend.name || 'friend'}`);
       setShareModalOpen(false);
     } catch (err) {
       toast.error(err?.message || 'Could not share trip.');
     }
-  }, [tripId]);
+  }, [tripId, serverItinerary, setServerItinerary]);
 
   const handleInviteByEmail = useCallback(async (email, role = 'viewer') => {
     try {
@@ -1168,7 +1191,12 @@ export default function TripDetailsPage({ user, onLogout }) {
     serverItinerary?.creator ||
     ''
   ).trim();
-  if (userId && creatorId && userId !== creatorId) {
+  if (
+    userId
+    && creatorId
+    && userId !== creatorId
+    && !isCurrentUserTripCollaborator(user, serverItinerary?.collaborators)
+  ) {
     navigate(`/itineraries/${tripId}`, { replace: true });
     return null;
   }

@@ -1235,6 +1235,25 @@ router.put('/:id', requireAuth, async (req, res) => {
       );
     }
 
+    const creatorIdStr = String(existing.creator?._id ?? existing.creator ?? '').trim();
+    const editorIdStr = String(req.userId || '').trim();
+    if (
+      creatorIdStr
+      && editorIdStr
+      && creatorIdStr !== editorIdStr
+      && mongoose.isValidObjectId(creatorIdStr)
+    ) {
+      await createNotification({
+        recipientId: creatorIdStr,
+        actorId: req.userId,
+        type: 'itinerary_updated',
+        title: 'Travel planner updated',
+        message: `${req.user?.name || 'Someone'} made changes to "${existing.title}".`,
+        link: `/trip/${String(existing._id)}`,
+        meta: { itineraryId: String(existing._id) },
+      });
+    }
+
     const populated = await Itinerary.findById(existing._id)
       .populate('creator', 'name email picture intro')
       .lean();

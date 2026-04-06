@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchItineraryById } from '../../../api/itinerariesApi';
+
+function parseDocUpdatedMs(doc) {
+  if (!doc) return 0;
+  const t = doc.updatedAt ?? doc.updated_at;
+  if (!t) return 0;
+  const d = new Date(t);
+  return Number.isFinite(d.getTime()) ? d.getTime() : 0;
+}
+
+const POLL_INTERVAL_MS = 25000;
 
 export function useTripDetailsItineraryLoad(tripId, locationState) {
   const [serverItinerary, setServerItinerary] = useState(null);
@@ -7,6 +17,23 @@ export function useTripDetailsItineraryLoad(tripId, locationState) {
   const [tripLoadError, setTripLoadError] = useState(null);
 
   const preloadedItinerary = locationState?.preloadedItinerary ?? null;
+
+  const refetchItineraryIfNewer = useCallback(async () => {
+    const id = String(tripId || '').trim();
+    if (!id) return;
+    try {
+      const doc = await fetchItineraryById(id);
+      if (!doc) return;
+      setServerItinerary((prev) => {
+        const prevTs = parseDocUpdatedMs(prev);
+        const nextTs = parseDocUpdatedMs(doc);
+        if (!prev || nextTs > prevTs) return doc;
+        return prev;
+      });
+    } catch {
+      /* ignore transient refetch errors */
+    }
+  }, [tripId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,5 +105,39 @@ export function useTripDetailsItineraryLoad(tripId, locationState) {
     };
   }, [tripId, preloadedItinerary]);
 
-  return { serverItinerary, setServerItinerary, tripLoading, tripLoadError };
+  useEffect(() => {
+    const id = String(tripId || '').trim();
+    if (!id) return undefined;
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refetchItineraryIfNewer();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [tripId, refetchItineraryIfNewer]);
+
+  useEffect(() => {
+    const id = String(tripId || '').trim();
+    if (!id) return undefined;
+
+    const tick = () => {
+      if (document.visibilityState === 'visible') {
+        refetchItineraryIfNewer();
+      }
+    };
+
+    const intervalId = window.setInterval(tick, POLL_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [tripId, refetchItineraryIfNewer]);
+
+  return {
+    serverItinerary,
+    setServerItinerary,
+    tripLoading,
+    tripLoadError,
+    refetchItineraryIfNewer,
+  };
 }
