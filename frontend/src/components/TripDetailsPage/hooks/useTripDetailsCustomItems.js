@@ -1,7 +1,16 @@
 import { useCallback, useState } from 'react';
 import { Camera, UtensilsCrossed } from 'lucide-react';
-import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
-import { convertCurrencyToUsd, findTimeOverlapItem } from '../lib/tripDetailsPageHelpers';
+import { convertCurrencyToUsd, findTimeOverlapItem, createAttachmentFromFile } from '../lib/tripDetailsPageHelpers';
+
+function fileToDataUrl(file) {
+  if (!(file instanceof File)) return Promise.resolve('');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function useTripDetailsCustomItems({
   mapCenter,
@@ -45,14 +54,18 @@ export function useTripDetailsCustomItems({
   }, []);
 
   const handleAddCustomPlaceSubmit = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
       const costNum = parseFloat(customPlaceCost) || 0;
       const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
-      const resolvedAddress =
-        customPlaceAddressSelection ??
-        searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress)[0];
       const [fallbackLat, fallbackLng] = mapCenter;
+      const resolvedAddress = customPlaceAddressSelection ?? {
+        name: customPlaceAddress,
+        address: customPlaceAddress,
+        lat: fallbackLat,
+        lng: fallbackLng,
+        source: 'Manual input',
+      };
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customPlaceDateKey,
         startTime: customPlaceStartTime,
@@ -63,6 +76,17 @@ export function useTripDetailsCustomItems({
         showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
         return;
       }
+
+      let placeImageUrl = '';
+      try {
+        placeImageUrl = await fileToDataUrl(customPlaceImage);
+      } catch {
+        showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
+      }
+
+      // Handle travel docs: convert files to attachments
+      const attachments = customPlaceTravelDocs.map((f) => createAttachmentFromFile(f));
+
       setTripExpenseItems((prev) => [
         ...prev,
         {
@@ -72,20 +96,17 @@ export function useTripDetailsCustomItems({
           categoryId: 'places',
           category: 'Places',
           date: customPlaceDateKey,
-          detail:
-            resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
-              ? resolvedAddress.address
-              : (customPlaceAddress || 'Custom place'),
+          detail: resolvedAddress?.address || customPlaceAddress || 'Custom place',
           Icon: Camera,
           lat: resolvedAddress?.lat ?? fallbackLat,
           lng: resolvedAddress?.lng ?? fallbackLng,
           notes: customPlaceNote || '',
-          attachments: [],
+          attachments,
           startTime: customPlaceStartTime,
           durationHrs: customPlaceDurationHrs,
           durationMins: customPlaceDurationMins,
           externalLink: '',
-          placeImageUrl: '',
+          placeImageUrl,
           rating: null,
           reviewCount: null,
         },
@@ -109,7 +130,6 @@ export function useTripDetailsCustomItems({
       currency,
       exchangeRates,
       customPlaceAddressSelection,
-      trip,
       customPlaceAddress,
       mapCenter,
       tripExpenseItems,
@@ -119,6 +139,8 @@ export function useTripDetailsCustomItems({
       customPlaceDurationMins,
       customPlaceName,
       customPlaceNote,
+      customPlaceImage,
+      customPlaceTravelDocs,
       showInAppNotice,
       setTripExpenseItems,
     ],
@@ -129,14 +151,18 @@ export function useTripDetailsCustomItems({
   }, []);
 
   const handleAddCustomFoodSubmit = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
       const costNum = parseFloat(customFoodCost) || 0;
       const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
-      const resolvedAddress =
-        customFoodAddressSelection ??
-        searchAddressSuggestions(trip.destination || trip.locations, customFoodAddress, 'custom-food')[0];
       const [fallbackLat, fallbackLng] = mapCenter;
+      const resolvedAddress = customFoodAddressSelection ?? {
+        name: customFoodAddress,
+        address: customFoodAddress,
+        lat: fallbackLat,
+        lng: fallbackLng,
+        source: 'Manual input',
+      };
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customFoodDateKey,
         startTime: customFoodStartTime,
@@ -147,6 +173,17 @@ export function useTripDetailsCustomItems({
         showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
         return;
       }
+
+      let placeImageUrl = '';
+      try {
+        placeImageUrl = await fileToDataUrl(customFoodImage);
+      } catch {
+        showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
+      }
+
+      // Handle travel docs: convert files to attachments
+      const attachments = customFoodTravelDocs.map((f) => createAttachmentFromFile(f));
+
       setTripExpenseItems((prev) => [
         ...prev,
         {
@@ -156,20 +193,17 @@ export function useTripDetailsCustomItems({
           categoryId: 'food',
           category: 'Food & Beverage',
           date: customFoodDateKey,
-          detail:
-            resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
-              ? resolvedAddress.address
-              : (customFoodAddress || 'Custom food & beverage'),
+          detail: resolvedAddress?.address || customFoodAddress || 'Custom food & beverage',
           Icon: UtensilsCrossed,
           lat: resolvedAddress?.lat ?? fallbackLat,
           lng: resolvedAddress?.lng ?? fallbackLng,
           notes: customFoodNote || '',
-          attachments: [],
+          attachments,
           startTime: customFoodStartTime,
           durationHrs: customFoodDurationHrs,
           durationMins: customFoodDurationMins,
           externalLink: '',
-          placeImageUrl: '',
+          placeImageUrl,
           rating: null,
           reviewCount: null,
         },
@@ -193,7 +227,6 @@ export function useTripDetailsCustomItems({
       currency,
       exchangeRates,
       customFoodAddressSelection,
-      trip,
       customFoodAddress,
       mapCenter,
       tripExpenseItems,
@@ -203,6 +236,8 @@ export function useTripDetailsCustomItems({
       customFoodDurationMins,
       customFoodName,
       customFoodNote,
+      customFoodImage,
+      customFoodTravelDocs,
       showInAppNotice,
       setTripExpenseItems,
     ],

@@ -1,5 +1,6 @@
-import { Clock, MapPin, Paperclip, PlusCircle, X } from 'lucide-react';
-import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
+import { Clock, MapPin, Paperclip, PlusCircle, X, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { fetchPlacesPredictions } from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddCustomPlaceModal({
   trip,
@@ -31,7 +32,18 @@ export default function TripDetailsAddCustomPlaceModal({
   setCustomPlaceTravelDocs,
   currency,
 }) {
-  const destinationQuery = trip.destination || trip.locations;
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [placePredictions, setPlacePredictions] = useState([]);
+
+  useEffect(() => {
+    if (!(customPlaceImage instanceof File)) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const url = URL.createObjectURL(customPlaceImage);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [customPlaceImage]);
 
   return (
     <>
@@ -62,11 +74,35 @@ export default function TripDetailsAddCustomPlaceModal({
                 if (f) setCustomPlaceImage(f);
               }}
             />
-            <label htmlFor="custom-place-image" className="trip-details__custom-place-upload-label">
+            <label
+              htmlFor="custom-place-image"
+              className={`trip-details__custom-place-upload-label ${customPlaceImage ? 'trip-details__custom-place-upload-label--has-image' : ''}`}
+            >
               {customPlaceImage ? (
-                <span className="trip-details__custom-place-upload-preview">
-                  Image selected: {customPlaceImage instanceof File ? customPlaceImage.name : 'Preview'}
-                </span>
+                <>
+                  {previewUrl && (
+                    <div className="trip-details__custom-place-upload-preview-container">
+                      <img
+                        src={previewUrl}
+                        alt="Selected place"
+                        className="trip-details__custom-place-upload-preview-image"
+                      />
+                      <button
+                        type="button"
+                        className="trip-details__custom-place-delete-image"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCustomPlaceImage(null);
+                          setPreviewUrl('');
+                        }}
+                        aria-label="Delete image"
+                      >
+                        <Trash2 size={18} aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <PlusCircle size={32} aria-hidden />
@@ -104,32 +140,72 @@ export default function TripDetailsAddCustomPlaceModal({
                   placeholder="Search by landmark or address"
                   value={customPlaceAddress}
                   onChange={(e) => {
-                    setCustomPlaceAddress(e.target.value);
+                    const value = e.target.value;
+                    setCustomPlaceAddress(value);
                     setCustomPlaceAddressSelection(null);
                     setCustomPlaceAddressSuggestionsOpen(true);
+                    if (!value.trim()) {
+                      setPlacePredictions([]);
+                      return;
+                    }
+                    fetchPlacesPredictions(value, (predictions) => {
+                      setPlacePredictions(predictions || []);
+                    });
                   }}
-                  onFocus={() => setCustomPlaceAddressSuggestionsOpen(true)}
+                  onFocus={() => {
+                    setCustomPlaceAddressSuggestionsOpen(true);
+                    if (customPlaceAddress.trim()) {
+                      fetchPlacesPredictions(customPlaceAddress, (predictions) => {
+                        setPlacePredictions(predictions || []);
+                      });
+                    }
+                  }}
                   onBlur={() => setTimeout(() => setCustomPlaceAddressSuggestionsOpen(false), 200)}
                   required
                 />
                 {customPlaceAddressSuggestionsOpen && customPlaceAddress.trim() && (
                   <ul className="trip-details__custom-transport-suggestions">
-                    {searchAddressSuggestions(destinationQuery, customPlaceAddress).map((suggestion) => (
-                      <li key={suggestion.id}>
-                        <button
-                          type="button"
-                          className="trip-details__custom-transport-suggestion"
-                          onClick={() => {
-                            setCustomPlaceAddress(suggestion.name);
-                            setCustomPlaceAddressSelection(suggestion);
-                            setCustomPlaceAddressSuggestionsOpen(false);
-                          }}
-                        >
-                          <strong>{suggestion.name}</strong>
-                          <span>{suggestion.address}</span>
-                        </button>
-                      </li>
-                    ))}
+                    {placePredictions.length > 0 ? (
+                      placePredictions.map((prediction) => (
+                        <li key={prediction.place_id}>
+                          <button
+                            type="button"
+                            className="trip-details__custom-transport-suggestion-item"
+                            onMouseDown={() => {
+                              const name = prediction.structured_formatting?.main_text || prediction.description;
+                              const address = prediction.structured_formatting?.secondary_text || prediction.description || 'Location';
+                              setCustomPlaceAddress(prediction.description || name);
+                              setCustomPlaceAddressSelection({
+                                id: prediction.place_id,
+                                name,
+                                address,
+                                description: prediction.description || name,
+                                source: 'Google Places',
+                              });
+                              setCustomPlaceAddressSuggestionsOpen(false);
+                              setPlacePredictions([]);
+                            }}
+                          >
+                            <MapPin size={16} aria-hidden />
+                            <div className="trip-details__custom-transport-suggestion-text">
+                              <span className="trip-details__custom-transport-suggestion-name">{prediction.structured_formatting?.main_text || prediction.description}</span>
+                              <span className="trip-details__custom-transport-suggestion-type">{prediction.structured_formatting?.secondary_text || 'Location'}</span>
+                            </div>
+                          </button>
+                        </li>
+                      ))
+                    ) : (
+                      <li>
+                        <div className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom" aria-live="polite">
+                          <MapPin size={16} aria-hidden />
+                          <div className="trip-details__custom-transport-suggestion-text">
+                            <span className="trip-details__custom-transport-suggestion-name">No matching places found</span>
+                            <span className="trip-details__custom-transport-suggestion-type">Try a full address, street name, city, or landmark</span>
+                          </div>
+                        </div>
+                        </li>
+                      
+                    )}
                   </ul>
                 )}
               </span>

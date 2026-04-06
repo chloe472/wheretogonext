@@ -75,7 +75,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  min-height: 120px;
+  min-height: 180px;
   padding: 1.5rem;
   border: 2px dashed var(--wtg-border);
   border-radius: 12px;
@@ -99,6 +99,78 @@
 .trip-details__custom-place-upload-preview {
   color: var(--wtg-text);
   font-weight: 500;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.trip-details__custom-place-upload-label--has-image {
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  min-height: 240px;
+  height: 240px;
+}
+
+.trip-details__custom-place-upload-preview-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trip-details__custom-place-upload-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  border: none;
+  display: block;
+}
+
+.trip-details__custom-place-delete-image {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.trip-details__custom-place-delete-image:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.trip-details__custom-place-delete-image:active {
+  transform: scale(0.95);
+}
+
+.trip-details__custom-transport-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: var(--wtg-surface);
+  border: 1px solid var(--wtg-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
 }
 
 .trip-details__custom-place-row {

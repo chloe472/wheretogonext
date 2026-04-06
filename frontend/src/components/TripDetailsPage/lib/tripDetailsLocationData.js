@@ -8,23 +8,6 @@ export function getMapCenterForDestination(destinationOrLocations, options = {})
   return DEFAULT_CENTER;
 }
 
-export function searchAddressSuggestions(destinationOrLocations, query, idPrefix = 'custom-location') {
-  const q = (query || '').trim();
-  if (!q) return [];
-
-  const [lat, lng] = getMapCenterForDestination(destinationOrLocations);
-  return [
-    {
-      id: `${idPrefix}-${q.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      name: q,
-      address: 'Custom location',
-      lat,
-      lng,
-      source: 'Custom location',
-    },
-  ];
-}
-
 export function searchLocations(query, limit = 12) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
