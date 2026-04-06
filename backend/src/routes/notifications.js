@@ -94,10 +94,10 @@ router.post('/:id/read', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * SSE stream — authenticated via ?token=<jwt> query param because
- * EventSource does not support custom request headers.
- */
+
+
+
+
 router.get('/stream', async (req, res) => {
   try {
     const token = String(req.query.token || '').trim();
@@ -116,17 +116,17 @@ router.get('/stream', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.setHeader('X-Accel-Buffering', 'no'); 
     res.flushHeaders();
 
-    // Send an initial ping so the client knows the connection is live.
+    
     res.write('event: connected\ndata: {}\n\n');
 
     addClient(userId, res);
 
-    // Keep-alive ping every 25 s to prevent proxy timeouts.
+    
     const ping = setInterval(() => {
-      try { res.write(': ping\n\n'); } catch { /* ignore */ }
+      try { res.write(': ping\n\n'); } catch {  }
     }, 25000);
 
     req.on('close', () => {

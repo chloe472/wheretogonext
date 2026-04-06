@@ -24,8 +24,7 @@ import {
   shareProfileWithFriends,
   lookupUserByEmail,
 } from '../../../api/profileApi';
-import countriesData from '../../../data/countries.json';
-import { CITIES } from '../../../data/cities';
+import { fetchCitySuggestions } from '../../../api/locationsApi';
 
 const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
 
@@ -113,6 +112,9 @@ export function useProfilePage({
   const [destinationCountryOpen, setDestinationCountryOpen] = useState(false);
   const [destinationCity, setDestinationCity] = useState('');
   const [destinationCityOpen, setDestinationCityOpen] = useState(false);
+  const [destinationCountrySuggestions, setDestinationCountrySuggestions] = useState([]);
+  const [destinationCitySuggestions, setDestinationCitySuggestions] = useState([]);
+  const [destinationSuggestionsLoading, setDestinationSuggestionsLoading] = useState(false);
   const [destinationError, setDestinationError] = useState('');
   const [destinationLoading, setDestinationLoading] = useState(false);
   const countryDropdownRef = useRef(null);
@@ -138,29 +140,6 @@ export function useProfilePage({
 
   const isSelf = !profileId || (user?.id && String(profileId) === String(user.id));
 
-  const countryNameMap = useMemo(() => {
-    const map = new Map();
-    countriesData.forEach((c) => {
-      if (c?.name) map.set(String(c.name).toLowerCase(), c.name);
-    });
-    return map;
-  }, []);
-
-  const countryNameList = useMemo(
-    () => countriesData.map((c) => c.name).filter(Boolean).sort((a, b) => b.length - a.length),
-    []
-  );
-
-  const cityCountryMap = useMemo(() => {
-    const map = new Map();
-    CITIES.forEach((city) => {
-      if (city?.name && city?.country) {
-        map.set(String(city.name).toLowerCase(), city.country);
-      }
-    });
-    return map;
-  }, []);
-
   const normalizeSocials = (list) => {
     if (!Array.isArray(list)) return [];
     return list
@@ -177,9 +156,7 @@ export function useProfilePage({
     const raw = String(value || '').trim();
     if (!raw) return '';
     const lower = raw.toLowerCase();
-    const alias = COUNTRY_ALIAS_LOOKUP[lower];
-    const candidate = alias || raw;
-    return countryNameMap.get(candidate.toLowerCase()) || '';
+    return COUNTRY_ALIAS_LOOKUP[lower] || raw;
   };
 
   const extractCountryFromString = (value) => {
@@ -192,17 +169,11 @@ export function useProfilePage({
     }
     const direct = normalizeCountryName(raw);
     if (direct) return direct;
-    const firstSegment = segments[0] || raw;
-    return cityCountryMap.get(firstSegment.toLowerCase()) || '';
+    return '';
   };
 
   const findCountryInText = (value) => {
-    const raw = String(value || '').toLowerCase();
-    if (!raw) return '';
-    for (const name of countryNameList) {
-      if (raw.includes(name.toLowerCase())) return name;
-    }
-    return '';
+    return extractCountryFromString(value);
   };
 
   const extractCountryFromTrip = (trip) => {
@@ -232,18 +203,12 @@ export function useProfilePage({
     return '';
   };
 
-  const cityNameList = useMemo(() => {
-    const list = Array.isArray(CITIES) ? CITIES.map((c) => c.name).filter(Boolean) : [];
-    return Array.from(new Set(list));
-  }, []);
-
   const extractCityFromString = (value) => {
-    const raw = String(value || '').toLowerCase();
+    const raw = String(value || '').trim();
     if (!raw) return '';
-    for (const name of cityNameList) {
-      if (raw.includes(String(name).toLowerCase())) return name;
-    }
-    return '';
+    const first = raw.split(',')[0]?.trim();
+    if (!first) return '';
+    return first;
   };
 
   const extractCitiesFromTrip = (trip) => {
@@ -741,6 +706,52 @@ const shareUrl = profile?.id || profileId
     }, 400);
     return () => clearTimeout(timer);
   }, [addFriendValue, addFriendOpen]);
+
+  useEffect(() => {
+    if (!addDestinationOpen) return () => {};
+
+    const query = String(destinationCity || destinationCountryInput || '').trim();
+    if (query.length < 2) {
+      setDestinationCitySuggestions([]);
+      setDestinationCountrySuggestions([]);
+      setDestinationSuggestionsLoading(false);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setDestinationSuggestionsLoading(true);
+      try {
+        const next = await fetchCitySuggestions(query, { signal: controller.signal, limit: 16 });
+        const cityList = Array.isArray(next) ? next : [];
+        setDestinationCitySuggestions(cityList);
+
+        const seenCountries = new Set();
+        const countryList = [];
+        cityList.forEach((item) => {
+          const country = String(item?.country || '').trim();
+          if (!country) return;
+          const key = country.toLowerCase();
+          if (seenCountries.has(key)) return;
+          seenCountries.add(key);
+          countryList.push(country);
+        });
+        setDestinationCountrySuggestions(countryList.slice(0, 16));
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setDestinationCitySuggestions([]);
+          setDestinationCountrySuggestions([]);
+        }
+      } finally {
+        setDestinationSuggestionsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [addDestinationOpen, destinationCity, destinationCountryInput]);
 
   const submitAddFriend = async () => {
     const selected = addFriendResults.find((u) => u.id === addFriendSelectedId) || null;
@@ -1255,6 +1266,9 @@ const shareUrl = profile?.id || profileId
     setDestinationCity,
     destinationCityOpen,
     setDestinationCityOpen,
+    destinationCountrySuggestions,
+    destinationCitySuggestions,
+    destinationSuggestionsLoading,
     destinationError,
     setDestinationError,
     destinationLoading,

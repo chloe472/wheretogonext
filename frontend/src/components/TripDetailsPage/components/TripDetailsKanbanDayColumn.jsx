@@ -6,7 +6,6 @@ import {
   ChevronDown,
   FileText,
   GripVertical,
-  Info,
   MapPin,
   MoreVertical,
   Palette,
@@ -395,7 +394,6 @@ export default function TripDetailsKanbanDayColumn({
       />
       <div className="trip-details__day-summary" style={dayColor ? { borderLeftColor: dayColor } : undefined}>
         <span className="trip-details__day-summary-text">Day {day.dayNum}: {day.label} · {durationStr}</span>
-        <Info size={14} className="trip-details__day-summary-icon" aria-hidden />
       </div>
       <input
         type="text"

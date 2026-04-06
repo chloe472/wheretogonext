@@ -1,8 +1,6 @@
 import { Search, X } from 'lucide-react';
-import countriesData from '../../../data/countries.json';
 import {
   WHERE_TYPE_LABELS,
-  countryCodeToFlag,
   getWhereLocationKey,
   getWhereLocationLabel,
   isCityWhereLocation,
@@ -118,13 +116,8 @@ export default function TripDetailsWhereModal({
           {(whereSelectedLocations.length > 0 || whereQuery.trim()) && (
             <div className="trip-details__where-chip-wrap">
               {whereSelectedLocations.map((loc) => {
-                const countryCode = loc.country
-                  ? (countriesData.find((c) => c.name === loc.country)?.id ?? (loc.type === 'Country' ? loc.id : null))
-                  : (loc.type === 'Country' ? loc.id : null);
-                const flag = countryCode ? countryCodeToFlag(countryCode) : '';
                 return (
                   <span key={loc.id} className="trip-details__where-chip">
-                    {flag && <span className="trip-details__where-chip-flag" aria-hidden>{flag}</span>}
                     {loc.name}
                     <button
                       type="button"
