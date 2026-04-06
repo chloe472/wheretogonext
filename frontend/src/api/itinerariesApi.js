@@ -172,7 +172,7 @@ export async function fetchItineraryById(id, signal) {
   return data.itinerary || null;
 }
 
-/** PUT /api/itineraries/:id — partial update (creator only; server-enforced) */
+/** PUT /api/itineraries/:id — partial update (creator or collaborator with edit access; server-enforced) */
 export async function updateItinerary(id, body) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}`, {
     method: 'PUT',
