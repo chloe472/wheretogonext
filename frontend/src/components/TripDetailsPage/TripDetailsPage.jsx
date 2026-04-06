@@ -1329,6 +1329,8 @@ export default function TripDetailsPage({ user, onLogout }) {
         loading={shareLoading}
         friends={shareFriends}
         collaborators={serverItinerary?.collaborators}
+        owner={serverItinerary?.creator}
+        currentUserId={accessInfo.userId}
         onSaveCollaboratorRoles={handleSaveCollaboratorRoles}
         onRemoveCollaborator={handleRemoveCollaborator}
         onClose={() => setShareModalOpen(false)}

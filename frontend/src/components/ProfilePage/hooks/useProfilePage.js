@@ -25,6 +25,7 @@ import {
   lookupUserByEmail,
 } from '../../../api/profileApi';
 import { fetchCitySuggestions } from '../../../api/locationsApi';
+import { getCurrentUserCollaboratorRole } from '../../TripDetailsPage/lib/tripCollaborationAccess';
 
 const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
 
@@ -816,6 +817,19 @@ const shareUrl = profile?.id || profileId
   };
 
   const setTripStatus = async (tripId, status) => {
+    const trip = trips.find((t) => String(t.id) === String(tripId));
+    const userId = String(user?.id || user?._id || '').trim();
+    const creatorId = String(
+      trip?.creator?._id || trip?.creator?.id || trip?.creator || ''
+    ).trim();
+    const isCreator = Boolean(userId && creatorId && userId === creatorId);
+    const collaboratorRole = isCreator ? null : getCurrentUserCollaboratorRole(user, trip?.collaborators);
+    if (!isCreator && collaboratorRole === 'viewer') {
+      setOpenStatusDropdownId(null);
+      toast.error('You have view-only access and cannot change the trip status.');
+      return;
+    }
+
     setTripStatuses((prev) => ({ ...prev, [tripId]: status }));
     setOpenStatusDropdownId(null);
     try {
