@@ -124,7 +124,7 @@ export default function ProfileShareModal({
         </div>
 
         <div className="trip-share__body">
-          {/* Invite row */}
+          {}
           <div className="trip-share__invite-section">
             <div className="trip-share__invite-row-wrap" ref={wrapRef}>
               <div className="trip-share__invite-field">
@@ -173,7 +173,7 @@ export default function ProfileShareModal({
             {inviteError && <p className="trip-share__invite-error">{inviteError}</p>}
           </div>
 
-          {/* Friends grid */}
+          {}
           {friendList.length > 0 && (
             <div className="trip-share__friends-section">
               <p className="trip-share__label">Share with friends</p>

@@ -1,4 +1,4 @@
-/* Itinerary block (card + travel segment) */
+
 .trip-details__itinerary-block {
   display: flex;
   flex-direction: column;

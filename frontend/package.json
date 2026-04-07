@@ -13,10 +13,12 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.575.0",
     "react": "^18.2.0",
+    "react-country-flag": "^3.1.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.30.3"
+    "react-router-dom": "^6.30.3",
+    "wheretogonext": "file:.."
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

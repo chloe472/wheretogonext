@@ -2,7 +2,7 @@
   min-height: 100vh;
 }
 
-/* Hero */
+
 .hero {
   position: relative;
   min-height: 70vh;
@@ -100,7 +100,7 @@
   transform: scale(0.98);
 }
 
-/* Features */
+
 .features {
   padding: 4rem 1.5rem;
   background: var(--wtg-bg);
@@ -170,7 +170,7 @@
   line-height: 1.5;
 }
 
-/* Process */
+
 .process {
   padding: 4rem 1.5rem;
   background: var(--wtg-surface);
@@ -251,7 +251,7 @@
   line-height: 1.5;
 }
 
-/* CTA */
+
 .cta {
   padding: 4rem 1.5rem;
   background: var(--wtg-primary);
@@ -293,7 +293,7 @@
   transform: scale(0.98);
 }
 
-/* Footer */
+
 .footer {
   display: flex;
   flex-wrap: wrap;

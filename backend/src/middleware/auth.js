@@ -1,9 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-/**
- * Requires `Authorization: Bearer <jwt>`. Sets `req.userId` and `req.user`.
- */
 export async function requireAuth(req, res, next) {
   try {
     if (!process.env.JWT_SECRET) {
@@ -36,7 +33,6 @@ export async function requireAuth(req, res, next) {
   }
 }
 
-/** Sets `req.userId` when a valid Bearer token is present; otherwise continues without auth. */
 export function optionalAuth(req, res, next) {
   try {
     if (!process.env.JWT_SECRET) return next();

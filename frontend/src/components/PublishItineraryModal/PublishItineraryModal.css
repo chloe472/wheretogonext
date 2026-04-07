@@ -339,7 +339,7 @@
   z-index: 100;
 }
 
-/* Cover (first) thumbnail: menu aligns left so it isn't clipped by modal edge */
+
 .publish-modal__menu--flip {
   left: 0;
   right: auto;

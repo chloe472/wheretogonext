@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Bell, User, Search } from 'lucide-react';
-import { searchLocations } from '../../data/mockLocations';
+import { fetchCitySuggestions } from '../../api/locationsApi';
 import {
   fetchNotifications,
   markNotificationRead,
@@ -10,14 +10,12 @@ import {
 } from '../../api/notificationsApi';
 import './DashboardHeader.css';
 
-/**
- * Shared top bar for dashboard-style pages (My Trips, Explore, etc.)
- * @param {{ user?: { name?: string }, onLogout?: () => void, activeNav?: 'dashboard' | 'explore' }} props
- */
+
 export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard' }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -28,7 +26,30 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
   const notificationsRef = useRef(null);
   const userId = String(user?.id || user?._id || '').trim();
 
-  const searchSuggestions = searchLocations(searchQuery);
+  useEffect(() => {
+    const trimmed = String(searchQuery || '').trim();
+    if (!trimmed) {
+      setSearchSuggestions([]);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      try {
+        const next = await fetchCitySuggestions(trimmed, { signal: controller.signal, limit: 8 });
+        setSearchSuggestions(Array.isArray(next) ? next : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setSearchSuggestions([]);
+        }
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -70,7 +91,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
 
     loadLatest();
 
-    // SSE — server pushes new notifications instantly.
+    
     const streamUrl = getNotificationStreamUrl();
     let es = null;
     let reconnectTimer = null;
@@ -81,7 +102,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       es = new EventSource(streamUrl);
 
       es.addEventListener('connected', () => {
-        reconnectDelay = 2000; // reset backoff on successful connection
+        reconnectDelay = 2000; 
       });
 
       es.addEventListener('notification', (e) => {
@@ -95,7 +116,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
           if (!notification.isRead) {
             setUnreadCount((c) => c + 1);
           }
-        } catch { /* ignore malformed event */ }
+        } catch {  }
       });
 
       es.onerror = () => {
@@ -111,7 +132,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
 
     connectSSE();
 
-    // Slow fallback poll (60 s) to catch anything missed while SSE was reconnecting.
+    
     const intervalId = window.setInterval(loadLatest, 60000);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -202,7 +223,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
         setUnreadCount(payload.unreadCount);
       }
     } catch {
-      // best effort
+      
     }
     setNotificationsOpen(false);
     navigate(link);
@@ -214,7 +235,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
     try {
       await markAllNotificationsRead();
     } catch {
-      // best effort
+      
     }
   };
 

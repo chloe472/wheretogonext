@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Calendar as CalendarIcon,
   Camera,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
 import TripMap from '../../TripMap/TripMap';
+import TripDetailsFilterDropdown from './TripDetailsFilterDropdown';
 import {
   distanceBetween,
   getDefaultStartTimeForDate,
@@ -164,7 +166,7 @@ return (
     <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={onCloseBackdrop} />
     <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'place-detail-title') : 'add-places-title'} aria-modal="true">
       {showingItineraryDetail ? (
-        // Itinerary Detail View
+        
         <div className="trip-details__add-places-body">
           <div className="trip-details__itinerary-detail-panel">
             <div className="trip-details__itinerary-detail-header">
@@ -320,26 +322,27 @@ return (
                       <p className="trip-details__add-places-results">
                         {filteredPlaces.length} results found · Page {addPlacesPage} of {addPlacesTotalPages}
                       </p>
-                      <div className="trip-details__add-places-sort">
+                      <div className="trip-details__add-places-sort trip-details__add-places-sort--push">
                         <label htmlFor="add-places-city-filter">City:</label>
-                        <select
-                          id="add-places-city-filter"
-                          className="trip-details__add-places-sort-select"
-                          value={addModalCityFilter}
-                          onChange={(e) => setAddModalCityFilter(e.target.value)}
-                        >
-                          {addModalCityOptions.map((city) => (
-                            <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
-                          ))}
-                        </select>
+                        <div id="add-places-city-filter">
+                          <TripDetailsFilterDropdown
+                            value={addModalCityFilter}
+                            options={addModalCityOptions.map((city) => ({ value: city, label: city === 'All' ? 'All cities' : city }))}
+                            onChange={setAddModalCityFilter}
+                            ariaLabel="City filter"
+                          />
+                        </div>
                       </div>
                       <div className="trip-details__add-places-sort">
                         <label htmlFor="add-places-sort">Sort by:</label>
-                        <select id="add-places-sort" className="trip-details__add-places-sort-select" value={placeSortBy} onChange={(e) => setPlaceSortBy(e.target.value)}>
-                          {PLACE_SORT_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
+                        <div id="add-places-sort">
+                          <TripDetailsFilterDropdown
+                            value={placeSortBy}
+                            options={PLACE_SORT_OPTIONS}
+                            onChange={setPlaceSortBy}
+                            ariaLabel="Sort places"
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="trip-details__add-places-grid">

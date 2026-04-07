@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
 import TripMap from '../../TripMap/TripMap';
+import TripDetailsFilterDropdown from './TripDetailsFilterDropdown';
 import {
   FOOD_FILTER_OPTIONS,
   FOOD_SORT_OPTIONS,
@@ -100,7 +101,7 @@ return (
     />
     <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? 'food-detail-title' : 'add-food-title'} aria-modal="true">
       {showingFoodDetail ? (
-        // Food Detail View
+        
         <div className="trip-details__add-places-body trip-details__add-food-body">
           <div className="trip-details__place-detail-panel">
             <div className="trip-details__place-detail-header">
@@ -281,36 +282,24 @@ return (
               <div className="trip-details__add-food-toolbar">
                 <p className="trip-details__add-places-results">{foodPlaces.length} results found</p>
                 <div className="trip-details__add-food-toolbar-actions">
-                  <select
-                    className="trip-details__add-places-sort-select"
-                    value={addModalCityFilter}
-                    onChange={(e) => setAddModalCityFilter(e.target.value)}
-                    aria-label="Filter by city"
-                  >
-                    {addModalCityOptions.map((city) => (
-                      <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
-                    ))}
-                  </select>
-                  <select
-                    className="trip-details__add-places-sort-select"
-                    value={foodDietaryFilter}
-                    onChange={(e) => setFoodDietaryFilter(e.target.value)}
-                    aria-label="Filter food and beverage results"
-                  >
-                    {FOOD_FILTER_OPTIONS.map((filter) => (
-                      <option key={filter} value={filter}>{filter}</option>
-                    ))}
-                  </select>
-                  <select
-                    className="trip-details__add-places-sort-select"
-                    value={foodSortBy}
-                    onChange={(e) => setFoodSortBy(e.target.value)}
-                    aria-label="Sort food and beverage places"
-                  >
-                    {FOOD_SORT_OPTIONS.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
+                    <TripDetailsFilterDropdown
+                      value={addModalCityFilter}
+                      options={addModalCityOptions.map((city) => ({ value: city, label: city === 'All' ? 'All cities' : city }))}
+                      onChange={setAddModalCityFilter}
+                      ariaLabel="Filter by city"
+                    />
+                    <TripDetailsFilterDropdown
+                      value={foodDietaryFilter}
+                      options={FOOD_FILTER_OPTIONS}
+                      onChange={setFoodDietaryFilter}
+                      ariaLabel="Filter food and beverage results"
+                    />
+                    <TripDetailsFilterDropdown
+                      value={foodSortBy}
+                      options={FOOD_SORT_OPTIONS}
+                      onChange={setFoodSortBy}
+                      ariaLabel="Sort food and beverage places"
+                    />
                 </div>
               </div>
 

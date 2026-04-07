@@ -95,7 +95,7 @@ export default function DestinationPickerField({
         id="where"
         type="text"
         className="new-trip__input new-trip__input--where"
-        placeholder="e.g. Paris, Hawaii, Japan"
+        placeholder="e.g. Paris, Berlin, Tokyo"
         value={whereQuery}
         onChange={(e) => {
           setWhereQuery(e.target.value);

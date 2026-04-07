@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { deleteItinerary, updateItinerary } from '../../../api/itinerariesApi';
-import { searchLocations } from '../lib/tripDetailsLocationData';
 import {
   buildWhereDefaultCityDayRanges,
   getTripDayCount,
@@ -77,16 +76,9 @@ export function useTripDetailsHeaderActions({
     const parts = locationsStr.split(';').map((s) => s.trim()).filter(Boolean);
     const initial = parts.length > 0 ? parts : (trip.destination ? [trip.destination] : []);
     const resolved = initial.map((str, i) => {
-      const match = searchLocations(str).find(
-        (loc) => loc.name === str || (loc.country && `${loc.name}, ${loc.country}` === str),
-      );
-      if (match) return match;
-
       const [name, ...rest] = str.split(',').map((s) => s.trim());
       const locName = name || str;
       const locCountry = rest.length > 0 ? rest.join(', ') : undefined;
-      const byName = searchLocations(locName).find((loc) => !locCountry || loc.country === locCountry);
-      if (byName) return byName;
       return { id: `where-${i}-${locName}`, name: locName, country: locCountry };
     });
 

@@ -42,19 +42,19 @@ export function buildInlinePlaceholderUrl(hint = '', topic = 'travel') {
 export function resolveImageUrl(imageUrl, hint = '', topic = 'travel') {
   const raw = String(imageUrl || '').trim();
   const normalized = raw.replace(/\\/g, '/');
-  // Support old persisted values like "uploads/itineraries/..." (without leading slash).
+  
   const rootRelative = normalized.startsWith('uploads/') ? `/${normalized}` : normalized;
   if (raw && raw.startsWith('data:image/')) {
     return raw;
   }
-  // Route uploaded asset paths through backend origin when needed.
+  
   if (rootRelative && rootRelative.startsWith('/uploads/')) {
     const assetOrigin = getBackendAssetOrigin();
     if (assetOrigin) return `${assetOrigin}${rootRelative}`;
     return rootRelative;
   }
 
-  // Accept absolute URLs, blob URLs, or other root-relative paths.
+  
   if (
     rootRelative
     && (/^(https?:)?\/\//i.test(rootRelative) || rootRelative.startsWith('/') || rootRelative.startsWith('blob:'))

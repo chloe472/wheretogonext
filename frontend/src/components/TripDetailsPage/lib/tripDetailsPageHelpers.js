@@ -1,12 +1,12 @@
 import { Footprints, Bike, Car, Train } from 'lucide-react';
 import { resolveImageUrl } from '../../../lib/imageFallback';
-import { searchLocations } from './tripDetailsLocationData';
+import { loadGoogleMapsScript } from '../../../lib/loadGoogleMaps';
 
 export const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/** Day rows for Kanban/calendar — from trip startDate/endDate (YYYY-MM-DD). */
+
 export function getTripDaysFromTrip(trip) {
   if (!trip?.startDate || !trip?.endDate) return [];
   const s = String(trip.startDate).slice(0, 10);
@@ -103,11 +103,7 @@ export function splitRouteLocationLabel(label = '') {
   return { city, country };
 }
 
-/**
- * Merge a destination label into trip.destination / trip.locations (semicolon-separated route).
- * Same rules as Trip Details "Add … to trip destinations" (social import / Explore add-to-trip).
- * @returns {{ ok: true, destination: string, locations: string } | { ok: false, reason: string, message?: string }}
- */
+
 export function appendDestinationLabelToTripDoc(trip, label) {
   const raw = String(label || '').trim();
   if (!raw) return { ok: false, reason: 'empty' };
@@ -276,7 +272,7 @@ export function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
   params.set('no_rooms', String(rooms));
   params.set('selected_currency', currencyCode);
 
-  // Reset child ages so generated URLs stay consistent with selected child count.
+  
   Array.from(params.keys())
     .filter((k) => /^age$|^age\d+$/i.test(k))
     .forEach((k) => params.delete(k));
@@ -296,13 +292,25 @@ export function isCityWhereLocation(loc) {
 export function findExactWhereLocationMatch(query) {
   const value = String(query || '').trim();
   if (!value) return null;
-  return searchLocations(value, 50).find((loc) => {
-    const full = loc.country ? `${loc.name}, ${loc.country}` : loc.name;
-    return (
-      String(loc.name || '').toLowerCase() === value.toLowerCase()
-      || String(full || '').toLowerCase() === value.toLowerCase()
-    );
-  }) || null;
+
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  if (parts.length > 1) {
+    return {
+      id: `where-${parts[0].toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      name: parts[0],
+      country: parts.slice(1).join(', '),
+      type: 'City',
+    };
+  }
+
+  return {
+    id: `where-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    name: value,
+    country: undefined,
+    type: 'City',
+  };
 }
 
 export const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND']);
@@ -358,14 +366,14 @@ export function getCurrencyDisplayName(code) {
       return display.of(currencyCode) || currencyCode;
     }
   } catch (_) {
-    // fall through
+    
   }
   return currencyCode;
 }
-// Keep one slot for the manual-add card so 3-column pages don't end with a lone card row.
+
 export const ADD_PLACES_PAGE_SIZE = 17;
 
-/** Category display for day cards */
+
 export const CATEGORY_CARD_STYLES = {
   places: { label: 'Place', color: '#16a34a' },
   place: { label: 'Place', color: '#16a34a' },
@@ -928,7 +936,7 @@ export function hasValidLatLng(place) {
   return Number.isFinite(lat) && Number.isFinite(lng);
 }
 
-/** Reorder items between start and end (inclusive) by proximity: start fixed, end fixed last, middle ordered by nearest neighbour. */
+
 export function reorderByProximity(items, startId, endId) {
   if (!Array.isArray(items) || items.length <= 1) return items || [];
 
@@ -1058,7 +1066,7 @@ export function getTransportTimesFromDetail(detail = '') {
   return { dep: match[1], arr: match[2] };
 }
 
-/** Maps our UI mode to Route Matrix travelMode strings (replaces legacy Distance Matrix). */
+
 export const ROUTE_MATRIX_TRAVEL_MODE = {
   walking: 'WALKING',
   cycling: 'BICYCLING',
@@ -1066,7 +1074,7 @@ export const ROUTE_MATRIX_TRAVEL_MODE = {
   public: 'TRANSIT',
 };
 
-/** Get travel time and distance via google.maps.routes.RouteMatrix.computeRouteMatrix (not deprecated DistanceMatrix). */
+
 export async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache) {
   const lat1 = fromItem.lat ?? 0;
   const lng1 = fromItem.lng ?? 0;
@@ -1124,7 +1132,7 @@ export async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, 
   }
 }
 
-/** Fallback travel time calculation using straight-line distance (Haversine formula). */
+
 export function getTravelBetweenFallback(fromItem, toItem, mode) {
   const lat1 = fromItem.lat ?? 47.6;
   const lng1 = fromItem.lng ?? -122.3;
@@ -1136,7 +1144,7 @@ export function getTravelBetweenFallback(fromItem, toItem, mode) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distKmRounded = Math.max(0.1, Math.round(distKm * 10) / 10);
-  // Add 30% buffer to straight-line distance to approximate actual route distance
+  
   const routeDistKm = Math.round(distKmRounded * 1.3 * 10) / 10;
   const minPerKm = { walking: 12, cycling: 4, driving: 2.5, public: 5 }[mode] || 5;
   const totalMins = Math.round(routeDistKm * minPerKm);
@@ -1146,31 +1154,28 @@ export function getTravelBetweenFallback(fromItem, toItem, mode) {
   return { duration: durationStr, durationMins: totalMins, distance: `${routeDistKm} km` };
 }
 
-/** Get travel time/distance between two items - tries Google Maps SDK first, falls back to calculation. */
+
 export function getTravelBetween(fromItem, toItem, mode, cache, setCache) {
-  // Generate cache key
+  
   const cacheKey = `${fromItem.lat},${fromItem.lng}|${toItem.lat},${toItem.lng}|${mode}`;
   
-  // Return cached result if available
+  
   if (cache && cache[cacheKey]) {
     return cache[cacheKey];
   }
   
-  // Start async fetch in background if Google Maps is available
+  
   if (typeof window !== 'undefined' && window.google && cache !== undefined && setCache) {
     getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache).catch(err => {
       console.error('Error fetching travel data:', err);
     });
   }
   
-  // Return fallback calculation immediately for initial render
+  
   return getTravelBetweenFallback(fromItem, toItem, mode);
 }
 
-/**
- * Pure append for discovery / Explore flows (same rules as TripDetails add-to-trip).
- * @returns {{ ok: true, tripExpenseItems: object[] } | { ok: false, reason: 'overlap' | 'invalid_stay', message: string }}
- */
+
 export function tryAppendItemToExpenseList(tripExpenseItems, {
   itemType,
   data,
@@ -1291,7 +1296,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'experiences', label: 'Experiences', color: '#7c3aed' },
 ];
 
-/** Build budget breakdown from actual trip items (totals are stored in USD). */
+
 export function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) {
   const prefix = currencyCode === 'USD' ? 'US' : currencyCode;
   const symbol = currencyCode === 'USD' ? 'US$' : `${currencyCode} `;
@@ -1333,39 +1338,370 @@ export function formatExpenseDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\//g, ' ');
 }
 
+function scoreMatch(query, text) {
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  if (!q || !t) return 0;
 
-// Fetch Google Places Autocomplete predictions
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  
+  if (t === q) return 1000;
+  
+  
+  if (new RegExp(`\\b${escaped}`).test(t)) return 500;
+  
+  
+  if (t.startsWith(q)) return 300;
+  
+  
+  if (t.includes(q)) return 100;
+  
+  return 0;
+}
+
+function sortPredictionsByQuery(query, predictions) {
+  const q = String(query || '').trim();
+  if (!q) return dedupePredictions(predictions).slice(0, 8);
+
+  return dedupePredictions(predictions)
+    .map((prediction) => {
+      const main = prediction?.structured_formatting?.main_text || prediction?.description || '';
+      const secondary = prediction?.structured_formatting?.secondary_text || '';
+      const score = Math.max(scoreMatch(q, main), scoreMatch(q, secondary));
+      return { prediction, score };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aMain = a.prediction?.structured_formatting?.main_text || a.prediction?.description || '';
+      const bMain = b.prediction?.structured_formatting?.main_text || b.prediction?.description || '';
+      return String(aMain).localeCompare(String(bMain));
+    })
+    .slice(0, 8)
+    .map((entry) => entry.prediction);
+}
+
+function isAddressLikeQuery(query) {
+  const q = String(query || '').trim();
+  if (!q) return false;
+  return /\d/.test(q) || q.includes(',') || q.split(/\s+/).length >= 4;
+}
+
+function toPrediction(main, secondary, placeIdPrefix = 'derived', index = 0, lat = null, lng = null) {
+  const mainText = String(main || '').trim();
+  const secondaryText = String(secondary || '').trim();
+  if (!mainText) return null;
+
+  const slug = mainText.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const prediction = {
+    place_id: `${placeIdPrefix}-${index}-${slug}`,
+    description: secondaryText ? `${mainText}, ${secondaryText}` : mainText,
+    structured_formatting: {
+      main_text: mainText,
+      secondary_text: secondaryText || 'Location',
+    },
+  };
+
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+    prediction.lat = latNum;
+    prediction.lng = lngNum;
+  }
+
+  return prediction;
+}
+
+function dedupePredictions(predictions) {
+  const seen = new Set();
+  const unique = [];
+  (predictions || []).forEach((prediction) => {
+    const key = String(prediction?.description || prediction?.place_id || '').toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    unique.push(prediction);
+  });
+  return unique;
+}
+
+async function fetchGlobalGeocodingPredictions(query) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    
+    const scored = results.map((item, index) => {
+      const city = item.name || q;
+      const admin = [item.admin1, item.country].filter(Boolean).join(', ');
+      const mainScore = scoreMatch(q, city);
+      const adminScore = scoreMatch(q, admin);
+      const totalScore = Math.max(mainScore, adminScore);
+      return {
+        item,
+        city,
+        admin,
+        score: totalScore || 50, 
+        index,
+      };
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((s) => {
+        const { city, admin, index } = s;
+        return toPrediction(city, admin, 'geocode', s.item.id || index, s.item.latitude, s.item.longitude);
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchPhotonPredictions(query) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=12&lang=en`;
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const features = Array.isArray(data?.features) ? data.features : [];
+
+    return features
+      .map((feature, index) => {
+        const props = feature?.properties || {};
+        const main = [props.name, props.street].filter(Boolean).join(' ').trim() || props.name || '';
+        const secondaryParts = [
+          props.housenumber,
+          props.postcode,
+          props.city || props.county || props.state,
+          props.country,
+        ].filter(Boolean);
+        const secondary = secondaryParts.join(', ');
+        const coords = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
+        const lng = coords.length >= 1 ? coords[0] : null;
+        const lat = coords.length >= 2 ? coords[1] : null;
+        return toPrediction(main, secondary, 'photon', props.osm_id || index, lat, lng);
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function fetchGoogleAutocompletePredictions(query) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.places?.AutocompleteService || !window.google?.maps?.places?.PlacesServiceStatus) {
+      resolve([]);
+      return;
+    }
+
+    const service = new window.google.maps.places.AutocompleteService();
+    const request = { input: query };
+    if (window.google.maps.places.AutocompleteSessionToken) {
+      request.sessionToken = new window.google.maps.places.AutocompleteSessionToken();
+    }
+
+    service.getPlacePredictions(request, (predictions, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && Array.isArray(predictions)) {
+        resolve(predictions);
+        return;
+      }
+      resolve([]);
+    });
+  });
+}
+
+function geocodeAddress(query) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.Geocoder) {
+      resolve(null);
+      return;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ address: query }, (results, status) => {
+      const okStatus = window.google?.maps?.GeocoderStatus?.OK || 'OK';
+      if (status !== okStatus && status !== 'OK') {
+        resolve(null);
+        return;
+      }
+      if (!Array.isArray(results) || results.length === 0) {
+        resolve(null);
+        return;
+      }
+      const location = results[0]?.geometry?.location;
+      if (!location || typeof location.lat !== 'function' || typeof location.lng !== 'function') {
+        resolve(null);
+        return;
+      }
+      resolve({ lat: location.lat(), lng: location.lng() });
+    });
+  });
+}
+
+function fetchNearbyLandmarksFromLatLng(latLng) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.places?.PlacesService || !window.google?.maps?.places?.PlacesServiceStatus) {
+      resolve([]);
+      return;
+    }
+
+    const div = document.createElement('div');
+    div.style.display = 'none';
+    document.body.appendChild(div);
+    const service = new window.google.maps.places.PlacesService(div);
+    const request = {
+      location: latLng,
+      radius: 3000,
+      type: 'point_of_interest',
+    };
+
+    service.nearbySearch(request, (results, status) => {
+      try {
+        div.remove();
+      } catch {
+        
+      }
+
+      if (status !== window.google.maps.places.PlacesServiceStatus.OK || !Array.isArray(results)) {
+        resolve([]);
+        return;
+      }
+
+      const mapped = results.slice(0, 8).map((item, index) => {
+        const main = item.name || '';
+        const secondary = item.vicinity || item.formatted_address || '';
+        const lat = item?.geometry?.location?.lat?.();
+        const lng = item?.geometry?.location?.lng?.();
+        return toPrediction(main, secondary, 'nearby', item.place_id || index, lat, lng);
+      }).filter(Boolean);
+
+      resolve(mapped);
+    });
+  });
+}
+
+function fetchLandmarksByAddressText(query) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.places?.PlacesService || !window.google?.maps?.places?.PlacesServiceStatus) {
+      resolve([]);
+      return;
+    }
+
+    const div = document.createElement('div');
+    div.style.display = 'none';
+    document.body.appendChild(div);
+    const service = new window.google.maps.places.PlacesService(div);
+
+    service.textSearch({ query: `top landmarks near ${query}` }, (results, status) => {
+      try {
+        div.remove();
+      } catch {
+        
+      }
+
+      if (status !== window.google.maps.places.PlacesServiceStatus.OK || !Array.isArray(results)) {
+        resolve([]);
+        return;
+      }
+
+      const mapped = results
+        .slice(0, 8)
+        .map((item, index) => {
+          const main = item.name || '';
+          const secondary = item.formatted_address || item.vicinity || '';
+          const lat = item?.geometry?.location?.lat?.();
+          const lng = item?.geometry?.location?.lng?.();
+          return toPrediction(main, secondary, 'text-landmark', item.place_id || index, lat, lng);
+        })
+        .filter(Boolean);
+
+      resolve(mapped);
+    });
+  });
+}
+
+async function fetchNearbyLandmarkPredictionsFromAddress(query) {
+  if (!isAddressLikeQuery(query)) return [];
+
+  const latLng = await geocodeAddress(query);
+  const nearby = latLng ? await fetchNearbyLandmarksFromLatLng(latLng) : [];
+  if (nearby.length > 0) return dedupePredictions(nearby);
+
+  const textLandmarks = await fetchLandmarksByAddressText(query);
+  if (textLandmarks.length > 0) return dedupePredictions(textLandmarks);
+
+  const geocoded = await fetchGlobalGeocodingPredictions(query);
+  const hint = geocoded[0]?.description || '';
+  if (!hint) return [];
+
+  const hintedLandmarks = await fetchLandmarksByAddressText(hint);
+  return dedupePredictions(hintedLandmarks);
+}
+
+
 export async function fetchPlacesPredictions(input, callback) {
-  if (!input || !input.trim()) {
+  const query = String(input || '').trim();
+  if (!query) {
     callback([]);
     return;
   }
 
   try {
-    // Wait for Google Maps SDK
-    if (!window.google || !window.google.maps || !window.google.maps.places) {
-      console.warn('Google Maps Places library not loaded yet');
-      callback([]);
-      return;
+    if (!window.google?.maps?.places?.AutocompleteService) {
+      await loadGoogleMapsScript();
     }
+    const addressLike = isAddressLikeQuery(query);
+    const googlePromise = fetchGoogleAutocompletePredictions(query);
+    const geocodePromise = fetchGlobalGeocodingPredictions(query);
+    const photonPromise = fetchPhotonPredictions(query);
+    const nearbyPromise = addressLike ? fetchNearbyLandmarkPredictionsFromAddress(query) : Promise.resolve([]);
 
-    const service = new window.google.maps.places.AutocompleteService();
-    service.getPlacePredictions(
-      {
-        input: input,
-        types: ['establishment', 'geocode'], // Include all types of locations
-      },
-      (predictions, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-          callback(predictions);
-        } else {
-          callback([]);
-        }
-      }
-    );
+    const [googlePredictions, geocoded, photonPredictions, nearbyLandmarks] = await Promise.all([
+      googlePromise,
+      geocodePromise,
+      photonPromise,
+      nearbyPromise,
+    ]);
+
+    const merged = sortPredictionsByQuery(query, [
+      ...nearbyLandmarks,
+      ...googlePredictions,
+      ...photonPredictions,
+      ...geocoded,
+    ]);
+
+    callback(merged);
   } catch (error) {
     console.error('Error fetching places predictions:', error);
-    callback([]);
+    try {
+      const [photonPredictions, geocoded] = await Promise.all([
+        fetchPhotonPredictions(query),
+        fetchGlobalGeocodingPredictions(query),
+      ]);
+      callback(sortPredictionsByQuery(query, [...photonPredictions, ...geocoded]));
+    } catch {
+      callback([]);
+    }
   }
 }
 

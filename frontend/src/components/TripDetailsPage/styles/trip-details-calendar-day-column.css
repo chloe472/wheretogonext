@@ -1,4 +1,4 @@
-/* Calendar day column content (same as Kanban itinerary) */
+
 .trip-details__calendar-day-col-content {
   display: flex;
   flex-direction: column;

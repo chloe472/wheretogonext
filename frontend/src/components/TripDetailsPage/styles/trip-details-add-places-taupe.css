@@ -1,4 +1,4 @@
-/* Taupe/black theme for Add Places modal (match dashboard) */
+
 .trip-details__add-places-modal--theme {
   --place-bg: var(--wtg-bg);
   --place-surface: var(--wtg-surface);

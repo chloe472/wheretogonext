@@ -1,5 +1,59 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
+
+const ROLE_LABELS = { viewer: 'Can View', editor: 'Can Edit' };
+
+function RoleDropdown({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  if (disabled) {
+    return <span className="trip-share__role-static">{ROLE_LABELS[value] ?? value}</span>;
+  }
+
+  return (
+    <div className="trip-share__role-dropdown" ref={ref}>
+      <button
+        type="button"
+        className={`trip-share__role-btn${open ? ' trip-share__role-btn--open' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span>{ROLE_LABELS[value] ?? value}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="trip-share__role-menu" role="listbox">
+          {Object.entries(ROLE_LABELS).map(([role, label]) => (
+            <button
+              key={role}
+              type="button"
+              role="option"
+              aria-selected={value === role}
+              className={`trip-share__role-option${value === role ? ' trip-share__role-option--active' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onChange(role); setOpen(false); }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Avatar({ user }) {
   if (!user) return null;
@@ -23,6 +77,11 @@ export default function TripShareModal({
   open,
   loading,
   friends,
+  collaborators,
+  owner,
+  currentUserId,
+  onSaveCollaboratorRoles,
+  onRemoveCollaborator,
   onClose,
   onShareWithFriend,
   onInviteByEmail,
@@ -40,8 +99,45 @@ export default function TripShareModal({
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
   const wrapRef = useRef(null);
+  const [roleSaving, setRoleSaving] = useState(false);
 
-  // Debounced search as user types
+  
+  const [pendingRoles, setPendingRoles] = useState({});
+
+  
+  useEffect(() => {
+    if (!open) setPendingRoles({});
+  }, [open]);
+
+  const originalRoles = useMemo(() => {
+    const map = {};
+    (Array.isArray(collaborators) ? collaborators : []).forEach((c) => {
+      const uid = String(c?.user?.id || c?.userId || '');
+      if (uid) map[uid] = c?.role || 'viewer';
+    });
+    return map;
+  }, [collaborators]);
+
+  const hasRoleChanges = Object.keys(pendingRoles).some(
+    (uid) => pendingRoles[uid] !== originalRoles[uid],
+  );
+
+  const handleSaveRoles = async () => {
+    if (!hasRoleChanges) {
+      onClose?.();
+      return;
+    }
+    setRoleSaving(true);
+    try {
+      await onSaveCollaboratorRoles(pendingRoles);
+      setPendingRoles({});
+      toast.success('Access updated successfully');
+    } finally {
+      setRoleSaving(false);
+    }
+  };
+
+  
   useEffect(() => {
     const q = inviteQuery.trim();
     if (q.length < 2) {
@@ -68,7 +164,7 @@ export default function TripShareModal({
     return () => clearTimeout(debounceRef.current);
   }, [inviteQuery, onSearchUsers]);
 
-  // Close dropdown on outside click
+  
   useEffect(() => {
     const handleClick = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
@@ -80,6 +176,11 @@ export default function TripShareModal({
   }, []);
 
   if (!open) return null;
+
+  const ownerName = owner?.name || owner?.username || owner?.email || 'Owner';
+  const ownerEmail = owner?.email || '';
+  const ownerId = String(owner?._id || owner?.id || '').trim();
+  const meId = String(currentUserId || '').trim();
 
   const friendList = Array.isArray(friends) ? friends : [];
 
@@ -171,7 +272,7 @@ export default function TripShareModal({
                   {inviteSending ? 'Sending…' : 'Send invite'}
                 </button>
 
-                {/* Search results dropdown */}
+                {}
                 {dropdownOpen && searchResults.length > 0 && (
                   <ul className="trip-share__search-dropdown">
                     {searchResults.map((u) => (
@@ -216,14 +317,69 @@ export default function TripShareModal({
           {!loading && friendList.length === 0 && (
             <p className="trip-share__empty">Add friends to share trips with them.</p>
           )}
+
+          {!loading && (owner || (Array.isArray(collaborators) && collaborators.length > 0)) && (
+            <div className="trip-share__collab-section">
+              <p className="trip-share__label">People with access</p>
+              <ul className="trip-share__collab-list">
+                {owner && (
+                  <li className="trip-share__collab-item">
+                    <Avatar user={owner} />
+                    <div className="trip-share__collab-info">
+                      <span className="trip-share__collab-name">{ownerName}</span>
+                      {ownerEmail && <span className="trip-share__collab-sub">{ownerEmail}</span>}
+                    </div>
+                    <span className="trip-share__owner-badge">Owner</span>
+                  </li>
+                )}
+                {Array.isArray(collaborators) && collaborators.map((collab) => {
+                  const user = collab?.user || {};
+                  const userId = String(user?.id || collab?.userId || '');
+                  const currentRole = pendingRoles[userId] ?? collab?.role ?? 'viewer';
+                  const isOwner = ownerId && userId && ownerId === userId;
+                  const isSelf = meId && userId && meId === userId;
+                  const lockAccess = isOwner || isSelf;
+                  return (
+                    <li key={userId} className="trip-share__collab-item">
+                      <Avatar user={user} />
+                      <div className="trip-share__collab-info">
+                        <span className="trip-share__collab-name">{user?.name || 'Tripmate'}</span>
+                        {user?.email && <span className="trip-share__collab-sub">{user.email}</span>}
+                      </div>
+                      <RoleDropdown
+                        value={currentRole}
+                        onChange={(role) => setPendingRoles((prev) => ({ ...prev, [userId]: role }))}
+                        disabled={lockAccess}
+                      />
+                      {!lockAccess && (
+                        <button
+                          type="button"
+                          className="trip-share__collab-remove"
+                          onClick={() => onRemoveCollaborator(userId)}
+                          aria-label={`Remove ${user?.name || 'tripmate'}`}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="trip-share__footer">
-          <button type="button" className="trip-share__footer-btn trip-share__footer-btn--ghost" onClick={onClose}>
-            Close
-          </button>
           <button type="button" className="trip-share__footer-btn trip-share__footer-btn--primary" onClick={onCopy}>
             Copy link
+          </button>
+          <button
+            type="button"
+            className="trip-share__footer-btn trip-share__footer-btn--primary"
+            onClick={handleSaveRoles}
+            disabled={roleSaving}
+          >
+            {roleSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>

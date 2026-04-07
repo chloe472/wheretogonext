@@ -4,7 +4,7 @@
   box-sizing: border-box;
 }
 
-/* App-wide theme (beige / brown / taupe – same as dashboard) */
+
 :root {
   --wtg-bg: #f2ebe3;
   --wtg-surface: #faf8f5;

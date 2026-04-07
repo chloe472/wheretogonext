@@ -1,6 +1,3 @@
-import countriesData from '../../../data/countries.json';
-import { CITIES } from '../../../data/cities';
-
 export default function ProfileAddDestinationModal({
   open,
   onClose,
@@ -14,6 +11,9 @@ export default function ProfileAddDestinationModal({
   setDestinationCity,
   destinationCityOpen,
   setDestinationCityOpen,
+  destinationCountrySuggestions,
+  destinationCitySuggestions,
+  destinationSuggestionsLoading,
   destinationError,
   setDestinationError,
   destinationLoading,
@@ -62,12 +62,12 @@ export default function ProfileAddDestinationModal({
                   setDestinationCountryOpen(true);
                 }}
                 onBlur={() => {
-                  const match = countriesData.find(
-                    (c) => c.name.toLowerCase() === destinationCountryInput.toLowerCase()
+                  const match = (Array.isArray(destinationCountrySuggestions) ? destinationCountrySuggestions : []).find(
+                    (name) => String(name || '').toLowerCase() === destinationCountryInput.toLowerCase()
                   );
                   if (match) {
-                    setDestinationCountry(match.name);
-                    setDestinationCountryInput(match.name);
+                    setDestinationCountry(match);
+                    setDestinationCountryInput(match);
                   } else if (destinationCountry) {
                     setDestinationCountryInput(destinationCountry);
                   }
@@ -75,12 +75,11 @@ export default function ProfileAddDestinationModal({
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { setDestinationCountryOpen(false); return; }
                   if (e.key === 'Enter') {
-                    const suggestions = countriesData.filter((c) =>
-                      c.name.toLowerCase().includes(destinationCountryInput.toLowerCase())
-                    );
+                    const suggestions = (Array.isArray(destinationCountrySuggestions) ? destinationCountrySuggestions : [])
+                      .filter((name) => String(name || '').toLowerCase().includes(destinationCountryInput.toLowerCase()));
                     if (suggestions.length > 0) {
-                      setDestinationCountry(suggestions[0].name);
-                      setDestinationCountryInput(suggestions[0].name);
+                      setDestinationCountry(suggestions[0]);
+                      setDestinationCountryInput(suggestions[0]);
                       setDestinationCountryOpen(false);
                     }
                   }
@@ -88,23 +87,24 @@ export default function ProfileAddDestinationModal({
               />
               {destinationCountryOpen && (
                 <ul className="profile-page__dest-dropdown">
-                  {countriesData
-                    .filter((c) => !destinationCountryInput || c.name.toLowerCase().includes(destinationCountryInput.toLowerCase()))
-                    .map((c) => (
-                      <li key={c.name}>
+                  {destinationSuggestionsLoading && <li className="profile-page__dest-dropdown-item">Searching...</li>}
+                  {!destinationSuggestionsLoading && (Array.isArray(destinationCountrySuggestions) ? destinationCountrySuggestions : [])
+                    .filter((name) => !destinationCountryInput || String(name || '').toLowerCase().includes(destinationCountryInput.toLowerCase()))
+                    .map((name) => (
+                      <li key={name}>
                         <button
                           type="button"
-                          className={`profile-page__dest-dropdown-item${destinationCountry === c.name ? ' profile-page__dest-dropdown-item--active' : ''}`}
+                          className={`profile-page__dest-dropdown-item${destinationCountry === name ? ' profile-page__dest-dropdown-item--active' : ''}`}
                           onMouseDown={(e) => {
                             e.preventDefault();
-                            setDestinationCountry(c.name);
-                            setDestinationCountryInput(c.name);
+                            setDestinationCountry(name);
+                            setDestinationCountryInput(name);
                             setDestinationCountryOpen(false);
                             setDestinationCity('');
                             setDestinationCityOpen(false);
                           }}
                         >
-                          {c.name}
+                          {name}
                         </button>
                       </li>
                     ))}
@@ -135,14 +135,15 @@ export default function ProfileAddDestinationModal({
               />
               {destinationCityOpen && (
                 <ul className="profile-page__dest-dropdown">
-                  {CITIES
+                  {destinationSuggestionsLoading && <li className="profile-page__dest-dropdown-item">Searching...</li>}
+                  {!destinationSuggestionsLoading && (Array.isArray(destinationCitySuggestions) ? destinationCitySuggestions : [])
                     .filter((c) => {
                       if (destinationCountry && c.country !== destinationCountry) return false;
                       if (!destinationCity) return true;
-                      return c.name.toLowerCase().includes(destinationCity.toLowerCase());
+                      return String(c.name || '').toLowerCase().includes(destinationCity.toLowerCase());
                     })
                     .map((c) => (
-                      <li key={c.id}>
+                      <li key={c.id || `${c.name}-${c.country || 'city'}`}>
                         <button
                           type="button"
                           className={`profile-page__dest-dropdown-item${destinationCity === c.name ? ' profile-page__dest-dropdown-item--active' : ''}`}

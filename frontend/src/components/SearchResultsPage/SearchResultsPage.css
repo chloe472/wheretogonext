@@ -15,7 +15,7 @@
   --dash-input-bg: var(--wtg-input-bg);
 }
 
-/* Hero */
+
 .search-results__hero {
   position: relative;
   overflow: visible;
@@ -223,7 +223,7 @@
   color: #fff;
 }
 
-/* Main: sidebar + grid */
+
 .search-results__main {
   display: flex;
   gap: 2rem;

@@ -1,6 +1,4 @@
-import { getMapCenterForDestination } from '../data/mockPlaces';
 
-/** Same mappable stop categories as trip planning / backend `placesFromTripExpenseItems`. */
 const MAP_CATEGORY_IDS = new Set(['places', 'food', 'experiences', 'stays']);
 
 function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
@@ -25,13 +23,7 @@ function dedupKey(m) {
   return `${m.lat.toFixed(5)},${m.lng.toFixed(5)},${String(m.name || '').trim().toLowerCase().slice(0, 48)}`;
 }
 
-/**
- * Build TripMap-compatible markers from a saved itinerary (same sources as TripDetailsPage: tripExpenseItems + places).
- * Dedupes when the same stop appears in both.
- *
- * @param {object | null | undefined} itinerary
- * @returns {{ markers: Array<object>, center: [number, number] }}
- */
+
 export function buildItineraryMapMarkers(itinerary) {
   if (!itinerary) {
     return { markers: [], center: [20, 0] };
@@ -106,7 +98,7 @@ export function buildItineraryMapMarkers(itinerary) {
   if (markers.length > 0) {
     center = [markers[0].lat, markers[0].lng];
   } else {
-    center = getMapCenterForDestination(itinerary.destination || itinerary.locations);
+    center = [20, 0];
   }
 
   return { markers, center };

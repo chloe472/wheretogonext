@@ -1,4 +1,4 @@
-/* Trip Details — see styles/trip-details-*.css (one file per UI area) */
+
 @import './styles/trip-details-shell.css';
 @import './styles/trip-details-header.css';
 @import './styles/trip-details-view-toggle.css';

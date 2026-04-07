@@ -5,9 +5,7 @@ import {
   getCityDayDraftKey,
 } from '../lib/newTripPageHelpers.js';
 
-/**
- * State and handlers for multi-city day allocation on the new-trip form.
- */
+
 export function useCityDayPlan(selectedLocations, totalTripDays) {
   const cityPlanRowSeqRef = useRef(0);
   const [cityPlanRows, setCityPlanRows] = useState([]);

@@ -1,7 +1,4 @@
-/**
- * Client-side location mismatch detection (aligned with backend socialImport.js).
- * Used when adding a place from Explore (or similar) to a trip with fixed destinations.
- */
+
 import { splitRouteLocationLabel } from './tripDetailsPageHelpers';
 
 export function inferCityFromFormattedAddress(formattedAddress) {
@@ -51,9 +48,7 @@ function tripCountryLabels(tripDestinations) {
   return out;
 }
 
-/**
- * One string to compare against trip cities/countries (city, country, or single region like "Japan").
- */
+
 export function inferPlaceLocationLabel(locality, address) {
   const loc = String(locality || '').trim();
   if (loc) return loc;
@@ -66,11 +61,7 @@ export function inferPlaceLocationLabel(locality, address) {
   return parts[parts.length - 1] || parts[0] || '';
 }
 
-/**
- * @param {Array<{ locality?: string, address?: string }>} places
- * @param {string[]} tripDestinationLabels full labels from getDestinationList(destination, locations)
- * @returns {object|null} same shape as backend locationInsight or null
- */
+
 export function computeLocationInsight(places, tripDestinationLabels) {
   const tripDestinations = Array.isArray(tripDestinationLabels) ? tripDestinationLabels : [];
   const knownTripCities = tripDestinations

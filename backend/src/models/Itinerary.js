@@ -23,9 +23,8 @@ const itinerarySchema = new mongoose.Schema(
     overview: { type: String, default: '' },
     creator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     destination: { type: String, default: '', trim: true },
-    /** Multi-city / broader location label (e.g. "Paris, France"). */
     locations: { type: String, default: '', trim: true },
-    /** Ordered city day allocation, e.g. [{ city: 'Seoul', startDay: 1, endDay: 3 }]. */
+    
     citySegments: {
       type: [
         {
@@ -37,7 +36,6 @@ const itinerarySchema = new mongoose.Schema(
       ],
       default: [],
     },
-    /** Trip date range (YYYY-MM-DD) and human-readable label for cards. */
     startDate: { type: String, default: '' },
     endDate: { type: String, default: '' },
     dates: { type: String, default: '' },
@@ -54,29 +52,22 @@ const itinerarySchema = new mongoose.Schema(
       ],
       default: [],
     },
-    /** UI status e.g. Planning, Upcoming � mirrors legacy trip cards. */
     status: { type: String, default: 'Planning' },
     statusClass: { type: String, default: '' },
-    /** Single hero image for trip cards (often same as coverImages[0]). */
     image: { type: String, default: '' },
-    /** Count shown on dashboard; may differ from places.length during migration. */
     placesSaved: { type: Number, default: 0, min: 0 },
-    /** Derived from unique day coverage / places; keep in sync when saving. */
     days: { type: Number, default: 1, min: 1 },
     categories: { type: [String], default: [] },
     coverImages: { type: [String], default: [] },
-    /** Kanban/calendar line items (places, transport, etc.) � rich objects from TripDetailsPage. */
     tripExpenseItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
-    /** Notes & Documents modal: general trip-level notes. */
+    dayTitles: { type: mongoose.Schema.Types.Mixed, default: {} },
     generalNotes: { type: String, default: '' },
-    /** Notes & Documents modal: general attachments metadata. */
     generalAttachments: { type: [mongoose.Schema.Types.Mixed], default: [] },
     places: { type: [placeSchema], default: [] },
     viewCount: { type: Number, default: 0, min: 0 },
     published: { type: Boolean, default: false },
     visibility: { type: String, enum: ['public', 'private'], default: 'private' },
     publishedAt: { type: Date, default: null },
-    /** Set when this trip was created via "Customize" from another itinerary (community source). */
     customizedFromItineraryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Itinerary',

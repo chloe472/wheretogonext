@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
 import TripMap from '../../TripMap/TripMap';
+import TripDetailsFilterDropdown from './TripDetailsFilterDropdown';
 import {
   formatStayDateTime,
   formatUsdAsCurrency,
@@ -496,50 +497,40 @@ export default function TripDetailsAddStaysModal({
                 <div className="trip-details__add-food-toolbar">
                   <p className="trip-details__add-places-results">{filteredStays.length} results found</p>
                   <div className="trip-details__add-food-toolbar-actions">
-                    <select
-                      className="trip-details__add-places-sort-select"
+                    <TripDetailsFilterDropdown
                       value={addModalCityFilter}
-                      onChange={(e) => setAddModalCityFilter(e.target.value)}
-                      aria-label="Filter by city"
-                    >
-                      {addModalCityOptions.map((city) => (
-                        <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={addModalCityOptions.map((city) => ({ value: city, label: city === 'All' ? 'All cities' : city }))}
+                      onChange={setAddModalCityFilter}
+                      ariaLabel="Filter by city"
+                    />
+                    <TripDetailsFilterDropdown
                       value={stayTypeFilter}
-                      onChange={(e) => setStayTypeFilter(e.target.value)}
-                      aria-label="Filter by accommodation type"
-                    >
-                      {stayTypeOptions.map((type) => (
-                        <option key={type} value={type}>
-                          {type === 'All' ? 'All Types' : type}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={stayTypeOptions.map((type) => ({ value: type, label: type === 'All' ? 'All Types' : type }))}
+                      onChange={setStayTypeFilter}
+                      ariaLabel="Filter by accommodation type"
+                    />
+                    <TripDetailsFilterDropdown
                       value={stayStarFilter}
-                      onChange={(e) => setStayStarFilter(e.target.value)}
-                      aria-label="Filter by hotel star rating"
-                    >
-                      <option value="All">All Stars</option>
-                      <option value="3">3-star</option>
-                      <option value="4">4-star</option>
-                      <option value="5">5-star</option>
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={[
+                        { value: 'All', label: 'All Stars' },
+                        { value: '3', label: '3-star' },
+                        { value: '4', label: '4-star' },
+                        { value: '5', label: '5-star' },
+                      ]}
+                      onChange={setStayStarFilter}
+                      ariaLabel="Filter by hotel star rating"
+                    />
+                    <TripDetailsFilterDropdown
                       value={staySortBy}
-                      onChange={(e) => setStaySortBy(e.target.value)}
-                      aria-label="Sort accommodations"
-                    >
-                      <option value="Recommended">Recommended</option>
-                      <option value="Stars: High to Low">Stars: High to Low</option>
-                      <option value="Stars: Low to High">Stars: Low to High</option>
-                      <option value="Rating: High to Low">Rating: High to Low</option>
-                    </select>
+                      options={[
+                        'Recommended',
+                        'Stars: High to Low',
+                        'Stars: Low to High',
+                        'Rating: High to Low',
+                      ]}
+                      onChange={setStaySortBy}
+                      ariaLabel="Sort accommodations"
+                    />
                   </div>
                 </div>
 

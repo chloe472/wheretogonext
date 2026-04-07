@@ -13,34 +13,13 @@ const router = Router();
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'itineraries');
 fs.mkdirSync(uploadDir, { recursive: true });
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg';
-    cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`);
-  },
+  filename: (req, file, cb) => { const ext = path.extname(file.originalname || '').toLowerCase(); const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext) ? ext : '.jpg'; cb(null, `${req.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}${safeExt}`); }
 });
+const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
 
-const ALLOWED_IMAGE_MIME = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-]);
-
-const uploadMw = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_IMAGE_MIME.has(file.mimetype)) return cb(null, true);
-    cb(new Error('Invalid file type. Use SVG, PNG, JPG, WEBP, or GIF.'));
-  },
-});
-
-// Prevent accidental double-counts from rapid duplicate requests (e.g., StrictMode/dev double-fetch).
+const uploadMw = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => { if (ALLOWED_IMAGE_MIME.has(file.mimetype)) return cb(null, true); cb(new Error('Invalid file type. Use SVG, PNG, JPG, WEBP, or GIF.')); } });
 const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
 const recentViewHits = new Map();
 
@@ -57,7 +36,7 @@ function shouldCountView(req, itineraryId) {
   const now = Date.now();
   const last = recentViewHits.get(key) || 0;
 
-  // Opportunistic cleanup to keep memory bounded.
+  
   if (recentViewHits.size > 5000) {
     for (const [hitKey, ts] of recentViewHits.entries()) {
       if (now - ts > VIEW_DEDUPE_WINDOW_MS) {
@@ -82,7 +61,7 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Max day number from places; default 1. */
+
 function computeDaysFromPlaces(places) {
   if (!Array.isArray(places) || places.length === 0) return 1;
   const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1);
@@ -90,7 +69,7 @@ function computeDaysFromPlaces(places) {
   return Math.max(1, ...nums);
 }
 
-/** Inclusive calendar-day count from YYYY-MM-DD strings (avoids TZ edge cases at noon UTC). */
+
 function computeDaysFromDateRange(startStr, endStr) {
   const a = String(startStr || '').trim();
   const b = String(endStr || '').trim();
@@ -172,6 +151,21 @@ function durationRangeMongoFilter(range) {
   };
 }
 
+function normalizeDayTitles(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const next = {};
+  Object.entries(input).forEach(([rawKey, rawValue]) => {
+    if (rawValue == null) return;
+    const value = String(rawValue).trim();
+    if (!value) return;
+    const keyNum = Number(rawKey);
+    const key = Number.isFinite(keyNum) && keyNum >= 1 ? String(keyNum) : String(rawKey).trim();
+    if (!key) return;
+    next[key] = value;
+  });
+  return next;
+}
+
 /**
  * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
  */
@@ -186,7 +180,7 @@ function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
   return Math.max(1, diff + 1);
 }
 
-/** Kanban categories that represent mappable / publishable stops (not transport-only rows). */
+
 const EXPENSE_ITEM_CATEGORIES_FOR_PLACES = new Set(['places', 'food', 'experiences', 'stays']);
 
 function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
@@ -204,88 +198,16 @@ function formatTimeRange(startTime = '', durationHrs = 0, durationMins = 0) {
   return end !== start ? `${start} - ${end}` : start;
 }
 
-/**
- * Build Itinerary.places[] from tripExpenseItems for Explore / public views.
- */
-function placesFromTripExpenseItems(items, startDateStr) {
-  if (!Array.isArray(items)) return [];
-  const raw = [];
-  for (const it of items) {
-    const cid = String(it?.categoryId || '').toLowerCase();
-    if (!EXPENSE_ITEM_CATEGORIES_FOR_PLACES.has(cid)) continue;
 
-    const name = String(it?.name || '').trim();
-    if (!name) continue;
 
-    const itemDate = cid === 'stays' ? (it.checkInDate || it.date || '') : (it.date || '');
-    const dayNumber = dayNumberFromStartAndItemDate(startDateStr, itemDate);
 
-    raw.push({
-      name,
-      category: String(it?.category != null ? it.category : it?.categoryId || ''),
-      address: String(it?.detail != null ? it.detail : it?.address || ''),
-      timeSlot: formatTimeRange(it?.startTime, it?.durationHrs, it?.durationMins),
-      notes: String(it?.notes != null ? it.notes : ''),
-      image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''),
-      rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null,
-      reviewCount: it?.reviewCount != null && it.reviewCount !== '' ? Number(it.reviewCount) : null,
-      dayNumber,
-      lat: it?.lat,
-      lng: it?.lng,
-    });
-  }
-  return normalizePlaces(raw);
-}
+const placesFromTripExpenseItems = (items, startDateStr) => { if (!Array.isArray(items)) return []; const raw = []; for (const it of items) { const cid = String(it?.categoryId || '').toLowerCase(); if (!EXPENSE_ITEM_CATEGORIES_FOR_PLACES.has(cid)) continue; const name = String(it?.name || '').trim(); if (!name) continue; const itemDate = cid === 'stays' ? (it.checkInDate || it.date || '') : (it.date || ''); const dayNumber = dayNumberFromStartAndItemDate(startDateStr, itemDate); raw.push({ name, category: String(it?.category != null ? it.category : it?.categoryId || ''), address: String(it?.detail != null ? it.detail : it?.address || ''), timeSlot: formatTimeRange(it?.startTime, it?.durationHrs, it?.durationMins), notes: String(it?.notes != null ? it.notes : ''), image: String(it?.placeImageUrl != null ? it.placeImageUrl : it?.image || ''), rating: it?.rating != null && it.rating !== '' ? Number(it.rating) : null, reviewCount: it?.reviewCount != null && it.reviewCount !== '' ? Number(it.reviewCount) : null, dayNumber, lat: it?.lat, lng: it?.lng }); } return normalizePlaces(raw); };
 
-function normalizePlaces(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((p) => ({
-    name: p?.name != null ? String(p.name) : '',
-    category: p?.category != null ? String(p.category) : '',
-    address: p?.address != null ? String(p.address) : '',
-    timeSlot: p?.timeSlot != null ? String(p.timeSlot) : '',
-    notes: p?.notes != null ? String(p.notes) : '',
-    image: p?.image != null ? String(p.image) : '',
-    rating: p?.rating != null && p.rating !== '' ? Number(p.rating) : null,
-    reviewCount: p?.reviewCount != null && p.reviewCount !== '' ? Number(p.reviewCount) : null,
-    dayNumber: Math.max(1, Number(p?.dayNumber) || 1),
-    lat: p?.lat != null && p.lat !== '' && Number.isFinite(Number(p.lat)) ? Number(p.lat) : null,
-    lng: p?.lng != null && p.lng !== '' && Number.isFinite(Number(p.lng)) ? Number(p.lng) : null,
-  }));
-}
+const normalizePlaces = (raw) => !Array.isArray(raw) ? [] : raw.map((p) => ({ name: p?.name != null ? String(p.name) : '', category: p?.category != null ? String(p.category) : '', address: p?.address != null ? String(p.address) : '', timeSlot: p?.timeSlot != null ? String(p.timeSlot) : '', notes: p?.notes != null ? String(p.notes) : '', image: p?.image != null ? String(p.image) : '', rating: p?.rating != null && p.rating !== '' ? Number(p.rating) : null, reviewCount: p?.reviewCount != null && p.reviewCount !== '' ? Number(p.reviewCount) : null, dayNumber: Math.max(1, Number(p?.dayNumber) || 1), lat: p?.lat != null && p.lat !== '' && Number.isFinite(Number(p.lat)) ? Number(p.lat) : null, lng: p?.lng != null && p.lng !== '' && Number.isFinite(Number(p.lng)) ? Number(p.lng) : null }));
 
-function serializeComment(c, currentUserId) {
-  const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : [];
-  const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false;
+const serializeComment = (c, currentUserId) => { const likes = Array.isArray(c.likes) ? c.likes.map((x) => String(x)) : []; const likedByMe = currentUserId ? likes.includes(String(currentUserId)) : false; let userIdStr = ''; let userPicture = ''; if (c.userId && typeof c.userId === 'object' && c.userId._id) { userIdStr = String(c.userId._id); userPicture = c.userId.picture != null ? String(c.userId.picture).trim() : ''; } else if (c.userId) { userIdStr = String(c.userId); } return { id: String(c._id), itineraryId: String(c.itineraryId), userId: userIdStr, userName: c.userName || '', userPicture, body: c.body, parentId: c.parentId ? String(c.parentId) : null, likeCount: likes.length, likedByMe, createdAt: c.createdAt, updatedAt: c.updatedAt }; };
 
-  let userIdStr = '';
-  let userPicture = '';
-  if (c.userId && typeof c.userId === 'object' && c.userId._id) {
-    userIdStr = String(c.userId._id);
-    userPicture = c.userId.picture != null ? String(c.userId.picture).trim() : '';
-  } else if (c.userId) {
-    userIdStr = String(c.userId);
-  }
-
-  return {
-    id: String(c._id),
-    itineraryId: String(c.itineraryId),
-    userId: userIdStr,
-    userName: c.userName || '',
-    userPicture,
-    body: c.body,
-    parentId: c.parentId ? String(c.parentId) : null,
-    likeCount: likes.length,
-    likedByMe,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-  };
-}
-
-function normalizeCategories(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((c) => String(c).trim()).filter(Boolean);
-}
+const normalizeCategories = (raw) => !Array.isArray(raw) ? [] : raw.map((c) => String(c).trim()).filter(Boolean);
 
 function normalizeCitySegments(raw) {
   if (!Array.isArray(raw)) return [];
@@ -384,10 +306,10 @@ async function collaboratorRecipientIds(collaborators, excludeUserId = '') {
   return Array.from(ids);
 }
 
-/**
- * True if user is listed as a collaborator with an editor-capable role (not viewer).
- * Matches by collaborator userId or by email (resolved from User record).
- */
+
+
+
+
 async function isCollaboratorEditorUser(userId, itineraryDoc) {
   const uid = String(userId || '').trim();
   if (!uid || !itineraryDoc) return false;
@@ -546,21 +468,13 @@ async function enrichCollaboratorsInItineraries(docs) {
   return Array.isArray(docs) ? enriched : enriched[0];
 }
 
-function toAbsoluteAssetUrl(req, rawUrl) {
-  const u = String(rawUrl || '').trim();
-  if (!u) return '';
-  if (/^(https?:)?\/\//i.test(u) || u.startsWith('data:')) return u;
-  if (!u.startsWith('/')) return u;
-  const host = req.get('host') || 'localhost:5000';
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  return `${proto}://${host}${u}`;
-}
+const toAbsoluteAssetUrl = (req, rawUrl) => { const u = String(rawUrl || '').trim(); if (!u) return ''; if (/^(https?:)?\/\//i.test(u) || u.startsWith('data:')) return u; if (!u.startsWith('/')) return u; const host = req.get('host') || 'localhost:5000'; const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'; return `${proto}://${host}${u}`; };
 
-/**
- * GET /api/itineraries
- * Public community list: published + public only.
- * Query: sort, categories, duration, search
- */
+
+
+
+
+
 router.get('/', async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -619,9 +533,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/mine
- */
+
+
+
 router.get('/mine', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -642,9 +556,9 @@ router.get('/mine', requireAuth, async (req, res) => {
 });
 
 
-/**
- * GET /api/itineraries/shared-with-me
- */
+
+
+
 router.get('/shared-with-me', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -677,9 +591,9 @@ router.get('/shared-with-me', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/upload - single image (multipart field name: file)
- */
+
+
+
 router.post('/upload', requireAuth, (req, res, next) => {
   uploadMw.single('file')(req, res, (err) => {
     if (err) {
@@ -689,16 +603,14 @@ router.post('/upload', requireAuth, (req, res, next) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     const rel = `/uploads/itineraries/${req.file.filename}`;
-    const host = req.get('host') || 'localhost:5000';
-    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const url = `${proto}://${host}${rel}`;
+    const url = toAbsoluteAssetUrl(req, rel);
     return res.status(201).json({ url, path: rel });
   });
 });
 
-/**
- * GET /api/itineraries/:id/comments
- */
+
+
+
 router.get('/:id/comments', optionalAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -724,9 +636,9 @@ router.get('/:id/comments', optionalAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/comments
- */
+
+
+
 router.post('/:id/comments', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -792,9 +704,9 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/comments/:commentId/like
- */
+
+
+
 router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -828,11 +740,11 @@ router.post('/:id/comments/:commentId/like', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/duplicate
- * Copy an itinerary into the current user's account as a new private, unpublished trip.
- * Source must be public+published (community) or owned by the user.
- */
+
+
+
+
+
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -932,10 +844,10 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/:id/customized-copy
- * Whether the current user already has a trip duplicated from this source itinerary.
- */
+
+
+
+
 router.get('/:id/customized-copy', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -964,10 +876,10 @@ router.get('/:id/customized-copy', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/itineraries/:id
- * Increments viewCount only for public itineraries viewed by non-owners.
- */
+
+
+
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1012,9 +924,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries
- */
+
+
+
 router.post('/', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1109,6 +1021,7 @@ router.post('/', requireAuth, async (req, res) => {
       categories: normalizeCategories(req.body?.categories),
       coverImages: coverImagesFinal,
       tripExpenseItems: tripExpenseItemsIn,
+      dayTitles: normalizeDayTitles(req.body?.dayTitles),
       generalNotes: req.body?.generalNotes != null ? String(req.body.generalNotes) : '',
       generalAttachments: Array.isArray(req.body?.generalAttachments) ? req.body.generalAttachments : [],
       places: placesFinal,
@@ -1148,10 +1061,10 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/share
- * Send share notifications to a list of friends — does not modify collaborators.
- */
+
+
+
+
 router.post('/:id/share', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) return res.status(503).json({ error: 'Database unavailable' });
@@ -1181,7 +1094,7 @@ router.post('/:id/share', requireAuth, async (req, res) => {
           type: 'itinerary_added',
           title: `${senderName} shared a trip with you`,
           message: `"${tripTitle}" — tap to view.`,
-          // Send users to the kanban trip details view (editable) when a trip is shared.
+
           link: `/trip/${String(itinerary._id)}`,
           meta: { itineraryId: String(itinerary._id) },
         })
@@ -1196,9 +1109,9 @@ router.post('/:id/share', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * PUT /api/itineraries/:id
- */
+
+
+
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1273,6 +1186,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.generalAttachments != null && Array.isArray(body.generalAttachments)) {
       existing.generalAttachments = body.generalAttachments;
     }
+    if (body.dayTitles != null) existing.dayTitles = normalizeDayTitles(body.dayTitles);
     if (body.categories != null) existing.categories = normalizeCategories(body.categories);
     if (body.coverImages != null) existing.coverImages = normalizeCoverImages(body.coverImages);
     if (body.places != null && !placesDerivedFromTripExpense) {
@@ -1364,9 +1278,9 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/itineraries/:id
- */
+
+
+
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
@@ -1394,9 +1308,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/itineraries/:id/publish
- */
+
+
+
 router.post('/:id/publish', requireAuth, async (req, res) => {
   try {
     if (!isDbReady()) {

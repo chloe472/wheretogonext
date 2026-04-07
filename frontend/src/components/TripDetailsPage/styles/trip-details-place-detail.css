@@ -1,4 +1,4 @@
-/* Place detail view (inside Add Places modal) */
+
 .trip-details__place-detail-panel {
   flex: 1;
   min-width: 0;
@@ -9,7 +9,7 @@
   border-right: 1px solid var(--place-border, #d4c4b0);
 }
 
-/* Matches itinerary-detail primary back (Explore hero: .itinerary-detail__btn). */
+
 .trip-details__place-detail-back {
   display: inline-flex;
   align-items: center;

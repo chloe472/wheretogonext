@@ -221,7 +221,7 @@ router.post("/analyze-moodboard", async (req, res) => {
         };
       } else {
         return {
-          text: url // Fallback
+          text: url 
         };
       }
     });

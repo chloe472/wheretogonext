@@ -1,9 +1,6 @@
 import '../styles/moodboard-modal.css';
 
-/**
- * Shared create / edit / delete folder modal.
- * type: 'create' | 'edit' | 'delete'
- */
+
 export default function MoodboardFolderModal({
   type,
   folderName,

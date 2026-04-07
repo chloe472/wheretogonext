@@ -7,7 +7,7 @@ async function handleJsonResponse(res) {
       const data = await res.json();
       if (data?.error) message = data.error;
     } catch {
-      // ignore
+      
     }
     throw new Error(message);
   }

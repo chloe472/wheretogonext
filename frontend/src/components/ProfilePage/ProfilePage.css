@@ -455,7 +455,7 @@
   white-space: nowrap;
 }
 
-/* Share with friends section */
+
 .profile-page__share-friends-section {
   margin-bottom: 1.25rem;
 }
@@ -806,6 +806,74 @@
 .profile-page__modal-select {
   appearance: none;
   background: var(--wtg-input-bg);
+}
+
+
+.nat-dropdown {
+  position: relative;
+}
+
+.nat-dropdown__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background: var(--wtg-input-bg);
+  text-align: left;
+}
+
+.nat-dropdown__trigger:focus {
+  outline: none;
+  border-color: var(--wtg-primary);
+  box-shadow: 0 0 0 2px rgba(92, 74, 61, 0.18);
+}
+
+.nat-dropdown__placeholder {
+  color: var(--wtg-text-muted, #a8a29e);
+}
+
+.nat-dropdown__chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--wtg-text-muted, #78716c);
+}
+
+.nat-dropdown__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--wtg-surface, #fff);
+  border: 1px solid var(--wtg-border, #e0ddd9);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.nat-dropdown__option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--wtg-text, #1c1917);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.nat-dropdown__option:hover {
+  background: var(--wtg-hover, #f5f5f4);
+}
+
+.nat-dropdown__option--selected {
+  background: color-mix(in srgb, var(--wtg-primary, #b07d4e) 10%, transparent);
+  font-weight: 600;
 }
 
 .profile-page__socials-edit {
@@ -1520,7 +1588,7 @@
   background: var(--wtg-hover);
 }
 
-/* Add friend search */
+
 .add-friend-search-wrap {
   display: flex;
   flex-direction: column;

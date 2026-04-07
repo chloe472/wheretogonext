@@ -1,5 +1,6 @@
-import { Clock, MapPin, Paperclip, PlusCircle, X } from 'lucide-react';
-import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
+import { Clock, MapPin, Paperclip, PlusCircle, X, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { fetchPlacesPredictions } from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddCustomFoodModal({
   trip,
@@ -31,7 +32,18 @@ export default function TripDetailsAddCustomFoodModal({
   setCustomFoodTravelDocs,
   currency,
 }) {
-  const destinationQuery = trip.destination || trip.locations;
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [foodPredictions, setFoodPredictions] = useState([]);
+
+  useEffect(() => {
+    if (!(customFoodImage instanceof File)) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const url = URL.createObjectURL(customFoodImage);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [customFoodImage]);
 
   return (
     <>
@@ -51,11 +63,35 @@ export default function TripDetailsAddCustomFoodModal({
               const f = e.target.files?.[0];
               if (f) setCustomFoodImage(f);
             }} />
-            <label htmlFor="custom-food-image" className="trip-details__custom-place-upload-label">
+            <label
+              htmlFor="custom-food-image"
+              className={`trip-details__custom-place-upload-label ${customFoodImage ? 'trip-details__custom-place-upload-label--has-image' : ''}`}
+            >
               {customFoodImage ? (
-                <span className="trip-details__custom-place-upload-preview">
-                  Image selected: {customFoodImage instanceof File ? customFoodImage.name : 'Preview'}
-                </span>
+                <>
+                  {previewUrl && (
+                    <div className="trip-details__custom-place-upload-preview-container">
+                      <img
+                        src={previewUrl}
+                        alt="Selected food"
+                        className="trip-details__custom-place-upload-preview-image"
+                      />
+                      <button
+                        type="button"
+                        className="trip-details__custom-place-delete-image"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCustomFoodImage(null);
+                          setPreviewUrl('');
+                        }}
+                        aria-label="Delete image"
+                      >
+                        <Trash2 size={18} aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <PlusCircle size={32} aria-hidden />
@@ -86,32 +122,74 @@ export default function TripDetailsAddCustomFoodModal({
                   placeholder="Search by landmark or address"
                   value={customFoodAddress}
                   onChange={(e) => {
-                    setCustomFoodAddress(e.target.value);
+                    const value = e.target.value;
+                    setCustomFoodAddress(value);
                     setCustomFoodAddressSelection(null);
                     setCustomFoodAddressSuggestionsOpen(true);
+                    if (!value.trim()) {
+                      setFoodPredictions([]);
+                      return;
+                    }
+                    fetchPlacesPredictions(value, (predictions) => {
+                      setFoodPredictions(predictions || []);
+                    });
                   }}
-                  onFocus={() => setCustomFoodAddressSuggestionsOpen(true)}
+                  onFocus={() => {
+                    setCustomFoodAddressSuggestionsOpen(true);
+                    if (customFoodAddress.trim()) {
+                      fetchPlacesPredictions(customFoodAddress, (predictions) => {
+                        setFoodPredictions(predictions || []);
+                      });
+                    }
+                  }}
                   onBlur={() => setTimeout(() => setCustomFoodAddressSuggestionsOpen(false), 200)}
                   required
                 />
                 {customFoodAddressSuggestionsOpen && customFoodAddress.trim() && (
                   <ul className="trip-details__custom-transport-suggestions">
-                    {searchAddressSuggestions(destinationQuery, customFoodAddress, 'custom-food').map((suggestion) => (
-                      <li key={suggestion.id}>
-                        <button
-                          type="button"
-                          className="trip-details__custom-transport-suggestion"
-                          onClick={() => {
-                            setCustomFoodAddress(suggestion.name);
-                            setCustomFoodAddressSelection(suggestion);
-                            setCustomFoodAddressSuggestionsOpen(false);
-                          }}
-                        >
-                          <strong>{suggestion.name}</strong>
-                          <span>{suggestion.address}</span>
-                        </button>
-                      </li>
-                    ))}
+                    {foodPredictions.length > 0 ? (
+                      foodPredictions.map((prediction) => (
+                        <li key={prediction.place_id}>
+                          <button
+                            type="button"
+                            className="trip-details__custom-transport-suggestion-item"
+                            onMouseDown={() => {
+                              const name = prediction.structured_formatting?.main_text || prediction.description;
+                              const address = prediction.structured_formatting?.secondary_text || prediction.description || 'Location';
+                              setCustomFoodAddress(prediction.description || name);
+                              setCustomFoodAddressSelection({
+                                id: prediction.place_id,
+                                name,
+                                address: prediction.description || address,
+                                description: prediction.description || name,
+                                source: 'Google Places',
+                                lat: Number.isFinite(Number(prediction.lat)) ? Number(prediction.lat) : null,
+                                lng: Number.isFinite(Number(prediction.lng)) ? Number(prediction.lng) : null,
+                              });
+                              setCustomFoodAddressSuggestionsOpen(false);
+                              setFoodPredictions([]);
+                            }}
+                          >
+                            <MapPin size={16} aria-hidden />
+                            <div className="trip-details__custom-transport-suggestion-text">
+                              <span className="trip-details__custom-transport-suggestion-name">{prediction.structured_formatting?.main_text || prediction.description}</span>
+                              <span className="trip-details__custom-transport-suggestion-type">{prediction.structured_formatting?.secondary_text || 'Location'}</span>
+                            </div>
+                          </button>
+                        </li>
+                      ))
+                    ) : (
+                      <li>
+                        <div className="trip-details__custom-transport-suggestion-item trip-details__custom-transport-suggestion-item--custom" aria-live="polite">
+                          <MapPin size={16} aria-hidden />
+                          <div className="trip-details__custom-transport-suggestion-text">
+                            <span className="trip-details__custom-transport-suggestion-name">No matching places found</span>
+                            <span className="trip-details__custom-transport-suggestion-type">Try a full address, street name, city, or landmark</span>
+                          </div>
+                        </div>
+                        </li>
+                      
+                    )}
                   </ul>
                 )}
               </span>

@@ -1,8 +1,6 @@
 import { apiUrl } from './apiConfig';
 
-/**
- * Analyze uploaded social screenshots and return ranked places for the trip destination.
- */
+
 export async function analyzeSocialImport({ destination, tripDestinations, imageFiles }) {
   const fd = new FormData();
   fd.append('destination', destination || '');
