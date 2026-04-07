@@ -115,6 +115,64 @@ function parseDurationFilter(durationParam) {
 }
 
 /**
+ * Mongo filter: trip length in range by stored `days` OR inclusive day count from startDate/endDate (YYYY-MM-DD).
+ */
+function durationRangeMongoFilter(range) {
+  if (!range || typeof range.$gte !== 'number') return null;
+  const gte = range.$gte;
+  const lte = range.$lte;
+
+  const storedMatch =
+    lte !== undefined
+      ? { $and: [{ $gte: ['$days', gte] }, { $lte: ['$days', lte] }] }
+      : { $gte: ['$days', gte] };
+
+  const startParsed = {
+    $dateFromString: { dateString: { $ifNull: ['$startDate', ''] }, onError: null, onNull: null },
+  };
+  const endParsed = {
+    $dateFromString: { dateString: { $ifNull: ['$endDate', ''] }, onError: null, onNull: null },
+  };
+  const computedLen = {
+    $cond: {
+      if: { $and: [{ $ne: [startParsed, null] }, { $ne: [endParsed, null] }] },
+      then: {
+        $add: [
+          1,
+          {
+            $dateDiff: {
+              startDate: startParsed,
+              endDate: endParsed,
+              unit: 'day',
+            },
+          },
+        ],
+      },
+      else: 0,
+    },
+  };
+
+  const computedMatch =
+    lte !== undefined
+      ? {
+          $and: [
+            { $gt: [computedLen, 0] },
+            { $gte: [computedLen, gte] },
+            { $lte: [computedLen, lte] },
+          ],
+        }
+      : {
+          $and: [{ $gt: [computedLen, 0] }, { $gte: [computedLen, gte] }],
+        };
+
+  return {
+    $expr: {
+      $or: [storedMatch, computedMatch],
+    },
+  };
+}
+
+/**
  * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
  */
 function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
@@ -531,7 +589,7 @@ router.get('/', async (req, res) => {
 
     const range = parseDurationFilter(req.query.duration);
     if (range) {
-      filter.days = range;
+      Object.assign(filter, durationRangeMongoFilter(range));
     }
 
     const sortKey = String(req.query.sort || 'newest').toLowerCase();

@@ -1,5 +1,24 @@
 import { apiUrl, getBearerAuthHeaders, TOKEN_STORAGE_KEY } from './apiConfig.js';
 
+/** Inclusive trip length for Explore sort/filter (aligns with backend computeDaysFromDateRange / places). */
+export function computeExploreDayCount(it) {
+  const start = String(it?.startDate || '').trim().slice(0, 10);
+  const end = String(it?.endDate || '').trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    const a = new Date(`${start}T12:00:00`);
+    const b = new Date(`${end}T12:00:00`);
+    if (Number.isFinite(a.getTime()) && Number.isFinite(b.getTime())) {
+      const diff = Math.round((b - a) / 86400000) + 1;
+      return Math.max(1, diff);
+    }
+  }
+  const places = Array.isArray(it?.places) ? it.places : [];
+  const nums = places.map((p) => Number(p?.dayNumber)).filter((n) => Number.isFinite(n) && n >= 1);
+  if (nums.length > 0) return Math.max(1, ...nums);
+  const d = Number(it?.days);
+  return Number.isFinite(d) && d >= 1 ? d : 1;
+}
+
 /**
  * Maps GET /api/itineraries response items to the shape SearchResultsPage cards expect.
  */
@@ -8,7 +27,7 @@ export function mapItineraryToCard(it) {
   const creatorName = creator.name || creator.username || creator.email || 'Traveler';
   const creatorPicture = creator.picture || null;
   const creatorId = creator._id || creator.id || '';
-  const days = Math.max(1, Number(it.days) || 1);
+  const days = computeExploreDayCount(it);
   const categories = Array.isArray(it.categories) ? it.categories : [];
   const coverImages = Array.isArray(it.coverImages) ? it.coverImages.filter(Boolean) : [];
   const cover = coverImages[0] || '';
@@ -49,15 +68,13 @@ export function mapSortToApiParam(sortBy) {
   return 'newest';
 }
 
-/** Apply sorts not supported by the API (no price on model — use views as proxy). */
+/** Client-side sorts; Most Popular is by view count (matches API intent if order was lost). */
 export function applyClientSort(cards, sortBy) {
   const list = [...cards];
   switch (sortBy) {
-    case 'Price: Low to High':
-      return list.sort((a, b) => (a.views ?? 0) - (b.views ?? 0));
-    case 'Price: High to Low':
+    case 'Most Popular':
       return list.sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
-    case 'Duration':
+    case 'Duration: Short to long':
       return list.sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
     case 'Newest': {
       const t = (c) => {
@@ -74,8 +91,13 @@ export function applyClientSort(cards, sortBy) {
 /**
  * Explore / community list: when the user has profile interests (same labels as itinerary.categories),
  * rank itineraries with more overlapping categories first; then apply the selected sort as tie-breaker.
+ * When filtersActive (search / adventure / duration), skips interest boost and sorts by sortBy only.
  */
-export function applyExploreOrdering(cards, sortBy, profileInterests) {
+export function applyExploreOrdering(cards, sortBy, profileInterests, filtersActive = false) {
+  if (filtersActive) {
+    return applyClientSort([...cards], sortBy);
+  }
+
   const raw = Array.isArray(profileInterests) ? profileInterests : [];
   const interestSet = new Set(
     raw.map((s) => String(s || '').trim().toLowerCase()).filter(Boolean),
@@ -94,11 +116,7 @@ export function applyExploreOrdering(cards, sortBy, profileInterests) {
 
   const secondaryCompare = (a, b) => {
     switch (sortBy) {
-      case 'Price: Low to High':
-        return (a.views ?? 0) - (b.views ?? 0);
-      case 'Price: High to Low':
-        return (b.views ?? 0) - (a.views ?? 0);
-      case 'Duration':
+      case 'Duration: Short to long':
         return (a.days ?? 0) - (b.days ?? 0);
       case 'Newest': {
         const ta = new Date(a.publishedAt || 0).getTime();
@@ -116,6 +134,28 @@ export function applyExploreOrdering(cards, sortBy, profileInterests) {
 
   if (!useInterestBoost) {
     return applyClientSort([...cards], sortBy);
+  }
+
+  // Most Popular must rank by views globally; use interest overlap only as a tie-breaker.
+  if (sortBy === 'Most Popular') {
+    const list = [...cards];
+    list.sort((a, b) => {
+      const v = (b.views ?? 0) - (a.views ?? 0);
+      if (v !== 0) return v;
+      return matchScore(b) - matchScore(a);
+    });
+    return list;
+  }
+
+  // Duration: shortest trips first globally; interest overlap only breaks ties.
+  if (sortBy === 'Duration: Short to long') {
+    const list = [...cards];
+    list.sort((a, b) => {
+      const d = (a.days ?? 0) - (b.days ?? 0);
+      if (d !== 0) return d;
+      return matchScore(b) - matchScore(a);
+    });
+    return list;
   }
 
   const list = [...cards];

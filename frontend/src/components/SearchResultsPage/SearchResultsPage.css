@@ -3,6 +3,16 @@
 .search-results {
   min-height: 100vh;
   background: var(--wtg-bg);
+  /* Tokens for DashboardTripsSection filter dropdown (reused on Explore) */
+  --dash-bg: var(--wtg-bg);
+  --dash-surface: var(--wtg-surface);
+  --dash-border: var(--wtg-border);
+  --dash-text: var(--wtg-text);
+  --dash-text-muted: var(--wtg-text-muted);
+  --dash-accent: var(--wtg-accent);
+  --dash-primary: var(--wtg-primary);
+  --dash-hover: var(--wtg-hover);
+  --dash-input-bg: var(--wtg-input-bg);
 }
 
 /* Hero */
@@ -243,26 +253,45 @@
   color: var(--wtg-text-muted, #6b7280);
 }
 
-.search-results__filter {
+.search-results__filters-active-hint {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--wtg-text-muted, #6b7280);
+}
+
+.search-results__clear-filters-wrap {
+  margin: 0 0 1rem;
+}
+
+.search-results__clear-filters-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wtg-primary);
+  background: transparent;
+  border: 1px solid var(--wtg-border, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.search-results__clear-filters-btn:hover {
+  background: var(--wtg-hover, #f5f5f4);
+  border-color: var(--wtg-primary);
+}
+
+.search-results__clear-filters-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.25);
+}
+
+.search-results__sort-row {
   margin-bottom: 1.25rem;
 }
 
-.search-results__filter label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #6b7280;
-}
-
-.search-results__select {
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--wtg-text);
-  background: var(--wtg-primary-contrast);
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+.search-results__sort-row .dashboard__filters {
+  margin-bottom: 0;
 }
 
 .search-results__filter-block {
