@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { fetchCitySuggestions } from '../../api/locationsApi';
 import {
   ADVENTURE_TYPES,
@@ -18,6 +18,7 @@ import { EXPLORE_HERO_IMAGES } from '../../assets/exploreHeroImages';
 import ItineraryCard from '../ItineraryCard/ItineraryCard';
 import DashboardHeader from '../DashboardHeader/DashboardHeader';
 import HeroSlideshowBackground from '../HeroSlideshowBackground/HeroSlideshowBackground';
+import '../Dashboard/components/DashboardTripsSection.css';
 import './SearchResultsPage.css';
 
 const RECENT_DESTINATIONS = ['Tokyo', 'Hanoi', 'Bangkok', 'Kuala Lumpur', 'Seoul'];
@@ -42,6 +43,7 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [adventureType, setAdventureType] = useState('All');
   const [duration, setDuration] = useState('');
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [openSortDropdown, setOpenSortDropdown] = useState(false);
   const [itineraries, setItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,6 +52,15 @@ export default function SearchResultsPage({ user, onLogout }) {
   const [profileInterests, setProfileInterests] = useState([]);
   const searchRef = useRef(null);
   const suggestRef = useRef(null);
+  const sortDropdownRef = useRef(null);
+
+  const exploreFiltersActive = useMemo(
+    () =>
+      Boolean(String(q || '').trim()) ||
+      adventureType !== 'All' ||
+      Boolean(String(duration || '').trim()),
+    [q, adventureType, duration],
+  );
 
   const suggestions = locationSuggestions.filter((loc) => isCityLocation(loc));
 
@@ -129,7 +140,7 @@ export default function SearchResultsPage({ user, onLogout }) {
         );
         if (cancelled) return;
         let cards = raw.map(mapItineraryToCard);
-        cards = applyExploreOrdering(cards, sortBy, profileInterests);
+        cards = applyExploreOrdering(cards, sortBy, profileInterests, exploreFiltersActive);
         setItineraries(cards);
       } catch (err) {
         if (err.name === 'AbortError') return;
@@ -145,12 +156,15 @@ export default function SearchResultsPage({ user, onLogout }) {
       cancelled = true;
       ac.abort();
     };
-  }, [q, sortBy, adventureType, duration, profileInterests]);
+  }, [q, sortBy, adventureType, duration, profileInterests, exploreFiltersActive]);
 
   useEffect(() => {
     function handleClickOutside(e) {
       if ((searchRef.current && !searchRef.current.contains(e.target)) && (suggestRef.current && !suggestRef.current.contains(e.target))) {
         setSuggestOpen(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target)) {
+        setOpenSortDropdown(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -176,6 +190,14 @@ export default function SearchResultsPage({ user, onLogout }) {
     setSearchParams({ q: term });
     setSuggestOpen(false);
   };
+
+  const clearExploreFilters = useCallback(() => {
+    setAdventureType('All');
+    setDuration('');
+    setSearchParams({});
+    setSearchInput('');
+    setSuggestOpen(false);
+  }, [setSearchParams]);
 
   const showSuggestionPanel = suggestOpen && searchInput.trim().length >= 2;
 
@@ -276,23 +298,55 @@ export default function SearchResultsPage({ user, onLogout }) {
 
       <div className="search-results__main">
         <aside className="search-results__sidebar">
-          <p className="search-results__count">
-            {loading ? 'Loading…' : `${itineraries.length} Itineraries for you`}
-          </p>
-          {!loading && profileInterests.length > 0 && (
-            <p className="search-results__interest-hint">
-              Recommendations prioritize itineraries that match your profile interests ({profileInterests.slice(0, 3).join(', ')}
-              {profileInterests.length > 3 ? '…' : ''}).
+          {!loading && exploreFiltersActive && (
+            <p className="search-results__filters-active-hint">
+              Filters are on — results are sorted by your selection only (profile interest ranking is off).
             </p>
           )}
-          <div className="search-results__filter">
-            <label htmlFor="sort">Sort by:</label>
-            <select id="sort" className="search-results__select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
+          <div className="search-results__sort-row">
+            <div className="dashboard__filters">
+              <label htmlFor="explore-sort" className="dashboard__filter-label">Sort by:</label>
+              <div className="dashboard__filter-dropdown" ref={sortDropdownRef}>
+                <button
+                  id="explore-sort"
+                  type="button"
+                  className={`dashboard__filter-btn ${openSortDropdown ? 'dashboard__filter-btn--open' : ''}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={openSortDropdown}
+                  onClick={() => setOpenSortDropdown((o) => !o)}
+                >
+                  <span className="dashboard__filter-btn-text">{sortBy}</span>
+                  <ChevronDown size={14} className="dashboard__filter-chevron" aria-hidden />
+                </button>
+                {openSortDropdown && (
+                  <div className="dashboard__filter-menu" role="listbox" aria-label="Sort itineraries">
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        role="option"
+                        aria-selected={sortBy === opt}
+                        className={`dashboard__filter-option ${sortBy === opt ? 'dashboard__filter-option--active' : ''}`}
+                        onClick={() => {
+                          setSortBy(opt);
+                          setOpenSortDropdown(false);
+                        }}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+          {exploreFiltersActive && (
+            <div className="search-results__clear-filters-wrap">
+              <button type="button" className="search-results__clear-filters-btn" onClick={clearExploreFilters}>
+                Clear filters
+              </button>
+            </div>
+          )}
           <div className="search-results__filter-block">
             <h3 className="search-results__filter-title">Adventure type</h3>
             <div className="search-results__filter-tags">

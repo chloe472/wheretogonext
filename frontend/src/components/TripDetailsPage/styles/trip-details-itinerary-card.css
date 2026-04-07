@@ -191,3 +191,36 @@
   background: var(--wtg-hover);
   color: #dc2626;
 }
+
+.trip-details__itinerary-delete-btn {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: var(--wtg-surface);
+  color: var(--wtg-text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.trip-details__itinerary-card:hover .trip-details__itinerary-delete-btn,
+.trip-details__itinerary-card:focus-within .trip-details__itinerary-delete-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.trip-details__itinerary-delete-btn:hover {
+  background: var(--wtg-hover);
+  color: #dc2626;
+}

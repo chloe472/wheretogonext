@@ -82,6 +82,7 @@ export default function TripDetailsKanbanDayColumn({
   setAddSheetFromCalendar,
   setAddSheetDay,
   setAddSheetAnchor,
+  setPendingDeleteItemId,
   kanbanDraggingDayNum,
   kanbanDragOverDayNum,
   handleKanbanDayDragStart,
@@ -605,6 +606,20 @@ export default function TripDetailsKanbanDayColumn({
                     onClick={(e) => { e.stopPropagation(); isEditableItineraryItem(item) && setEditPlaceItem(item); }}
                   >
                     <FileText size={16} aria-hidden />
+                  </button>
+                ) : null}
+                {!isTransportItem && !readOnly ? (
+                  <button
+                    type="button"
+                    className="trip-details__itinerary-delete-btn"
+                    aria-label="Delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isEditableItineraryItem(item)) return;
+                      setPendingDeleteItemId(item.id);
+                    }}
+                  >
+                    <Trash2 size={16} aria-hidden />
                   </button>
                 ) : null}
               </div>

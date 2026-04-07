@@ -1,10 +1,23 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { ChevronDown, Globe, X } from 'lucide-react';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
+import { collaboratorRoleForApi } from '../lib/tripCollaborationAccess';
 
 const ROLE_LABELS = { viewer: 'Can View', editor: 'Can Edit' };
+const LINK_ACCESS_LABELS = { restricted: 'Restricted', anyone: 'Anyone with the link' };
+const LINK_PERMISSION_LABELS = { viewer: 'Viewer', editor: 'Editor' };
 
-function RoleDropdown({ value, onChange, disabled }) {
+function isMe(meId, meEmail, rowUserId, rowEmail) {
+  const mid = String(meId || '').trim();
+  const rid = String(rowUserId || '').trim();
+  if (mid && rid && mid === rid) return true;
+  const a = String(meEmail || '').trim().toLowerCase();
+  const b = String(rowEmail || '').trim().toLowerCase();
+  return Boolean(a && b && a === b);
+}
+
+function OptionDropdown({ value, onChange, disabled, labels, ariaLabel = 'Options' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -17,34 +30,33 @@ function RoleDropdown({ value, onChange, disabled }) {
   }, []);
 
   if (disabled) {
-    return <span className="trip-share__role-static">{ROLE_LABELS[value] ?? value}</span>;
+    return <span className="trip-share__role-static">{labels[value] ?? value}</span>;
   }
 
   return (
-    <div className="trip-share__role-dropdown" ref={ref}>
+    <div className="dashboard__filter-dropdown" ref={ref}>
       <button
         type="button"
-        className={`trip-share__role-btn${open ? ' trip-share__role-btn--open' : ''}`}
+        className={`dashboard__filter-btn${open ? ' dashboard__filter-btn--open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={ariaLabel}
       >
-        <span>{ROLE_LABELS[value] ?? value}</span>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <span className="dashboard__filter-btn-text">{labels[value] ?? value}</span>
+        <ChevronDown size={14} className="dashboard__filter-chevron" aria-hidden />
       </button>
       {open && (
-        <div className="trip-share__role-menu" role="listbox">
-          {Object.entries(ROLE_LABELS).map(([role, label]) => (
+        <div className="dashboard__filter-menu" role="listbox" aria-label={ariaLabel}>
+          {Object.entries(labels).map(([key, label]) => (
             <button
-              key={role}
+              key={key}
               type="button"
               role="option"
-              aria-selected={value === role}
-              className={`trip-share__role-option${value === role ? ' trip-share__role-option--active' : ''}`}
+              aria-selected={value === key}
+              className={`dashboard__filter-option${value === key ? ' dashboard__filter-option--active' : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(role); setOpen(false); }}
+              onClick={() => { onChange(key); setOpen(false); }}
             >
               {label}
             </button>
@@ -53,6 +65,10 @@ function RoleDropdown({ value, onChange, disabled }) {
       )}
     </div>
   );
+}
+
+function RoleDropdown(props) {
+  return <OptionDropdown {...props} labels={ROLE_LABELS} ariaLabel="Access level" />;
 }
 
 function Avatar({ user }) {
@@ -76,18 +92,24 @@ function Avatar({ user }) {
 export default function TripShareModal({
   open,
   loading,
+  readOnly = false,
   friends,
   collaborators,
   owner,
   currentUserId,
+  currentUserEmail = '',
   onSaveCollaboratorRoles,
   onRemoveCollaborator,
   onClose,
   onShareWithFriend,
   onInviteByEmail,
   onInviteByUser,
+  onInviteUsersBatch,
   onSearchUsers,
   onCopy,
+  linkAccess: linkAccessProp = 'restricted',
+  linkPermission: linkPermissionProp = 'viewer',
+  onLinkSettingsChange,
 }) {
   const [inviteQuery, setInviteQuery] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
@@ -101,19 +123,29 @@ export default function TripShareModal({
   const wrapRef = useRef(null);
   const [roleSaving, setRoleSaving] = useState(false);
 
+  /** Search picks staged as pills until user clicks Send invite (Google Docs–style). */
+  const [pendingInviteUsers, setPendingInviteUsers] = useState([]);
+
   
   const [pendingRoles, setPendingRoles] = useState({});
 
   
   useEffect(() => {
-    if (!open) setPendingRoles({});
+    if (!open) {
+      setPendingRoles({});
+      setPendingInviteUsers([]);
+      setInviteQuery('');
+      setInviteError('');
+      setSearchResults([]);
+      setDropdownOpen(false);
+    }
   }, [open]);
 
   const originalRoles = useMemo(() => {
     const map = {};
     (Array.isArray(collaborators) ? collaborators : []).forEach((c) => {
       const uid = String(c?.user?.id || c?.userId || '');
-      if (uid) map[uid] = c?.role || 'viewer';
+      if (uid) map[uid] = collaboratorRoleForApi(c);
     });
     return map;
   }, [collaborators]);
@@ -131,7 +163,9 @@ export default function TripShareModal({
     try {
       await onSaveCollaboratorRoles(pendingRoles);
       setPendingRoles({});
-      toast.success('Access updated successfully');
+      toast.success('Permissions updated successfully');
+    } catch (err) {
+      toast.error(err?.message || 'Could not update permissions.');
     } finally {
       setRoleSaving(false);
     }
@@ -175,39 +209,82 @@ export default function TripShareModal({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  const la = String(linkAccessProp || 'restricted');
+  const lp = String(linkPermissionProp || 'viewer');
+
+  const generalAccessHint = useMemo(() => {
+    if (la === 'restricted') {
+      return 'Only people you invite can use this link.';
+    }
+    if (lp === 'viewer') {
+      return 'Anyone on the internet with the link can view.';
+    }
+    return 'Anyone with the link can view; signed-in users can edit.';
+  }, [la, lp]);
+
   if (!open) return null;
 
   const ownerName = owner?.name || owner?.username || owner?.email || 'Owner';
   const ownerEmail = owner?.email || '';
   const ownerId = String(owner?._id || owner?.id || '').trim();
   const meId = String(currentUserId || '').trim();
+  const meEmail = String(currentUserEmail || '').trim();
 
   const friendList = Array.isArray(friends) ? friends : [];
 
-  const handleSelectUser = async (user) => {
+  const handleSelectUser = (user) => {
+    const userId = String(user?.id || '').trim();
+    if (!userId) return;
     setDropdownOpen(false);
-    setInviteQuery('');
     setInviteError('');
-    setInviteSending(true);
-    try {
-      await onInviteByUser(user, inviteRole);
-    } catch (err) {
-      setInviteError(err?.message || 'Could not send invite.');
-    } finally {
-      setInviteSending(false);
+    const existsCollab = (Array.isArray(collaborators) ? collaborators : []).some(
+      (c) => String(c?.user?.id || c?.userId || '') === userId,
+    );
+    if (existsCollab) {
+      toast('This person already has access.');
+      return;
     }
+    if (pendingInviteUsers.some((p) => p.id === userId)) return;
+    setPendingInviteUsers((prev) => [
+      ...prev,
+      {
+        id: userId,
+        name: user.name || user.username || 'User',
+        email: user.email,
+        picture: user.picture,
+      },
+    ]);
+    setInviteQuery('');
+  };
+
+  const removePendingInvite = (userId) => {
+    setPendingInviteUsers((prev) => prev.filter((p) => p.id !== userId));
   };
 
   const handleInvite = async () => {
+    if (readOnly) return;
     const email = inviteQuery.trim().toLowerCase();
-    if (!email) return;
+    const hasTypedEmail = email.includes('@');
+    if (pendingInviteUsers.length === 0 && !hasTypedEmail) return;
+
     setInviteSending(true);
     setInviteError('');
     setDropdownOpen(false);
     try {
-      await onInviteByEmail(email, inviteRole);
-      setInviteQuery('');
-      setInviteRole('viewer');
+      if (pendingInviteUsers.length > 0) {
+        if (typeof onInviteUsersBatch === 'function') {
+          await onInviteUsersBatch(pendingInviteUsers, inviteRole);
+        } else {
+          for (const u of pendingInviteUsers) {
+            await onInviteByUser(u, inviteRole);
+          }
+        }
+        setPendingInviteUsers([]);
+      }
+      if (hasTypedEmail) {
+        await onInviteByEmail(email, inviteRole);
+        setInviteQuery('');
+      }
     } catch (err) {
       setInviteError(err?.message || 'Could not send invite.');
     } finally {
@@ -216,6 +293,28 @@ export default function TripShareModal({
   };
 
   const isEmail = inviteQuery.includes('@');
+  const canSendInvite =
+    !readOnly && !inviteSending && (pendingInviteUsers.length > 0 || isEmail);
+
+  const handleLinkAccessChange = async (next) => {
+    if (readOnly || !onLinkSettingsChange) return;
+    try {
+      await onLinkSettingsChange({ linkAccess: next });
+      toast.success('General access updated');
+    } catch (e) {
+      toast.error(e?.message || 'Could not update access');
+    }
+  };
+
+  const handleLinkPermissionChange = async (next) => {
+    if (readOnly || la === 'restricted' || !onLinkSettingsChange) return;
+    try {
+      await onLinkSettingsChange({ linkPermission: next });
+      toast.success('General access updated');
+    } catch (e) {
+      toast.error(e?.message || 'Could not update access');
+    }
+  };
 
   return (
     <div className="trip-share__overlay" role="dialog" aria-modal="true" aria-labelledby="trip-share-title">
@@ -238,33 +337,54 @@ export default function TripShareModal({
             <div className="trip-share__invite-section">
               <div className="trip-share__invite-row-wrap" ref={wrapRef}>
                 <div className="trip-share__invite-field">
-                  <input
-                    className="trip-share__invite-input"
-                    type="text"
-                    placeholder="Invite by name or email"
-                    value={inviteQuery}
-                    onChange={(e) => { setInviteQuery(e.target.value); setInviteError(''); }}
-                    onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && isEmail) handleInvite(); }}
-                    autoComplete="off"
-                  />
-                  {searching && <div className="trip-share__invite-spinner" />}
-                  <div className="trip-share__invite-divider" />
-                  <select
-                    className="trip-share__invite-role"
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value)}
-                    aria-label="Access level"
-                  >
-                    <option value="viewer">Can View</option>
-                    <option value="editor">Can Edit</option>
-                  </select>
+                  <div className="trip-share__invite-chips-wrap">
+                    {pendingInviteUsers.map((u) => (
+                      <span key={u.id} className="trip-share__invite-pill">
+                        <span className="trip-share__invite-pill-avatar" aria-hidden>
+                          <Avatar user={u} />
+                        </span>
+                        <span className="trip-share__invite-pill-name">{u.name}</span>
+                        <button
+                          type="button"
+                          className="trip-share__invite-pill-remove"
+                          onClick={() => removePendingInvite(u.id)}
+                          aria-label={`Remove ${u.name}`}
+                          disabled={readOnly}
+                        >
+                          <X size={14} strokeWidth={2.25} aria-hidden />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      className="trip-share__invite-input"
+                      type="text"
+                      placeholder={pendingInviteUsers.length ? 'Add another…' : 'Invite by name or email'}
+                      value={inviteQuery}
+                      onChange={(e) => { setInviteQuery(e.target.value); setInviteError(''); }}
+                      onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && canSendInvite) handleInvite();
+                      }}
+                      autoComplete="off"
+                      disabled={readOnly}
+                      aria-disabled={readOnly}
+                    />
+                    {searching && <div className="trip-share__invite-spinner" />}
+                  </div>
+                  <div className="trip-share__invite-divider" aria-hidden />
+                  <div className="trip-share__invite-role-slot">
+                    <RoleDropdown
+                      value={inviteRole}
+                      onChange={setInviteRole}
+                      disabled={readOnly}
+                    />
+                  </div>
                 </div>
                 <button
                   type="button"
                   className="trip-share__send-btn"
                   onClick={handleInvite}
-                  disabled={inviteSending || !isEmail}
+                  disabled={!canSendInvite}
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -295,6 +415,36 @@ export default function TripShareModal({
             </div>
           )}
 
+          {!loading && typeof onLinkSettingsChange === 'function' && (
+            <div className="trip-share__general-access">
+              <p className="trip-share__label">General access</p>
+              <div className="trip-share__general-access-row">
+                <div className="trip-share__general-access-icon" aria-hidden>
+                  <Globe size={22} strokeWidth={1.75} />
+                </div>
+                <div className="trip-share__general-access-main">
+                  <div className="trip-share__general-access-controls">
+                    <OptionDropdown
+                      value={la}
+                      onChange={handleLinkAccessChange}
+                      disabled={readOnly}
+                      labels={LINK_ACCESS_LABELS}
+                      ariaLabel="Who can use the link"
+                    />
+                    <OptionDropdown
+                      value={lp}
+                      onChange={handleLinkPermissionChange}
+                      disabled={readOnly || la === 'restricted'}
+                      labels={LINK_PERMISSION_LABELS}
+                      ariaLabel="Link permission"
+                    />
+                  </div>
+                  <p className="trip-share__general-access-hint">{generalAccessHint}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {!loading && friendList.length > 0 && (
             <div className="trip-share__friends-section">
               <p className="trip-share__label">Share with friends</p>
@@ -306,6 +456,7 @@ export default function TripShareModal({
                     className="trip-share__friend-btn"
                     onClick={() => onShareWithFriend(friend)}
                     title={`Share with ${friend.name}`}
+                    disabled={readOnly}
                   >
                     <Avatar user={friend} />
                     <span className="trip-share__friend-name">{friend.name || 'Friend'}</span>
@@ -326,7 +477,12 @@ export default function TripShareModal({
                   <li className="trip-share__collab-item">
                     <Avatar user={owner} />
                     <div className="trip-share__collab-info">
-                      <span className="trip-share__collab-name">{ownerName}</span>
+                      <span className="trip-share__collab-name">
+                        {ownerName}
+                        {isMe(meId, meEmail, ownerId, ownerEmail) ? (
+                          <span className="trip-share__you-suffix"> (You)</span>
+                        ) : null}
+                      </span>
                       {ownerEmail && <span className="trip-share__collab-sub">{ownerEmail}</span>}
                     </div>
                     <span className="trip-share__owner-badge">Owner</span>
@@ -335,23 +491,28 @@ export default function TripShareModal({
                 {Array.isArray(collaborators) && collaborators.map((collab) => {
                   const user = collab?.user || {};
                   const userId = String(user?.id || collab?.userId || '');
-                  const currentRole = pendingRoles[userId] ?? collab?.role ?? 'viewer';
+                  const currentRole = pendingRoles[userId] ?? collaboratorRoleForApi(collab);
                   const isOwner = ownerId && userId && ownerId === userId;
-                  const isSelf = meId && userId && meId === userId;
+                  const isSelf =
+                    isMe(meId, meEmail, userId, user?.email || collab?.email);
                   const lockAccess = isOwner || isSelf;
+                  const roleControlsDisabled = lockAccess || readOnly;
                   return (
                     <li key={userId} className="trip-share__collab-item">
                       <Avatar user={user} />
                       <div className="trip-share__collab-info">
-                        <span className="trip-share__collab-name">{user?.name || 'Tripmate'}</span>
+                        <span className="trip-share__collab-name">
+                          {user?.name || 'Tripmate'}
+                          {isSelf ? <span className="trip-share__you-suffix"> (You)</span> : null}
+                        </span>
                         {user?.email && <span className="trip-share__collab-sub">{user.email}</span>}
                       </div>
                       <RoleDropdown
                         value={currentRole}
                         onChange={(role) => setPendingRoles((prev) => ({ ...prev, [userId]: role }))}
-                        disabled={lockAccess}
+                        disabled={roleControlsDisabled}
                       />
-                      {!lockAccess && (
+                      {!lockAccess && !readOnly && (
                         <button
                           type="button"
                           className="trip-share__collab-remove"

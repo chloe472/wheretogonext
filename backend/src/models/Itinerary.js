@@ -68,6 +68,10 @@ const itinerarySchema = new mongoose.Schema(
     published: { type: Boolean, default: false },
     visibility: { type: String, enum: ['public', 'private'], default: 'private' },
     publishedAt: { type: Date, default: null },
+    /** Link sharing: restricted = only invited collaborators; anyone = open to anyone with URL. */
+    linkAccess: { type: String, enum: ['restricted', 'anyone'], default: 'restricted' },
+    /** When linkAccess is anyone: viewer = read-only; editor = signed-in users may edit via link. */
+    linkPermission: { type: String, enum: ['viewer', 'editor'], default: 'viewer' },
     customizedFromItineraryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Itinerary',

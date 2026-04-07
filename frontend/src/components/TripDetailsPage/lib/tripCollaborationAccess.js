@@ -18,7 +18,16 @@ export function getCurrentUserCollaboratorRole(user, collaborators) {
     if (userEmail && email && email === userEmail) return true;
     return false;
   });
-  return match ? (match.role || 'viewer') : null;
+  if (!match) return null;
+  // Backend normalizeCollaborators defaults omitted role to "editor", not "viewer".
+  const r = String(match.role ?? '').trim().toLowerCase();
+  return r === 'viewer' ? 'viewer' : 'editor';
+}
+
+/** Role string for API payloads — matches backend default when role is missing. */
+export function collaboratorRoleForApi(c) {
+  const r = String(c?.role ?? '').trim().toLowerCase();
+  return r === 'viewer' ? 'viewer' : 'editor';
 }
 
 
