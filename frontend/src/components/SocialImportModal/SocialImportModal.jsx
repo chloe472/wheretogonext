@@ -2,10 +2,7 @@ import { X, Plus, Loader2 } from 'lucide-react';
 import { placeKeySocialImport } from './socialImportUtils';
 import SocialImportLocationMismatchBanner from './SocialImportLocationMismatchBanner';
 
-/**
- * Multi-step modal: upload screenshots -> analyzing -> pick places.
- * Styles: `trip-details__social-import-*` in TripDetailsPage/styles/trip-details-social-import-modal.css (via TripDetailsPage.css).
- */
+
 export default function SocialImportModal({
   isOpen,
   onClose,

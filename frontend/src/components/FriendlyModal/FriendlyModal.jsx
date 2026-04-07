@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import './FriendlyModal.css';
 
-/**
- * Generic in-app modal to replace native alert/confirm dialogs.
- */
+
 export default function FriendlyModal({
   open,
   title = 'Notice',

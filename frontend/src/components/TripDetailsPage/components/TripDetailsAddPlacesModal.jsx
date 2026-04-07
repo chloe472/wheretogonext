@@ -166,7 +166,7 @@ return (
     <button type="button" className="trip-details__modal-backdrop" aria-label="Close" onClick={onCloseBackdrop} />
     <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? (showingItineraryDetail ? 'itinerary-detail-title' : 'place-detail-title') : 'add-places-title'} aria-modal="true">
       {showingItineraryDetail ? (
-        // Itinerary Detail View
+        
         <div className="trip-details__add-places-body">
           <div className="trip-details__itinerary-detail-panel">
             <div className="trip-details__itinerary-detail-header">

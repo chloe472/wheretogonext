@@ -6,7 +6,7 @@ export const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/** Day rows for Kanban/calendar — from trip startDate/endDate (YYYY-MM-DD). */
+
 export function getTripDaysFromTrip(trip) {
   if (!trip?.startDate || !trip?.endDate) return [];
   const s = String(trip.startDate).slice(0, 10);
@@ -103,11 +103,7 @@ export function splitRouteLocationLabel(label = '') {
   return { city, country };
 }
 
-/**
- * Merge a destination label into trip.destination / trip.locations (semicolon-separated route).
- * Same rules as Trip Details "Add … to trip destinations" (social import / Explore add-to-trip).
- * @returns {{ ok: true, destination: string, locations: string } | { ok: false, reason: string, message?: string }}
- */
+
 export function appendDestinationLabelToTripDoc(trip, label) {
   const raw = String(label || '').trim();
   if (!raw) return { ok: false, reason: 'empty' };
@@ -276,7 +272,7 @@ export function buildStayBookingDeepLink(stay = {}, city = '', options = {}) {
   params.set('no_rooms', String(rooms));
   params.set('selected_currency', currencyCode);
 
-  // Reset child ages so generated URLs stay consistent with selected child count.
+  
   Array.from(params.keys())
     .filter((k) => /^age$|^age\d+$/i.test(k))
     .forEach((k) => params.delete(k));
@@ -370,14 +366,14 @@ export function getCurrencyDisplayName(code) {
       return display.of(currencyCode) || currencyCode;
     }
   } catch (_) {
-    // fall through
+    
   }
   return currencyCode;
 }
-// Keep one slot for the manual-add card so 3-column pages don't end with a lone card row.
+
 export const ADD_PLACES_PAGE_SIZE = 17;
 
-/** Category display for day cards */
+
 export const CATEGORY_CARD_STYLES = {
   places: { label: 'Place', color: '#16a34a' },
   place: { label: 'Place', color: '#16a34a' },
@@ -940,7 +936,7 @@ export function hasValidLatLng(place) {
   return Number.isFinite(lat) && Number.isFinite(lng);
 }
 
-/** Reorder items between start and end (inclusive) by proximity: start fixed, end fixed last, middle ordered by nearest neighbour. */
+
 export function reorderByProximity(items, startId, endId) {
   if (!Array.isArray(items) || items.length <= 1) return items || [];
 
@@ -1070,7 +1066,7 @@ export function getTransportTimesFromDetail(detail = '') {
   return { dep: match[1], arr: match[2] };
 }
 
-/** Maps our UI mode to Route Matrix travelMode strings (replaces legacy Distance Matrix). */
+
 export const ROUTE_MATRIX_TRAVEL_MODE = {
   walking: 'WALKING',
   cycling: 'BICYCLING',
@@ -1078,7 +1074,7 @@ export const ROUTE_MATRIX_TRAVEL_MODE = {
   public: 'TRANSIT',
 };
 
-/** Get travel time and distance via google.maps.routes.RouteMatrix.computeRouteMatrix (not deprecated DistanceMatrix). */
+
 export async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache) {
   const lat1 = fromItem.lat ?? 0;
   const lng1 = fromItem.lng ?? 0;
@@ -1136,7 +1132,7 @@ export async function getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, 
   }
 }
 
-/** Fallback travel time calculation using straight-line distance (Haversine formula). */
+
 export function getTravelBetweenFallback(fromItem, toItem, mode) {
   const lat1 = fromItem.lat ?? 47.6;
   const lng1 = fromItem.lng ?? -122.3;
@@ -1148,7 +1144,7 @@ export function getTravelBetweenFallback(fromItem, toItem, mode) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distKmRounded = Math.max(0.1, Math.round(distKm * 10) / 10);
-  // Add 30% buffer to straight-line distance to approximate actual route distance
+  
   const routeDistKm = Math.round(distKmRounded * 1.3 * 10) / 10;
   const minPerKm = { walking: 12, cycling: 4, driving: 2.5, public: 5 }[mode] || 5;
   const totalMins = Math.round(routeDistKm * minPerKm);
@@ -1158,31 +1154,28 @@ export function getTravelBetweenFallback(fromItem, toItem, mode) {
   return { duration: durationStr, durationMins: totalMins, distance: `${routeDistKm} km` };
 }
 
-/** Get travel time/distance between two items - tries Google Maps SDK first, falls back to calculation. */
+
 export function getTravelBetween(fromItem, toItem, mode, cache, setCache) {
-  // Generate cache key
+  
   const cacheKey = `${fromItem.lat},${fromItem.lng}|${toItem.lat},${toItem.lng}|${mode}`;
   
-  // Return cached result if available
+  
   if (cache && cache[cacheKey]) {
     return cache[cacheKey];
   }
   
-  // Start async fetch in background if Google Maps is available
+  
   if (typeof window !== 'undefined' && window.google && cache !== undefined && setCache) {
     getTravelBetweenGoogleMaps(fromItem, toItem, mode, cache, setCache).catch(err => {
       console.error('Error fetching travel data:', err);
     });
   }
   
-  // Return fallback calculation immediately for initial render
+  
   return getTravelBetweenFallback(fromItem, toItem, mode);
 }
 
-/**
- * Pure append for discovery / Explore flows (same rules as TripDetails add-to-trip).
- * @returns {{ ok: true, tripExpenseItems: object[] } | { ok: false, reason: 'overlap' | 'invalid_stay', message: string }}
- */
+
 export function tryAppendItemToExpenseList(tripExpenseItems, {
   itemType,
   data,
@@ -1303,7 +1296,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'experiences', label: 'Experiences', color: '#7c3aed' },
 ];
 
-/** Build budget breakdown from actual trip items (totals are stored in USD). */
+
 export function getBudgetBreakdown(trip, currencyCode = 'USD', extraItems = []) {
   const prefix = currencyCode === 'USD' ? 'US' : currencyCode;
   const symbol = currencyCode === 'USD' ? 'US$' : `${currencyCode} `;
@@ -1352,16 +1345,16 @@ function scoreMatch(query, text) {
 
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   
-  // Exact match = highest score
+  
   if (t === q) return 1000;
   
-  // Word-boundary prefix (e.g., "tower" matches "Tower Bridge" but not "Power")
+  
   if (new RegExp(`\\b${escaped}`).test(t)) return 500;
   
-  // Starts with query
+  
   if (t.startsWith(q)) return 300;
   
-  // Contains query
+  
   if (t.includes(q)) return 100;
   
   return 0;
@@ -1445,7 +1438,7 @@ async function fetchGlobalGeocodingPredictions(query) {
     const data = await res.json();
     const results = Array.isArray(data?.results) ? data.results : [];
 
-    // Score and sort by relevance to user query
+    
     const scored = results.map((item, index) => {
       const city = item.name || q;
       const admin = [item.admin1, item.country].filter(Boolean).join(', ');
@@ -1456,7 +1449,7 @@ async function fetchGlobalGeocodingPredictions(query) {
         item,
         city,
         admin,
-        score: totalScore || 50, // Default score for partial matches from API
+        score: totalScore || 50, 
         index,
       };
     });
@@ -1586,7 +1579,7 @@ function fetchNearbyLandmarksFromLatLng(latLng) {
       try {
         div.remove();
       } catch {
-        // no-op cleanup
+        
       }
 
       if (status !== window.google.maps.places.PlacesServiceStatus.OK || !Array.isArray(results)) {
@@ -1623,7 +1616,7 @@ function fetchLandmarksByAddressText(query) {
       try {
         div.remove();
       } catch {
-        // no-op cleanup
+        
       }
 
       if (status !== window.google.maps.places.PlacesServiceStatus.OK || !Array.isArray(results)) {
@@ -1665,7 +1658,7 @@ async function fetchNearbyLandmarkPredictionsFromAddress(query) {
   return dedupePredictions(hintedLandmarks);
 }
 
-// Fetch Google Places Autocomplete predictions
+
 export async function fetchPlacesPredictions(input, callback) {
   const query = String(input || '').trim();
   if (!query) {

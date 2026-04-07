@@ -29,7 +29,7 @@ export default function useDashboardTripActions({ setMyTrips, refreshTrips, user
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const [dialog, setDialog] = useState(DIALOG_CLOSED);
 
-  // Share modal state
+  
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareItinerary, setShareItinerary] = useState(null);
   const [shareFriends, setShareFriends] = useState([]);

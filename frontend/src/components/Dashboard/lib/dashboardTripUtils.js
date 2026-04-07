@@ -5,7 +5,7 @@ import {
 } from '../../../data/tripDestinationMeta';
 import { resolveImageUrl } from '../../../lib/imageFallback';
 
-/** Map Mongo itinerary doc → trip card row (same shape the mock list used). */
+
 export function mapItineraryToTripRow(raw) {
   const id = String(raw._id ?? raw.id ?? '');
   const destination = String(raw.destination || '').trim();

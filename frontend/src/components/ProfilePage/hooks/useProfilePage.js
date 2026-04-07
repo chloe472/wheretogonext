@@ -134,7 +134,7 @@ export function useProfilePage({
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [socialDraft, setSocialDraft] = useState({ platform: '', value: '' });
-  const [statsListOpen, setStatsListOpen] = useState(null); // 'countries' | 'cities' | null
+  const [statsListOpen, setStatsListOpen] = useState(null); 
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTrip, setShareTrip] = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
@@ -623,7 +623,7 @@ const shareUrl = profile?.id || profileId
       setRequests(incoming?.requests || []);
       setOutgoingRequests(outgoing?.requests || []);
     } catch {
-      // ignore
+      
     }
   };
 
@@ -776,7 +776,7 @@ const shareUrl = profile?.id || profileId
         setRequests(incoming?.requests || []);
         setOutgoingRequests(outgoing?.requests || []);
       } catch {
-        // ignore refresh errors
+        
       }
     } catch (err) {
       setAddFriendError(err?.message || 'Request failed.');
@@ -1125,7 +1125,7 @@ const shareUrl = profile?.id || profileId
       await navigator.clipboard.writeText(shareLink);
       toast.success('Link copied.');
     } catch {
-      // ignore
+      
     }
   };
 

@@ -17,7 +17,7 @@ function getNotificationStreamBaseUrl() {
   return '';
 }
 
-/** Returns the SSE stream URL with the JWT token as a query param. */
+
 export function getNotificationStreamUrl() {
   const token = typeof localStorage !== 'undefined'
     ? (localStorage.getItem(TOKEN_STORAGE_KEY) || '')

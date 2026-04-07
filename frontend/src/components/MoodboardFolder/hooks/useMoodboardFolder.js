@@ -24,7 +24,7 @@ export function useMoodboardFolder(user) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // AI analysis
+  
   const [aiResult, setAiResult] = useState(null);
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -171,22 +171,22 @@ export function useMoodboardFolder(user) {
     reactions,
     loading,
     error,
-    // URL modal
+    
     urlInput,
     setUrlInput,
     showUrlModal,
     setShowUrlModal,
-    // delete image modal
+    
     showDeleteModal,
     setShowDeleteModal,
     currentImageIdx,
     setCurrentImageIdx,
-    // AI
+    
     aiResult,
     showAiModal,
     setShowAiModal,
     aiLoading,
-    // handlers
+    
     handleEmojiClick,
     handleDeleteImage,
     handleAddUrl,

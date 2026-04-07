@@ -106,7 +106,7 @@ export default function Dashboard({ user, onLogout }) {
   })();
 
   const filteredTrips = useMemo(() => {
-    // Use midday local time to avoid TZ edge cases.
+    
     const todayDate = new Date(`${todayStr}T12:00:00`);
     if (tripFilter === 'All') return tripRows;
     if (tripFilter === 'Upcoming') {
@@ -159,7 +159,7 @@ export default function Dashboard({ user, onLogout }) {
         const activityDate = updatedAt || createdAt;
         if (!activityDate) return null;
 
-        // Treat as "created" when updatedAt is missing or effectively same as createdAt.
+        
         const createdMs = createdAt ? createdAt.getTime() : null;
         const updatedMs = updatedAt ? updatedAt.getTime() : null;
         const isCreated =
@@ -244,7 +244,7 @@ export default function Dashboard({ user, onLogout }) {
           try {
             await refreshTrips();
           } catch {
-            /* ignore */
+            
           }
         }}
       />

@@ -4,11 +4,6 @@ import path from 'path';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
-/**
- * Tried after GEMINI_MODEL on 404 / errors.
- * Use IDs from https://ai.google.dev/gemini-api/docs/models — short names like
- * `gemini-1.5-flash` often 404 on generativelanguage.googleapis.com; prefer -002 / -8b / lite.
- */
 const GEMINI_MODEL_FALLBACKS = [
   'gemini-2.0-flash-lite',
   'gemini-2.5-flash-lite',
@@ -16,9 +11,6 @@ const GEMINI_MODEL_FALLBACKS = [
   'gemini-1.5-flash-8b',
 ];
 
-/**
- * POST generateContent; tries GEMINI_MODEL then fallbacks. Handles top-level data.error and empty candidates.
- */
 async function geminiGenerateContent(body, timeoutMs = 90000) {
   const models = [GEMINI_MODEL, ...GEMINI_MODEL_FALLBACKS].filter(
     (m, i, a) => m && a.indexOf(m) === i,

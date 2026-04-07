@@ -223,7 +223,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const calendarTimelineRef = useRef(null);
   const hydratedTripItemsForIdRef = useRef(null);
   const tripDatePersistKeyRef = useRef('');
-  /** Counts expense-item persists per trip; first persist is hydration — skip toast. */
+  
   const expensePersistCountByTripRef = useRef({ tripId: null, count: 0 });
   const [transportModeBySegment, setTransportModeBySegment] = useState({});
   const [openTravelDropdownKey, setOpenTravelDropdownKey] = useState(null);
@@ -454,7 +454,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     setServerItinerary((prev) => ({ ...prev, ...updated }));
   }, [tripId, serverItinerary, setServerItinerary]);
 
-  // pendingRoles: { [userId]: role } — only entries that changed
+  
   const handleSaveCollaboratorRoles = useCallback(async (pendingRoles) => {
     const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
     const newCollabs = currentCollabs.map((c) => {

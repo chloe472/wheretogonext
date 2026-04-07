@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import { getNotificationStreamUrl } from '../../../api/notificationsApi';
 
-/**
- * While the trip planner is open, listen for itinerary update notifications and refetch when this trip changed.
- */
+
 export function useTripDetailsPlannerNotificationStream(tripId, userId, refetchItineraryIfNewer) {
   useEffect(() => {
     const uid = String(userId || '').trim();
@@ -28,7 +26,7 @@ export function useTripDetailsPlannerNotificationStream(tripId, userId, refetchI
           refetchItineraryIfNewer();
         }
       } catch {
-        /* ignore */
+        
       }
     };
 

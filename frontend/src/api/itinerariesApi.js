@@ -1,8 +1,6 @@
 import { apiUrl, getBearerAuthHeaders, TOKEN_STORAGE_KEY } from './apiConfig.js';
 
-/**
- * Maps GET /api/itineraries response items to the shape SearchResultsPage cards expect.
- */
+
 export function mapItineraryToCard(it) {
   const creator = it.creator && typeof it.creator === 'object' ? it.creator : {};
   const creatorName = creator.name || creator.username || creator.email || 'Traveler';
@@ -33,23 +31,20 @@ export function mapItineraryToCard(it) {
     creatorId,
     tags: categories,
     type: categories.length ? categories.slice(0, 2).join(' · ') : '—',
-    /** Legacy mock fields — omit in UI when absent */
+    
     currency: it.currency ?? null,
     price: it.price ?? null,
   };
 }
 
-/**
- * Maps sidebar sort label to API `sort` query (server supports most-popular | newest).
- * Other options are applied client-side after fetch.
- */
+
 export function mapSortToApiParam(sortBy) {
   if (sortBy === 'Most Popular') return 'most-popular';
   if (sortBy === 'Newest') return 'newest';
   return 'newest';
 }
 
-/** Apply sorts not supported by the API (no price on model — use views as proxy). */
+
 export function applyClientSort(cards, sortBy) {
   const list = [...cards];
   switch (sortBy) {
@@ -71,10 +66,7 @@ export function applyClientSort(cards, sortBy) {
   }
 }
 
-/**
- * Explore / community list: when the user has profile interests (same labels as itinerary.categories),
- * rank itineraries with more overlapping categories first; then apply the selected sort as tie-breaker.
- */
+
 export function applyExploreOrdering(cards, sortBy, profileInterests) {
   const raw = Array.isArray(profileInterests) ? profileInterests : [];
   const interestSet = new Set(
@@ -128,11 +120,7 @@ export function applyExploreOrdering(cards, sortBy, profileInterests) {
   return list;
 }
 
-/**
- * GET /api/itineraries — public published itineraries.
- * @param {{ search?: string, sort?: string, categories?: string, duration?: string }} params
- * @param {AbortSignal} [signal]
- */
+
 function authHeaders() {
   return getBearerAuthHeaders();
 }
@@ -158,7 +146,7 @@ export async function fetchPublicItineraries(params = {}, signal) {
   return Array.isArray(data.itineraries) ? data.itineraries : [];
 }
 
-/** GET /api/itineraries/:id (increments views server-side) */
+
 export async function fetchItineraryById(id, signal) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}`, {
     signal,
@@ -172,7 +160,7 @@ export async function fetchItineraryById(id, signal) {
   return data.itinerary || null;
 }
 
-/** PUT /api/itineraries/:id — partial update (creator or collaborator with edit access; server-enforced) */
+
 export async function updateItinerary(id, body) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}`, {
     method: 'PUT',
@@ -184,7 +172,7 @@ export async function updateItinerary(id, body) {
   return data.itinerary;
 }
 
-/** POST /api/itineraries/:id/share — notify friends, no collaborator change */
+
 export async function shareItineraryWithFriends(id, friendIds) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}/share`, {
     method: 'POST',
@@ -196,7 +184,7 @@ export async function shareItineraryWithFriends(id, friendIds) {
   return data;
 }
 
-/** GET /api/itineraries/:id/comments */
+
 export async function fetchItineraryComments(itineraryId, signal) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(itineraryId)}/comments`, {
     signal,
@@ -210,7 +198,7 @@ export async function fetchItineraryComments(itineraryId, signal) {
   return Array.isArray(data.comments) ? data.comments : [];
 }
 
-/** POST /api/itineraries/:id/comments */
+
 export async function postItineraryComment(itineraryId, body, parentId = null) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(itineraryId)}/comments`, {
     method: 'POST',
@@ -222,7 +210,7 @@ export async function postItineraryComment(itineraryId, body, parentId = null) {
   return data.comment;
 }
 
-/** POST /api/itineraries/:id/comments/:commentId/like */
+
 export async function toggleCommentLike(itineraryId, commentId) {
   const res = await fetch(
     `${apiUrl('/api/itineraries')}/${encodeURIComponent(itineraryId)}/comments/${encodeURIComponent(commentId)}/like`,
@@ -233,7 +221,7 @@ export async function toggleCommentLike(itineraryId, commentId) {
   return data;
 }
 
-/** GET /api/itineraries/mine */
+
 export async function fetchMyItineraries(signal) {
   const res = await fetch(apiUrl('/api/itineraries/mine'), { signal, headers: authHeaders() });
   const data = await res.json().catch(() => ({}));
@@ -241,7 +229,7 @@ export async function fetchMyItineraries(signal) {
   return Array.isArray(data.itineraries) ? data.itineraries : [];
 }
 
-/** GET /api/itineraries/shared-with-me */
+
 export async function fetchSharedWithMeItineraries(signal) {
   const res = await fetch(apiUrl('/api/itineraries/shared-with-me'), { signal, headers: authHeaders() });
   const data = await res.json().catch(() => ({}));
@@ -249,7 +237,7 @@ export async function fetchSharedWithMeItineraries(signal) {
   return Array.isArray(data.itineraries) ? data.itineraries : [];
 }
 
-/** GET /api/itineraries/:id/customized-copy — whether user already duplicated from this source (auth) */
+
 export async function fetchCustomizedCopyExists(sourceItineraryId) {
   const res = await fetch(
     `${apiUrl('/api/itineraries')}/${encodeURIComponent(sourceItineraryId)}/customized-copy`,
@@ -263,7 +251,7 @@ export async function fetchCustomizedCopyExists(sourceItineraryId) {
   };
 }
 
-/** POST /api/itineraries/:id/duplicate — copy into current user's trips (auth) */
+
 export async function duplicateItinerary(id) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}/duplicate`, {
     method: 'POST',
@@ -274,7 +262,7 @@ export async function duplicateItinerary(id) {
   return data.itinerary;
 }
 
-/** POST /api/itineraries — create (used for duplicate) */
+
 export async function createItinerary(body) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -301,7 +289,7 @@ export async function createItinerary(body) {
   }
 }
 
-/** DELETE /api/itineraries/:id */
+
 export async function deleteItinerary(id) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -312,7 +300,7 @@ export async function deleteItinerary(id) {
   throw new Error(data.error || 'Failed to delete');
 }
 
-/** POST multipart /api/itineraries/upload */
+
 export async function uploadItineraryImage(file) {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
   const fd = new FormData();
@@ -329,10 +317,7 @@ export async function uploadItineraryImage(file) {
   return data.url;
 }
 
-/**
- * POST /api/itineraries/:id/publish
- * @param {object} payload — visibility, title?, overview?, categories?, coverImages?
- */
+
 export async function publishItinerary(id, payload) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}/publish`, {
     method: 'POST',

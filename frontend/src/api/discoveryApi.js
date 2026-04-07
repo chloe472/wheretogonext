@@ -26,7 +26,7 @@ function writeCachedDiscovery(destination, data) {
       JSON.stringify({ timestamp: Date.now(), data }),
     );
   } catch {
-    // ignore storage issues
+    
   }
 }
 

@@ -25,7 +25,7 @@ function writeCachedRates(payload) {
       stale: Boolean(payload?.stale),
     }));
   } catch {
-    // ignore cache write failures
+    
   }
 }
 

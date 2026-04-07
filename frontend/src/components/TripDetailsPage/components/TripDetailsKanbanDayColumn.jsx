@@ -93,7 +93,7 @@ export default function TripDetailsKanbanDayColumn({
   const [expandedNotesByItem, setExpandedNotesByItem] = useState({});
   const { readOnly } = useTripAccess();
 
-  // Icon render break fix
+  
   const isRenderableIcon = (candidate) => (
     typeof candidate === 'function'
     || typeof candidate === 'string'

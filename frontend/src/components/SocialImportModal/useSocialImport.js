@@ -19,10 +19,7 @@ function fileToDataUrl(file) {
   });
 }
 
-/**
- * State and handlers for "Import from social media" (Add to trip sheet).
- * Must be called after `appendItemToTrip` is defined in the parent.
- */
+
 export function useSocialImport({
   appendItemToTrip,
   days,
@@ -75,7 +72,7 @@ export function useSocialImport({
     setSocialImportFilePreviews(next);
     return () => {
       next.forEach((p) => {
-        try { URL.revokeObjectURL(p.url); } catch { /* ignore */ }
+        try { URL.revokeObjectURL(p.url); } catch {  }
       });
     };
   }, [socialImportFiles]);

@@ -10,10 +10,7 @@ import {
 } from '../../api/notificationsApi';
 import './DashboardHeader.css';
 
-/**
- * Shared top bar for dashboard-style pages (My Trips, Explore, etc.)
- * @param {{ user?: { name?: string }, onLogout?: () => void, activeNav?: 'dashboard' | 'explore' }} props
- */
+
 export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard' }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,7 +91,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
 
     loadLatest();
 
-    // SSE — server pushes new notifications instantly.
+    
     const streamUrl = getNotificationStreamUrl();
     let es = null;
     let reconnectTimer = null;
@@ -105,7 +102,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       es = new EventSource(streamUrl);
 
       es.addEventListener('connected', () => {
-        reconnectDelay = 2000; // reset backoff on successful connection
+        reconnectDelay = 2000; 
       });
 
       es.addEventListener('notification', (e) => {
@@ -119,7 +116,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
           if (!notification.isRead) {
             setUnreadCount((c) => c + 1);
           }
-        } catch { /* ignore malformed event */ }
+        } catch {  }
       });
 
       es.onerror = () => {
@@ -135,7 +132,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
 
     connectSSE();
 
-    // Slow fallback poll (60 s) to catch anything missed while SSE was reconnecting.
+    
     const intervalId = window.setInterval(loadLatest, 60000);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -226,7 +223,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
         setUnreadCount(payload.unreadCount);
       }
     } catch {
-      // best effort
+      
     }
     setNotificationsOpen(false);
     navigate(link);
@@ -238,7 +235,7 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
     try {
       await markAllNotificationsRead();
     } catch {
-      // best effort
+      
     }
   };
 

@@ -4,9 +4,7 @@ function normalizeId(value) {
   return String(value).trim();
 }
 
-/**
- * Returns the logged-in user's role on the collaborators list, or null if not found.
- */
+
 export function getCurrentUserCollaboratorRole(user, collaborators) {
   const userId = String(user?.id || user?._id || '').trim();
   const userEmail = String(user?.email || '').trim().toLowerCase();
@@ -23,9 +21,7 @@ export function getCurrentUserCollaboratorRole(user, collaborators) {
   return match ? (match.role || 'viewer') : null;
 }
 
-/**
- * True when the logged-in user appears on the itinerary collaborators list (by userId or email).
- */
+
 export function isCurrentUserTripCollaborator(user, collaborators) {
   const userId = String(user?.id || user?._id || '').trim();
   const userEmail = String(user?.email || '').trim().toLowerCase();

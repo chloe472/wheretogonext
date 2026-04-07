@@ -6,22 +6,7 @@ import { formatViewCount } from '../../lib/formatViewCount';
 import { getFlagImageForDestination } from '../../data/tripDestinationMeta';
 import './ItineraryCard.css';
 
-/**
- * @param {object} props
- * @param {string} props.title
- * @param {string[]} [props.coverImages]
- * @param {number} props.views
- * @param {string} props.durationLabel e.g. "2 days"
- * @param {number} props.placesCount
- * @param {string} props.creatorName
- * @param {string|null} [props.creatorAvatar]
- * @param {string} [props.creatorId]
- * @param {string} [props.destination]
- * @param {string} [props.locations]
- * @param {string} [props.itineraryId] — navigates to detail when card is clicked (carousel buttons excluded)
- * @param {boolean} [props.ownerMenu] — show kebab with Share / Publish / Duplicate / Delete
- * @param {function(string): void} [props.onOwnerMenu]
- */
+
 export default function ItineraryCard({
   title,
   coverImages = [],

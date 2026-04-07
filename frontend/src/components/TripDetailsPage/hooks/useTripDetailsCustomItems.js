@@ -27,7 +27,7 @@ async function geocodeAddressWithGoogle(address) {
       await loadGoogleMapsScript();
     }
   } catch {
-    // Fall back to non-Google geocoding below.
+    
   }
 
   if (!window.google?.maps?.Geocoder) return null;
@@ -96,7 +96,7 @@ async function resolveCoordsFromPlaceId(placeId) {
       try {
         div.remove();
       } catch {
-        // no-op cleanup
+        
       }
 
       if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
@@ -224,7 +224,7 @@ export function useTripDetailsCustomItems({
         showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
       }
 
-      // Handle travel docs: convert files to attachments
+      
       const attachments = customPlaceTravelDocs.map((f) => createAttachmentFromFile(f));
 
       setTripExpenseItems((prev) => [
@@ -327,7 +327,7 @@ export function useTripDetailsCustomItems({
         showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
       }
 
-      // Handle travel docs: convert files to attachments
+      
       const attachments = customFoodTravelDocs.map((f) => createAttachmentFromFile(f));
 
       setTripExpenseItems((prev) => [

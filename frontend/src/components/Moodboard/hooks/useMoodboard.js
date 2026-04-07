@@ -112,22 +112,22 @@ export function useMoodboard() {
     folders,
     loading,
     error,
-    // create modal
+    
     showCreate,
     setShowCreate,
-    // edit modal
+    
     showEdit,
     setShowEdit,
-    // delete modal
+    
     showDelete,
     setShowDelete,
-    // shared name input
+    
     newFolderName,
     setNewFolderName,
-    // menu
+    
     openMenuId,
     setOpenMenuId,
-    // handlers
+    
     handleCreate,
     handleEdit,
     handleDelete,

@@ -7,7 +7,7 @@ import {
   Share2,
 } from 'lucide-react';
 
-/** Options for the "Add to trip" action sheet (Itinerary kanban / calendar). */
+
 export const ADD_TO_TRIP_OPTIONS = [
   {
     id: 'place',

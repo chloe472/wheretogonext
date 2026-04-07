@@ -101,7 +101,7 @@ return (
     />
     <div className="trip-details__add-places-modal trip-details__add-places-modal--theme" role="dialog" aria-labelledby={showingAnyDetail ? 'food-detail-title' : 'add-food-title'} aria-modal="true">
       {showingFoodDetail ? (
-        // Food Detail View
+        
         <div className="trip-details__add-places-body trip-details__add-food-body">
           <div className="trip-details__place-detail-panel">
             <div className="trip-details__place-detail-header">

@@ -104,9 +104,7 @@ export function getCityDayDraftKey(rowId, field) {
   return `${rowId}::${field}`;
 }
 
-/**
- * @returns {{ ok: true, segments: object[] } | { ok: false, error: string }}
- */
+
 export function buildCitySegmentsForSubmit(allLocations, dayCount, cityPlanRows, cityDayRanges, cityDayDrafts) {
   const fallbackRanges = buildDefaultCityDayRanges(allLocations, dayCount);
   if (allLocations.length <= 1) {

@@ -72,7 +72,7 @@ const STEPS = [
 export default function LandingPage({ onStartPlanning }) {
   return (
     <div className="landing">
-      {/* Hero */}
+      {}
       <header className="hero">
         <HeroSlideshowBackground images={EXPLORE_HERO_IMAGES} />
         <div className="hero__content">
@@ -94,7 +94,7 @@ export default function LandingPage({ onStartPlanning }) {
         </div>
       </header>
 
-      {/* Features */}
+      {}
       <section className="features">
         <h2 className="features__title">Everything you need for seamless travel planning</h2>
         <p className="features__subtitle">
@@ -113,7 +113,7 @@ export default function LandingPage({ onStartPlanning }) {
         </div>
       </section>
 
-      {/* Process */}
+      {}
       <section className="process">
         <h2 className="process__title">From chaos to clarity</h2>
         <p className="process__subtitle">In just a few clicks</p>
@@ -131,7 +131,7 @@ export default function LandingPage({ onStartPlanning }) {
         </div>
       </section>
 
-      {/* CTA */}
+      {}
       <section className="cta">
         <h2 className="cta__title">Ready to plan your next adventure?</h2>
         <p className="cta__subtitle">
@@ -142,7 +142,7 @@ export default function LandingPage({ onStartPlanning }) {
         </button>
       </section>
 
-      {/* Footer */}
+      {}
       <footer className="footer">
         <div className="footer__logo">
           <Globe size={20} className="footer__logo-icon" aria-hidden />

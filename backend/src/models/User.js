@@ -35,7 +35,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Sparse unique index: multiple users can have no googleId (email/password signups)
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
 userSchema.pre('save', async function (next) {

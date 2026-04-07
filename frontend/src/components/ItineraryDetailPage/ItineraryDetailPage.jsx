@@ -86,7 +86,7 @@ function buildCommentTree(flat) {
   return roots;
 }
 
-/** First grapheme of display name for avatar fallback */
+
 function commentAuthorInitial(displayName) {
   const s = String(displayName || '').trim();
   if (!s) return '?';

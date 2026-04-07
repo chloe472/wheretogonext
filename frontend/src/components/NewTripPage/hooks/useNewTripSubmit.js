@@ -11,9 +11,7 @@ import {
   buildCitySegmentsForSubmit,
 } from '../lib/newTripPageHelpers.js';
 
-/**
- * Validates form state, creates the itinerary, navigates to the new trip, and applies router fallbacks.
- */
+
 export function useNewTripSubmit({
   navigate,
   getPendingWhereQuery,

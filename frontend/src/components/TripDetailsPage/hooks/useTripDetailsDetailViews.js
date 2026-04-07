@@ -15,7 +15,7 @@ async function geocodeAddressForDetail(address) {
       await loadGoogleMapsScript();
     }
   } catch {
-    // Ignore and continue to fallback geocoder.
+    
   }
 
   if (window.google?.maps?.Geocoder) {
@@ -130,7 +130,7 @@ export function useTripDetailsDetailViews({
       ? {
         ...item,
         ...canonical,
-        // Keep itinerary identity so selected marker points to the actual trip item.
+        
         id: item.id || canonical.id,
         sourcePlaceId: item.sourcePlaceId || canonical.id,
         name: canonical.name || item.name,

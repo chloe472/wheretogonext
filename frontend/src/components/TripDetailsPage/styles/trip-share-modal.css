@@ -76,7 +76,7 @@
   margin: 0 0 0.5rem;
 }
 
-/* Invite section */
+
 .trip-share__invite-section {
   display: flex;
   align-items: flex-start;
@@ -230,7 +230,7 @@
   color: var(--wtg-text, #1c1917);
 }
 
-/* Friends section */
+
 .trip-share__friends-section {
   margin-bottom: 1.25rem;
 }
@@ -304,7 +304,7 @@
   font-weight: 700;
 }
 
-/* Email invite */
+
 .trip-share__email-row {
   display: flex;
   gap: 0.5rem;
@@ -349,7 +349,7 @@
   margin: 0 0 0.75rem;
 }
 
-/* Collaborators list */
+
 .trip-share__collab-section {
   margin-top: 1rem;
 }
@@ -420,7 +420,7 @@
   white-space: nowrap;
 }
 
-/* Footer */
+
 .trip-share__footer {
   display: flex;
   justify-content: flex-end;
@@ -454,7 +454,7 @@
   opacity: 0.9;
 }
 
-/* Custom role dropdown */
+
 .trip-share__role-dropdown {
   position: relative;
   flex-shrink: 0;

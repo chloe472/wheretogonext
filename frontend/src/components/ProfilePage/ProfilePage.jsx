@@ -391,7 +391,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
             try {
               await refreshProfile();
             } catch {
-              /* ignore */
+              
             }
           },
         }}

@@ -31,7 +31,7 @@ export function useTripDetailsItineraryLoad(tripId, locationState) {
         return prev;
       });
     } catch {
-      /* ignore transient refetch errors */
+      
     }
   }, [tripId]);
 

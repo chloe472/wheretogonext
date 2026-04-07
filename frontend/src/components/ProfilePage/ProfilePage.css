@@ -455,7 +455,7 @@
   white-space: nowrap;
 }
 
-/* Share with friends section */
+
 .profile-page__share-friends-section {
   margin-bottom: 1.25rem;
 }
@@ -808,7 +808,7 @@
   background: var(--wtg-input-bg);
 }
 
-/* Nationality custom dropdown */
+
 .nat-dropdown {
   position: relative;
 }
@@ -1588,7 +1588,7 @@
   background: var(--wtg-hover);
 }
 
-/* Add friend search */
+
 .add-friend-search-wrap {
   display: flex;
   flex-direction: column;

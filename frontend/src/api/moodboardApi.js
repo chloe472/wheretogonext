@@ -72,7 +72,7 @@ export async function deleteMoodboardFolder(tripId, folderId) {
   return Array.isArray(data) ? data.map(normalizeFolder) : [];
 }
 
-// --- IMAGES ---
+
 export async function addMoodboardImage(tripId, folderId, url) {
   const res = await fetch(apiUrl(`/api/moodboard/trip/${encodeURIComponent(tripId)}/folder/${encodeURIComponent(folderId)}/image`), {
     method: 'POST',

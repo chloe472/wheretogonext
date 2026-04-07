@@ -1,4 +1,4 @@
-/* Add Custom Place modal */
+
 .trip-details__custom-place-modal {
   position: fixed;
   left: 50%;
@@ -15,7 +15,7 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
-/* Parent supplies backdrop (e.g. Explore → add to existing trip). */
+
 .trip-details__custom-place-modal--embedded {
   position: relative;
   left: auto;
@@ -188,7 +188,7 @@
   color: var(--wtg-text);
 }
 
-/* Keeps "Label *" on one row; parent label stays column so controls sit below. */
+
 .trip-details__custom-place-label-heading {
   display: inline-flex;
   align-items: baseline;

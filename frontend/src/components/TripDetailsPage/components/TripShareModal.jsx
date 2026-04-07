@@ -101,10 +101,10 @@ export default function TripShareModal({
   const wrapRef = useRef(null);
   const [roleSaving, setRoleSaving] = useState(false);
 
-  // Local role edits: userId → role
+  
   const [pendingRoles, setPendingRoles] = useState({});
 
-  // Reset pending roles when the modal opens or closes
+  
   useEffect(() => {
     if (!open) setPendingRoles({});
   }, [open]);
@@ -137,7 +137,7 @@ export default function TripShareModal({
     }
   };
 
-  // Debounced search as user types
+  
   useEffect(() => {
     const q = inviteQuery.trim();
     if (q.length < 2) {
@@ -164,7 +164,7 @@ export default function TripShareModal({
     return () => clearTimeout(debounceRef.current);
   }, [inviteQuery, onSearchUsers]);
 
-  // Close dropdown on outside click
+  
   useEffect(() => {
     const handleClick = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
@@ -272,7 +272,7 @@ export default function TripShareModal({
                   {inviteSending ? 'Sending…' : 'Send invite'}
                 </button>
 
-                {/* Search results dropdown */}
+                {}
                 {dropdownOpen && searchResults.length > 0 && (
                   <ul className="trip-share__search-dropdown">
                     {searchResults.map((u) => (
