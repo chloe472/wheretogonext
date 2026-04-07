@@ -86,35 +86,46 @@ export default function TripDetailsHeader({
                 />
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="trip-details__title-btn"
-                    onClick={() => {
-                      const now = Date.now();
-                      if (!readOnly && now - titleLastClickRef.current < 400) {
+                  <div className="trip-details__title-line">
+                    <button
+                      type="button"
+                      className="trip-details__title-btn"
+                      onClick={() => {
+                        const now = Date.now();
+                        if (!readOnly && now - titleLastClickRef.current < 400) {
+                          setTitleEditValue(titleDisplay);
+                          setTitleEditing(true);
+                          setTitleDropdownOpen(false);
+                        } else {
+                          setTitleDropdownOpen((o) => !o);
+                        }
+                        titleLastClickRef.current = now;
+                      }}
+                      onDoubleClick={(e) => {
+                        if (readOnly) return;
+                        e.preventDefault();
                         setTitleEditValue(titleDisplay);
                         setTitleEditing(true);
                         setTitleDropdownOpen(false);
-                      } else {
-                        setTitleDropdownOpen((o) => !o);
-                      }
-                      titleLastClickRef.current = now;
-                    }}
-                    onDoubleClick={(e) => {
-                      if (readOnly) return;
-                      e.preventDefault();
-                      setTitleEditValue(titleDisplay);
-                      setTitleEditing(true);
-                      setTitleDropdownOpen(false);
-                    }}
-                    aria-label="Trip name - click for menu, double-click to rename"
-                    aria-expanded={titleDropdownOpen}
-                  >
-                    <span className="trip-details__title-text">
-                      {titleDisplay || `${daysLength} days to ${trip.destination}`}
-                    </span>
-                    <ChevronDown size={16} aria-hidden />
-                  </button>
+                      }}
+                      aria-label="Trip name - click for menu, double-click to rename"
+                      aria-expanded={titleDropdownOpen}
+                    >
+                      <span className="trip-details__title-text">
+                        {titleDisplay || `${daysLength} days to ${trip.destination}`}
+                      </span>
+                      <ChevronDown size={16} aria-hidden />
+                    </button>
+                    {readOnly && (
+                      <span
+                        className="trip-details__collab-badge"
+                        role="status"
+                        title="You can view this trip but cannot edit it"
+                      >
+                        View only
+                      </span>
+                    )}
+                  </div>
                   {titleDropdownOpen && (
                     <div className="trip-details__title-dropdown" role="menu">
                       <button

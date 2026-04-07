@@ -78,6 +78,7 @@ export default function TripDetailsPageLayout({
   setAddSheetFromCalendar,
   setAddSheetDay,
   setAddSheetAnchor,
+  setPendingDeleteItemId,
   tripDetailsMapPanelProps,
   calendarScrollLeft,
   setCalendarScrollLeft,
@@ -185,6 +186,7 @@ export default function TripDetailsPageLayout({
         setAddSheetFromCalendar={setAddSheetFromCalendar}
         setAddSheetDay={setAddSheetDay}
         setAddSheetAnchor={setAddSheetAnchor}
+        setPendingDeleteItemId={setPendingDeleteItemId}
         tripDetailsMapPanelProps={tripDetailsMapPanelProps}
         calendarScrollLeft={calendarScrollLeft}
         setCalendarScrollLeft={setCalendarScrollLeft}

@@ -239,22 +239,8 @@
   width: 220px;
 }
 
-.search-results__count {
-  margin: 0 0 1rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--wtg-primary);
-}
-
-.search-results__interest-hint {
-  margin: -0.5rem 0 1rem;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--wtg-text-muted, #6b7280);
-}
-
 .search-results__filters-active-hint {
-  margin: -0.5rem 0 1rem;
+  margin: 0 0 1rem;
   font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--wtg-text-muted, #6b7280);

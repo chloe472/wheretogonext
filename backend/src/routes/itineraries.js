@@ -333,6 +333,39 @@ async function isCollaboratorEditorUser(userId, itineraryDoc) {
   return false;
 }
 
+function collaboratorEntryMatchesUser(collaborators, userId, userEmail) {
+  const uid = String(userId || '').trim();
+  const em = String(userEmail || '').trim().toLowerCase();
+  for (const c of collaborators || []) {
+    const cUid = c?.userId != null ? String(c.userId) : '';
+    if (uid && cUid && cUid === uid) return true;
+    const cEm = String(c?.email || '').trim().toLowerCase();
+    if (em && cEm && cEm === em) return true;
+  }
+  return false;
+}
+
+async function userMayViewItinerary(req, itinerary) {
+  const creatorId = String(itinerary?.creator?._id || itinerary?.creator || '');
+  if (req.userId && creatorId && req.userId === creatorId) return true;
+  const isPublicPublished = Boolean(itinerary.published && itinerary.visibility === 'public');
+  if (isPublicPublished) return true;
+  const linkAnyone = String(itinerary.linkAccess || 'restricted') === 'anyone';
+  if (linkAnyone) return true;
+  if (!req.userId) return false;
+  const u = await User.findById(req.userId).select('email').lean();
+  const email = String(u?.email || '').trim().toLowerCase();
+  return collaboratorEntryMatchesUser(itinerary.collaborators, req.userId, email);
+}
+
+async function isInvitedCollaboratorUser(userId, itineraryDoc) {
+  const uid = String(userId || '').trim();
+  if (!uid || !itineraryDoc) return false;
+  const me = await User.findById(uid).select('email').lean();
+  const email = String(me?.email || '').trim().toLowerCase();
+  return collaboratorEntryMatchesUser(itineraryDoc.collaborators, uid, email);
+}
+
 async function attachCollaboratorUserIds(collaborators) {
   if (!Array.isArray(collaborators) || collaborators.length === 0) return [];
 
@@ -899,6 +932,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'Itinerary not found' });
     }
 
+    const mayView = await userMayViewItinerary(req, itinerary);
+    if (!mayView) {
+      return res.status(403).json({ error: 'Not allowed to view this itinerary' });
+    }
+
     const creatorId = String(itinerary?.creator?._id || itinerary?.creator || '');
     const isOwner = Boolean(req.userId && creatorId && req.userId === creatorId);
     const isPublicPublished = Boolean(itinerary.published && itinerary.visibility === 'public');
@@ -1074,7 +1112,9 @@ router.post('/:id/share', requireAuth, async (req, res) => {
 
     const itinerary = await Itinerary.findById(id).lean();
     if (!itinerary) return res.status(404).json({ error: 'Itinerary not found' });
-    if (String(itinerary.creator) !== req.userId) return res.status(403).json({ error: 'Not allowed' });
+    const isCreatorShare = String(itinerary.creator) === req.userId;
+    const isEditorShare = !isCreatorShare && (await isCollaboratorEditorUser(req.userId, itinerary));
+    if (!isCreatorShare && !isEditorShare) return res.status(403).json({ error: 'Not allowed' });
 
     const friendIds = Array.isArray(req.body?.friendIds) ? req.body.friendIds : [];
     const validIds = friendIds
@@ -1131,14 +1171,21 @@ router.put('/:id', requireAuth, async (req, res) => {
     const creatorIdStr = String(existing.creator || '');
     const isCreator = creatorIdStr === String(req.userId);
     const isCollaboratorEditor = !isCreator && (await isCollaboratorEditorUser(req.userId, existing));
-    if (!isCreator && !isCollaboratorEditor) {
+    const isInvited = req.userId && (await isInvitedCollaboratorUser(req.userId, existing));
+    const linkAnyone = String(existing.linkAccess || 'restricted') === 'anyone';
+    const linkEditor = String(existing.linkPermission || 'viewer') === 'editor';
+    const canEditViaLink = Boolean(
+      req.userId && linkAnyone && linkEditor && !isCreator && !isInvited,
+    );
+    if (!isCreator && !isCollaboratorEditor && !canEditViaLink) {
       return res.status(403).json({ error: 'Not allowed to edit this itinerary' });
     }
 
     const previousCollaboratorIds = await collaboratorRecipientIds(existing.collaborators, String(req.userId));
 
     const body = req.body || {};
-    if (!isCreator && body.collaborators != null) {
+    const canManageCollaborators = isCreator || isCollaboratorEditor;
+    if (!canManageCollaborators && body.collaborators != null) {
       return res.status(403).json({ error: 'Not allowed to change collaborators' });
     }
     if (body.title != null) existing.title = String(body.title).trim();
@@ -1156,18 +1203,29 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (body.travelers != null && body.travelers !== '') {
       existing.travelers = Math.max(1, Number(body.travelers) || 1);
     }
-    if (isCreator && body.collaborators != null) {
+    if (canManageCollaborators && body.collaborators != null) {
       const collaboratorsNormalized = normalizeCollaborators(body.collaborators);
-      const creator = await User.findById(req.userId).select('email').lean();
+      const creatorIdForCollab = String(existing.creator || '');
+      const creatorUserDoc = mongoose.isValidObjectId(creatorIdForCollab)
+        ? await User.findById(existing.creator).select('email').lean()
+        : null;
       const collaboratorValidation = await validateCollaborators(
         collaboratorsNormalized,
-        creator?.email || '',
-        String(req.userId)
+        creatorUserDoc?.email || '',
+        creatorIdForCollab
       );
       if (!collaboratorValidation.ok) {
         return res.status(400).json({ error: collaboratorValidation.error });
       }
       existing.collaborators = await attachCollaboratorUserIds(collaboratorsNormalized);
+    }
+    if (canManageCollaborators) {
+      if (body.linkAccess === 'restricted' || body.linkAccess === 'anyone') {
+        existing.linkAccess = body.linkAccess;
+      }
+      if (body.linkPermission === 'viewer' || body.linkPermission === 'editor') {
+        existing.linkPermission = body.linkPermission;
+      }
     }
     if (body.status != null) existing.status = String(body.status);
     if (body.statusClass != null) existing.statusClass = String(body.statusClass);

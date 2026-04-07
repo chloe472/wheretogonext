@@ -298,16 +298,6 @@ export default function SearchResultsPage({ user, onLogout }) {
 
       <div className="search-results__main">
         <aside className="search-results__sidebar">
-          <p className="search-results__count">
-            {loading ? 'Loading…' : `${itineraries.length} Itineraries for you`}
-          </p>
-          {!loading && profileInterests.length > 0 && !exploreFiltersActive && (
-            <p className="search-results__interest-hint">
-              With no filters: Most Popular ranks by view count. Duration: Short to long ranks shortest trips first. Newest ranks itineraries that match your interests higher first
-              ({profileInterests.slice(0, 3).join(', ')}
-              {profileInterests.length > 3 ? '…' : ''}).
-            </p>
-          )}
           {!loading && exploreFiltersActive && (
             <p className="search-results__filters-active-hint">
               Filters are on — results are sorted by your selection only (profile interest ranking is off).

@@ -54,6 +54,7 @@ export default function TripDetailsMainBody({
   setAddSheetFromCalendar,
   setAddSheetDay,
   setAddSheetAnchor,
+  setPendingDeleteItemId,
   tripDetailsMapPanelProps,
   calendarScrollLeft,
   setCalendarScrollLeft,
@@ -196,6 +197,7 @@ export default function TripDetailsMainBody({
                 setAddSheetFromCalendar={setAddSheetFromCalendar}
                 setAddSheetDay={setAddSheetDay}
                 setAddSheetAnchor={setAddSheetAnchor}
+                setPendingDeleteItemId={setPendingDeleteItemId}
                 kanbanDraggingDayNum={kanbanDraggingDayNum}
                 kanbanDragOverDayNum={kanbanDragOverDayNum}
                 handleKanbanDayDragStart={handleKanbanDayDragStart}

@@ -116,7 +116,11 @@ import {
   rangesOverlap,
   toHHmmLocal,
 } from './lib/tripDetailsPageHelpers';
-import { isCurrentUserTripCollaborator, getCurrentUserCollaboratorRole } from './lib/tripCollaborationAccess';
+import {
+  isCurrentUserTripCollaborator,
+  getCurrentUserCollaboratorRole,
+  collaboratorRoleForApi,
+} from './lib/tripCollaborationAccess';
 import { TripAccessContext } from './lib/TripAccessContext';
 
 export default function TripDetailsPage({ user, onLogout }) {
@@ -410,7 +414,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       }
       const email = friend?.email ? String(friend.email).trim().toLowerCase() : undefined;
       const newCollabs = [
-        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: collaboratorRoleForApi(c) })),
         email ? { userId, email, role: 'viewer' } : { userId, role: 'viewer' },
       ];
       const updated = await updateItinerary(tripId, { collaborators: newCollabs });
@@ -433,7 +437,7 @@ export default function TripDetailsPage({ user, onLogout }) {
       const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
       if (exists) { toast('This person already has access.'); return; }
       const newCollabs = [
-        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+        ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: collaboratorRoleForApi(c) })),
         { userId, email, role },
       ];
       const updated = await updateItinerary(tripId, { collaborators: newCollabs });
@@ -449,7 +453,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
     const newCollabs = currentCollabs
       .filter((c) => String(c?.user?.id || c?.userId || '') !== String(userId))
-      .map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' }));
+      .map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: collaboratorRoleForApi(c) }));
     const updated = await updateItinerary(tripId, { collaborators: newCollabs });
     setServerItinerary((prev) => ({ ...prev, ...updated }));
   }, [tripId, serverItinerary, setServerItinerary]);
@@ -459,7 +463,10 @@ export default function TripDetailsPage({ user, onLogout }) {
     const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
     const newCollabs = currentCollabs.map((c) => {
       const cId = String(c?.user?.id || c?.userId || '');
-      return { userId: cId, role: pendingRoles[cId] ?? c?.role ?? 'viewer' };
+      return {
+        userId: cId,
+        role: pendingRoles[cId] ?? collaboratorRoleForApi(c),
+      };
     });
     const updated = await updateItinerary(tripId, { collaborators: newCollabs });
     setServerItinerary((prev) => ({ ...prev, ...updated }));
@@ -472,7 +479,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     const exists = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
     if (exists) { toast('This person already has access.'); return; }
     const newCollabs = [
-      ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: c?.role || 'viewer' })),
+      ...currentCollabs.map((c) => ({ userId: String(c?.user?.id || c?.userId || ''), role: collaboratorRoleForApi(c) })),
       { userId, role },
     ];
     const updated = await updateItinerary(tripId, { collaborators: newCollabs });
@@ -480,6 +487,41 @@ export default function TripDetailsPage({ user, onLogout }) {
     await shareItineraryWithFriends(tripId, [userId]);
     toast.success('Invite sent.');
   }, [tripId, serverItinerary]);
+
+  /** One PUT for several search picks (share modal pills). */
+  const inviteUsersBatch = useCallback(async (users, role = 'viewer') => {
+    if (!Array.isArray(users) || users.length === 0) return;
+    const currentCollabs = Array.isArray(serverItinerary?.collaborators) ? serverItinerary.collaborators : [];
+    const newCollabs = currentCollabs.map((c) => ({
+      userId: String(c?.user?.id || c?.userId || ''),
+      role: collaboratorRoleForApi(c),
+    })).filter((c) => c.userId);
+    const seen = new Set(newCollabs.map((c) => c.userId));
+    const addedIds = [];
+    for (const u of users) {
+      const userId = String(u?.id || '').trim();
+      if (!userId || seen.has(userId)) continue;
+      const already = currentCollabs.some((c) => String(c?.user?.id || c?.userId || '') === userId);
+      if (already) continue;
+      const em = u?.email ? String(u.email).trim().toLowerCase() : '';
+      newCollabs.push(em ? { userId, email: em, role } : { userId, role });
+      seen.add(userId);
+      addedIds.push(userId);
+    }
+    if (addedIds.length === 0) {
+      toast('Everyone selected already has access.');
+      return;
+    }
+    const updated = await updateItinerary(tripId, { collaborators: newCollabs });
+    setServerItinerary((prev) => ({ ...prev, ...updated }));
+    await shareItineraryWithFriends(tripId, addedIds);
+    toast.success(addedIds.length === 1 ? 'Invite sent.' : `Invites sent (${addedIds.length}).`);
+  }, [tripId, serverItinerary, setServerItinerary]);
+
+  const handleLinkSettingsChange = useCallback(async (patch) => {
+    const updated = await updateItinerary(tripId, patch);
+    setServerItinerary((prev) => ({ ...prev, ...updated }));
+  }, [tripId, setServerItinerary]);
 
   const handleShareCopyLink = useCallback(async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -626,7 +668,13 @@ export default function TripDetailsPage({ user, onLogout }) {
     ).trim();
     const isCreator = Boolean(userId && creatorId && userId === creatorId);
     const collaboratorRole = isCreator ? null : getCurrentUserCollaboratorRole(user, serverItinerary?.collaborators);
-    const readOnly = !isCreator && collaboratorRole === 'viewer';
+    const isInvitedCollaborator = isCurrentUserTripCollaborator(user, serverItinerary?.collaborators);
+    const linkAnyone = String(serverItinerary?.linkAccess || 'restricted') === 'anyone';
+    const linkPerm = String(serverItinerary?.linkPermission || 'viewer');
+    const readOnly =
+      !isCreator &&
+      (collaboratorRole === 'viewer' ||
+        (linkAnyone && linkPerm === 'viewer' && !isInvitedCollaborator));
     return { userId, creatorId, isCreator, collaboratorRole, readOnly };
   }, [user, serverItinerary]);
 
@@ -1211,11 +1259,13 @@ export default function TripDetailsPage({ user, onLogout }) {
     collaboratorRole,
     readOnly,
   } = accessInfo;
+  const linkAnyoneBrowse = String(serverItinerary?.linkAccess || 'restricted') === 'anyone';
   if (
     userId
     && creatorId
     && userId !== creatorId
     && !isCurrentUserTripCollaborator(user, serverItinerary?.collaborators)
+    && !linkAnyoneBrowse
   ) {
     navigate(`/itineraries/${tripId}`, { replace: true });
     return null;
@@ -1300,6 +1350,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         setAddSheetFromCalendar={setAddSheetFromCalendar}
         setAddSheetDay={setAddSheetDay}
         setAddSheetAnchor={setAddSheetAnchor}
+        setPendingDeleteItemId={setPendingDeleteItemId}
         tripDetailsMapPanelProps={tripDetailsMapPanelProps}
         calendarScrollLeft={calendarScrollLeft}
         setCalendarScrollLeft={setCalendarScrollLeft}
@@ -1327,18 +1378,24 @@ export default function TripDetailsPage({ user, onLogout }) {
       <TripShareModal
         open={shareModalOpen}
         loading={shareLoading}
+        readOnly={accessInfo.readOnly}
         friends={shareFriends}
         collaborators={serverItinerary?.collaborators}
         owner={serverItinerary?.creator}
         currentUserId={accessInfo.userId}
+        currentUserEmail={user?.email}
         onSaveCollaboratorRoles={handleSaveCollaboratorRoles}
         onRemoveCollaborator={handleRemoveCollaborator}
         onClose={() => setShareModalOpen(false)}
         onShareWithFriend={handleShareWithFriend}
         onInviteByEmail={handleInviteByEmail}
         onInviteByUser={handleInviteByUser}
+        onInviteUsersBatch={inviteUsersBatch}
         onSearchUsers={searchUsers}
         onCopy={handleShareCopyLink}
+        linkAccess={serverItinerary?.linkAccess ?? 'restricted'}
+        linkPermission={serverItinerary?.linkPermission ?? 'viewer'}
+        onLinkSettingsChange={handleLinkSettingsChange}
       />
 
       <PublishItineraryModal

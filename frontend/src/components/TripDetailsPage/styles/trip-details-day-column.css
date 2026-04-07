@@ -148,6 +148,11 @@
 .trip-details__day-header-actions {
   position: relative;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.125rem;
 }
 
 .trip-details__day-dropdown {
