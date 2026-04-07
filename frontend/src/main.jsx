@@ -7,7 +7,7 @@ import { loadGoogleMapsScript } from './lib/loadGoogleMaps';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-// Load Google Maps API on app initialization
+
 loadGoogleMapsScript().catch(err => {
   console.error('Failed to load Google Maps:', err);
 });

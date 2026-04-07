@@ -89,6 +89,9 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     setDestinationCity,
     destinationCityOpen,
     setDestinationCityOpen,
+    destinationCountrySuggestions,
+    destinationCitySuggestions,
+    destinationSuggestionsLoading,
     destinationError,
     setDestinationError,
     destinationLoading,
@@ -345,6 +348,9 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
           setDestinationCity,
           destinationCityOpen,
           setDestinationCityOpen,
+          destinationCountrySuggestions,
+          destinationCitySuggestions,
+          destinationSuggestionsLoading,
           destinationError,
           setDestinationError,
           destinationLoading,
@@ -364,6 +370,8 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
           loading: shareLoading,
           friends: friendsList.filter((f) => f.id !== String(user?.id || user?._id || '')),
           collaborators: shareTrip?.collaborators || [],
+          owner: shareTrip?.creator,
+          currentUserId: String(user?.id || user?._id || ''),
           onClose: closeShareTrip,
           onSendToFriends: handleShareSendToFriends,
           onInviteByEmail: handleShareInviteByEmail,
@@ -383,7 +391,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
             try {
               await refreshProfile();
             } catch {
-              /* ignore */
+              
             }
           },
         }}

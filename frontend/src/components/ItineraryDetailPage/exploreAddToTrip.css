@@ -28,7 +28,7 @@
   gap: 0.75rem;
   width: min(560px, 100%);
   max-width: 100%;
-  /* Fit within viewport; scroll inside stack so trip picker + banner + add form are never clipped */
+  
   max-height: min(92vh, calc(100dvh - 2.5rem), 900px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -85,7 +85,7 @@
   color: var(--wtg-text-muted, #78716c);
 }
 
-/* Trip picker: neutral rectangular field (not status-colored pill). */
+
 .explore-add-to-trip-layer__picker-wrap {
   position: relative;
   width: 100%;
@@ -189,7 +189,7 @@
   min-height: 0;
 }
 
-/* Single scroll on the stack: don’t nest a second max-height scroll inside the add form */
+
 .explore-add-to-trip-layer__modal-wrap .trip-details__custom-place-modal--embedded {
   max-height: none;
   overflow-y: visible;

@@ -1,6 +1,6 @@
-/** Mock airports and cities for transport autofill (in production use an API). */
+
 export const AIRPORTS_AND_CITIES = [
-  // Major US Airports
+  
   { id: 'ATL', name: 'Atlanta Hartsfield-Jackson (ATL)', city: 'Atlanta', country: 'United States', type: 'Airport' },
   { id: 'LAX', name: 'Los Angeles International (LAX)', city: 'Los Angeles', country: 'United States', type: 'Airport' },
   { id: 'ORD', name: "Chicago O'Hare International (ORD)", city: 'Chicago', country: 'United States', type: 'Airport' },
@@ -22,13 +22,13 @@ export const AIRPORTS_AND_CITIES = [
   { id: 'EWR', name: 'Newark Liberty International (EWR)', city: 'Newark', country: 'United States', type: 'Airport' },
   { id: 'CLT', name: 'Charlotte Douglas (CLT)', city: 'Charlotte', country: 'United States', type: 'Airport' },
 
-  // Canada
+  
   { id: 'YYZ', name: 'Toronto Pearson (YYZ)', city: 'Toronto', country: 'Canada', type: 'Airport' },
   { id: 'YVR', name: 'Vancouver International (YVR)', city: 'Vancouver', country: 'Canada', type: 'Airport' },
   { id: 'YUL', name: 'Montreal-Pierre Trudeau (YUL)', city: 'Montreal', country: 'Canada', type: 'Airport' },
   { id: 'YYC', name: 'Calgary International (YYC)', city: 'Calgary', country: 'Canada', type: 'Airport' },
 
-  // Europe
+  
   { id: 'LHR', name: 'London Heathrow (LHR)', city: 'London', country: 'United Kingdom', type: 'Airport' },
   { id: 'LGW', name: 'London Gatwick (LGW)', city: 'London', country: 'United Kingdom', type: 'Airport' },
   { id: 'CDG', name: 'Paris Charles de Gaulle (CDG)', city: 'Paris', country: 'France', type: 'Airport' },
@@ -50,7 +50,7 @@ export const AIRPORTS_AND_CITIES = [
   { id: 'LIS', name: 'Lisbon Portela (LIS)', city: 'Lisbon', country: 'Portugal', type: 'Airport' },
   { id: 'ATH', name: 'Athens International (ATH)', city: 'Athens', country: 'Greece', type: 'Airport' },
 
-  // Asia
+  
   { id: 'HND', name: 'Tokyo Haneda (HND)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
   { id: 'NRT', name: 'Tokyo Narita (NRT)', city: 'Tokyo', country: 'Japan', type: 'Airport' },
   { id: 'SIN', name: 'Singapore Changi (SIN)', city: 'Singapore', country: 'Singapore', type: 'Airport' },
@@ -71,21 +71,21 @@ export const AIRPORTS_AND_CITIES = [
   { id: 'KIX', name: 'Osaka Kansai (KIX)', city: 'Osaka', country: 'Japan', type: 'Airport' },
   { id: 'TPE', name: 'Taiwan Taoyuan (TPE)', city: 'Taipei', country: 'Taiwan', type: 'Airport' },
 
-  // Middle East
+  
   { id: 'DXB', name: 'Dubai International (DXB)', city: 'Dubai', country: 'UAE', type: 'Airport' },
   { id: 'DOH', name: 'Doha Hamad International (DOH)', city: 'Doha', country: 'Qatar', type: 'Airport' },
   { id: 'AUH', name: 'Abu Dhabi International (AUH)', city: 'Abu Dhabi', country: 'UAE', type: 'Airport' },
   { id: 'CAI', name: 'Cairo International (CAI)', city: 'Cairo', country: 'Egypt', type: 'Airport' },
   { id: 'TLV', name: 'Tel Aviv Ben Gurion (TLV)', city: 'Tel Aviv', country: 'Israel', type: 'Airport' },
 
-  // Oceania
+  
   { id: 'SYD', name: 'Sydney Kingsford Smith (SYD)', city: 'Sydney', country: 'Australia', type: 'Airport' },
   { id: 'MEL', name: 'Melbourne Airport (MEL)', city: 'Melbourne', country: 'Australia', type: 'Airport' },
   { id: 'BNE', name: 'Brisbane Airport (BNE)', city: 'Brisbane', country: 'Australia', type: 'Airport' },
   { id: 'AKL', name: 'Auckland Airport (AKL)', city: 'Auckland', country: 'New Zealand', type: 'Airport' },
   { id: 'PER', name: 'Perth Airport (PER)', city: 'Perth', country: 'Australia', type: 'Airport' },
 
-  // Latin America
+  
   { id: 'GRU', name: 'Sao Paulo Guarulhos (GRU)', city: 'Sao Paulo', country: 'Brazil', type: 'Airport' },
   { id: 'GIG', name: 'Rio de Janeiro Galeao (GIG)', city: 'Rio de Janeiro', country: 'Brazil', type: 'Airport' },
   { id: 'MEX', name: 'Mexico City International (MEX)', city: 'Mexico City', country: 'Mexico', type: 'Airport' },
@@ -94,14 +94,14 @@ export const AIRPORTS_AND_CITIES = [
   { id: 'LIM', name: 'Lima Jorge Chavez (LIM)', city: 'Lima', country: 'Peru', type: 'Airport' },
   { id: 'SCL', name: 'Santiago Arturo Merino (SCL)', city: 'Santiago', country: 'Chile', type: 'Airport' },
 
-  // Africa
+  
   { id: 'JNB', name: 'Johannesburg O.R. Tambo (JNB)', city: 'Johannesburg', country: 'South Africa', type: 'Airport' },
   { id: 'CPT', name: 'Cape Town International (CPT)', city: 'Cape Town', country: 'South Africa', type: 'Airport' },
   { id: 'NBO', name: 'Nairobi Jomo Kenyatta (NBO)', city: 'Nairobi', country: 'Kenya', type: 'Airport' },
   { id: 'LOS', name: 'Lagos Murtala Muhammed (LOS)', city: 'Lagos', country: 'Nigeria', type: 'Airport' },
   { id: 'ADD', name: 'Addis Ababa Bole (ADD)', city: 'Addis Ababa', country: 'Ethiopia', type: 'Airport' },
 
-  // Cities and Stations
+  
   { id: 'city-newyork', name: 'New York, United States', type: 'City' },
   { id: 'city-london', name: 'London, United Kingdom', type: 'City' },
   { id: 'city-paris', name: 'Paris, France', type: 'City' },

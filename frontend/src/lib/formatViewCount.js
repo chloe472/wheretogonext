@@ -1,6 +1,4 @@
-/**
- * Compact view counts for UI, e.g. 24990 → "24.99k", 842 → "842".
- */
+
 export function formatViewCount(n) {
   const x = Math.max(0, Number(n) || 0);
   if (x < 1000) return String(Math.round(x));

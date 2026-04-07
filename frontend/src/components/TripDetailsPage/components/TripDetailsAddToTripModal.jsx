@@ -39,7 +39,7 @@ export default function TripDetailsAddToTripModal({
   setAddToTripExternalLink,
   addToTripTravelDocs,
   setAddToTripTravelDocs,
-  /** When false, only the dialog panel is rendered (parent supplies backdrop). */
+  
   showBackdrop = true,
   submitting = false,
 }) {

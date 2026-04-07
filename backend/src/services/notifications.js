@@ -16,7 +16,6 @@ function dedupeFilterFromPayload(payload) {
   const type = String(payload?.type || '').trim();
   if (!recipient || !type) return null;
 
-  // Prevent noisy duplicates for update-style notifications only.
   if (type === 'itinerary_updated' && itineraryId) {
     return {
       recipient,
@@ -53,12 +52,19 @@ function dedupeFilterFromPayload(payload) {
 async function createNotificationDeduped(payload) {
   const filter = dedupeFilterFromPayload(payload);
   if (filter) {
-    const exists = await Notification.findOne(filter).select('_id').lean();
-    if (exists?._id) return null;
+    const exists = await Notification.findOne(filter).lean();
+    if (exists?._id) {
+      const populated = await Notification.findById(exists._id)
+        .populate('actor', 'name username picture')
+        .lean();
+      if (populated) {
+        pushToUser(String(populated.recipient), 'notification', serializeNotification(populated));
+      }
+      return null;
+    }
   }
   const doc = await Notification.create(payload);
   if (doc) {
-    // Populate actor so the SSE payload matches what the REST endpoint returns.
     const populated = await doc.populate('actor', 'name username picture');
     pushToUser(String(doc.recipient), 'notification', serializeNotification(populated));
   }
@@ -108,7 +114,6 @@ export async function createNotifications(list = []) {
 
   const created = [];
   for (const payload of docs) {
-    // Keep dedupe logic identical to single-create API.
     const inserted = await createNotificationDeduped(payload);
     if (inserted) created.push(inserted);
   }

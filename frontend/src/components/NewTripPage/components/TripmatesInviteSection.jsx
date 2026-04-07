@@ -37,7 +37,7 @@ export default function TripmatesInviteSection({ myEmail, invitedEmails, onInvit
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
 
-  // Fetch friends on mount
+  
   useEffect(() => {
     setFriendsLoading(true);
     fetchMyProfile()
@@ -46,7 +46,7 @@ export default function TripmatesInviteSection({ myEmail, invitedEmails, onInvit
       .finally(() => setFriendsLoading(false));
   }, []);
 
-  // Debounced search as user types
+  
   useEffect(() => {
     const q = inviteQuery.trim();
     if (q.length < 2) {
@@ -74,7 +74,7 @@ export default function TripmatesInviteSection({ myEmail, invitedEmails, onInvit
     return () => clearTimeout(debounceRef.current);
   }, [inviteQuery]);
 
-  // Close friends dropdown on outside click
+  
   useEffect(() => {
     if (!friendsOpen) return;
     const handleClick = (e) => {
@@ -86,7 +86,7 @@ export default function TripmatesInviteSection({ myEmail, invitedEmails, onInvit
     return () => document.removeEventListener('mousedown', handleClick);
   }, [friendsOpen]);
 
-  // Close search dropdown on outside click
+  
   useEffect(() => {
     if (!searchDropdownOpen) return;
     const handleClick = (e) => {
@@ -126,7 +126,7 @@ export default function TripmatesInviteSection({ myEmail, invitedEmails, onInvit
 
   const addedEmails = new Set(invitedEmails);
 
-  // Find full user info for invited emails (from search results or friends)
+  
   const allKnownUsers = [...friends, ...searchResults];
   const getUserForEmail = (email) =>
     allKnownUsers.find((u) => String(u.email || '').trim().toLowerCase() === email);

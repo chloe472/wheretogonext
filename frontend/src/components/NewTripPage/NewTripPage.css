@@ -308,7 +308,7 @@
   color: var(--wtg-text-muted);
 }
 
-/* Where to? suggestions */
+
 .new-trip__suggestions {
   position: absolute;
   top: 100%;
@@ -386,7 +386,7 @@
   color: #b45309;
 }
 
-/* Dates row */
+
 .new-trip__date-btn {
   display: flex;
   align-items: center;

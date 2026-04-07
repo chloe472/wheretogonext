@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { useTripAccess } from '../lib/TripAccessContext';
 import {
   BookOpen,
   Calendar as CalendarIcon,
@@ -46,6 +47,7 @@ export default function TripDetailsHeader({
   setViewMode,
 }) {
   const navigate = useNavigate();
+  const { readOnly } = useTripAccess();
   const routeSummary = buildTripRouteSummary(trip?.destination, trip?.locations);
 
   return (
@@ -57,7 +59,7 @@ export default function TripDetailsHeader({
               @
             </Link>
             <div className="trip-details__trip-info" ref={titleDropdownRef}>
-              {titleEditing ? (
+              {titleEditing && !readOnly ? (
                 <input
                   type="text"
                   className="trip-details__title-input"
@@ -89,7 +91,7 @@ export default function TripDetailsHeader({
                     className="trip-details__title-btn"
                     onClick={() => {
                       const now = Date.now();
-                      if (now - titleLastClickRef.current < 400) {
+                      if (!readOnly && now - titleLastClickRef.current < 400) {
                         setTitleEditValue(titleDisplay);
                         setTitleEditing(true);
                         setTitleDropdownOpen(false);
@@ -99,6 +101,7 @@ export default function TripDetailsHeader({
                       titleLastClickRef.current = now;
                     }}
                     onDoubleClick={(e) => {
+                      if (readOnly) return;
                       e.preventDefault();
                       setTitleEditValue(titleDisplay);
                       setTitleEditing(true);
@@ -125,29 +128,33 @@ export default function TripDetailsHeader({
                       >
                         Share link
                       </button>
-                      <button
-                        type="button"
-                        className="trip-details__title-dropdown-item"
-                        role="menuitem"
-                        onClick={() => {
-                          setTitleDropdownOpen(false);
-                          onPublishTrip?.();
-                        }}
-                      >
-                        {trip?.published && trip?.visibility === 'public' ? 'Make private' : 'Publish to Explore'}
-                      </button>
-                      <button
-                        type="button"
-                        className="trip-details__title-dropdown-item"
-                        role="menuitem"
-                        onClick={() => {
-                          setTitleDropdownOpen(false);
-                          onSetCoverPage?.();
-                        }}
-                      >
-                        Set cover page
-                      </button>
-                      {trip?.published && trip?.visibility === 'public' ? (
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="trip-details__title-dropdown-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setTitleDropdownOpen(false);
+                            onPublishTrip?.();
+                          }}
+                        >
+                          {trip?.published && trip?.visibility === 'public' ? 'Make private' : 'Publish to Explore'}
+                        </button>
+                      )}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="trip-details__title-dropdown-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setTitleDropdownOpen(false);
+                            onSetCoverPage?.();
+                          }}
+                        >
+                          Set cover page
+                        </button>
+                      )}
+                      {!readOnly && trip?.published && trip?.visibility === 'public' ? (
                         <button
                           type="button"
                           className="trip-details__title-dropdown-item"
@@ -171,29 +178,33 @@ export default function TripDetailsHeader({
                       >
                         Duplicate
                       </button>
-                      <button
-                        type="button"
-                        className="trip-details__title-dropdown-item"
-                        role="menuitem"
-                        onClick={() => {
-                          setTitleEditing(true);
-                          setTitleEditValue(titleDisplay);
-                          setTitleDropdownOpen(false);
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        className="trip-details__title-dropdown-item trip-details__title-dropdown-item--danger"
-                        role="menuitem"
-                        onClick={() => {
-                          setTitleDropdownOpen(false);
-                          onRequestDeleteTrip();
-                        }}
-                      >
-                        Delete
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="trip-details__title-dropdown-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setTitleEditing(true);
+                            setTitleEditValue(titleDisplay);
+                            setTitleDropdownOpen(false);
+                          }}
+                        >
+                          Rename
+                        </button>
+                      )}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="trip-details__title-dropdown-item trip-details__title-dropdown-item--danger"
+                          role="menuitem"
+                          onClick={() => {
+                            setTitleDropdownOpen(false);
+                            onRequestDeleteTrip();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   )}
                 </>
@@ -219,17 +230,19 @@ export default function TripDetailsHeader({
             <button
               type="button"
               className="trip-details__pill trip-details__pill--btn trip-details__pill--primary"
-              onClick={onOpenWhereModal}
+              onClick={readOnly ? undefined : onOpenWhereModal}
+              disabled={readOnly}
               aria-label="Change destination"
             >
               <span className="trip-details__pill-label">Where</span>
               <span className="trip-details__pill-value">{routeSummary.displayLocations || trip.locations || trip.destination}</span>
-              <ChevronDown size={14} aria-hidden />
+              {!readOnly && <ChevronDown size={14} aria-hidden />}
             </button>
             <button
               type="button"
               className="trip-details__pill trip-details__pill--btn"
-              onClick={onOpenDateModal}
+              onClick={readOnly ? undefined : onOpenDateModal}
+              disabled={readOnly}
               aria-label="Change dates"
             >
               <span className="trip-details__pill-label">When</span>
@@ -239,12 +252,13 @@ export default function TripDetailsHeader({
               <button
                 type="button"
                 className="trip-details__pill trip-details__pill--btn trip-details__currency-btn"
-                onClick={onOpenCurrencyModal}
+                onClick={readOnly ? undefined : onOpenCurrencyModal}
+                disabled={readOnly}
                 aria-label="Change currency"
               >
                 <span className="trip-details__pill-label">Budget</span>
                 <span className="trip-details__pill-value">{currency}</span>
-                <ChevronDown size={14} aria-hidden />
+                {!readOnly && <ChevronDown size={14} aria-hidden />}
               </button>
             </div>
           </div>

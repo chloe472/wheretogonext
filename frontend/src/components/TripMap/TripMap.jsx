@@ -6,7 +6,7 @@ import { resolveImageUrl, applyImageFallback } from '../../lib/imageFallback';
 import './TripMap.css';
 
 const DAY_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#7c3aed', '#ea580c'];
-// Colorful raster basemap (Carto Voyager) — good OSM-derived colored style without API key
+
 const ENGLISH_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 const ENGLISH_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
@@ -82,13 +82,13 @@ function FitBounds({ markers, disabled = false }) {
       const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng]));
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
     } catch (_) {
-      // ignore
+      
     }
   }, [map, key, disabled]);
   return null;
 }
 
-/** Call invalidateSize when the map container is resized (e.g. expand half/full) so the map fills the new size. */
+
 function MapResizeHandler({ resizeKey }) {
   const map = useMap();
 
@@ -96,12 +96,12 @@ function MapResizeHandler({ resizeKey }) {
     try {
       map.invalidateSize({ pan: false, animate: false });
     } catch (_) {
-      // ignore
+      
     }
   };
 
   useEffect(() => {
-    // Handle explicit layout mode changes (Default/Expand half/Expand full).
+    
     const t = setTimeout(() => invalidateMapSize(), resizeKey ? 50 : 0);
     return () => clearTimeout(t);
   }, [map, resizeKey]);
@@ -141,7 +141,7 @@ function MapCenterUpdater({ center }) {
     try {
       map.setView([lat, lng], map.getZoom(), { animate: false });
     } catch (_) {
-      // ignore
+      
     }
   }, [map, centerKey]);
 
@@ -159,7 +159,7 @@ function SelectedMarkerFocus({ marker }) {
       const targetZoom = Math.max(map.getZoom(), 14);
       map.setView([marker.lat, marker.lng], targetZoom, { animate: true });
     } catch (_) {
-      // ignore
+      
     }
   }, [map, markerKey]);
 
@@ -226,7 +226,7 @@ export default function TripMap({
       try {
         ref.openPopup();
       } catch (_) {
-        // ignore
+        
       }
     }, 60);
     return () => clearTimeout(timeoutId);

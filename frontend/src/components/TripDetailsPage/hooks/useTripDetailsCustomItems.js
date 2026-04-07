@@ -1,7 +1,136 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Camera, UtensilsCrossed } from 'lucide-react';
-import { searchAddressSuggestions } from '../lib/tripDetailsLocationData';
-import { convertCurrencyToUsd, findTimeOverlapItem } from '../lib/tripDetailsPageHelpers';
+import { loadGoogleMapsScript } from '../../../lib/loadGoogleMaps';
+import {
+  convertCurrencyToUsd,
+  findTimeOverlapItem,
+  createAttachmentFromFile,
+  getDefaultStartTimeForDate,
+} from '../lib/tripDetailsPageHelpers';
+
+function fileToDataUrl(file) {
+  if (!(file instanceof File)) return Promise.resolve('');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function geocodeAddressWithGoogle(address) {
+  const q = String(address || '').trim();
+  if (!q) return null;
+
+  try {
+    if (!window.google?.maps?.Geocoder) {
+      await loadGoogleMapsScript();
+    }
+  } catch {
+    
+  }
+
+  if (!window.google?.maps?.Geocoder) return null;
+
+  return new Promise((resolve) => {
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ address: q }, (results, status) => {
+      const okStatus = window.google?.maps?.GeocoderStatus?.OK || 'OK';
+      if (status !== okStatus && status !== 'OK') {
+        resolve(null);
+        return;
+      }
+      const loc = results?.[0]?.geometry?.location;
+      if (!loc || typeof loc.lat !== 'function' || typeof loc.lng !== 'function') {
+        resolve(null);
+        return;
+      }
+      resolve({ lat: loc.lat(), lng: loc.lng() });
+    });
+  });
+}
+
+async function geocodeAddressWithOpenMeteo(address) {
+  const q = String(address || '').trim();
+  if (!q) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const first = Array.isArray(data?.results) ? data.results[0] : null;
+    if (!first || typeof first.latitude !== 'number' || typeof first.longitude !== 'number') return null;
+    return { lat: first.latitude, lng: first.longitude };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveCoordsFromPlaceId(placeId) {
+  const id = String(placeId || '').trim();
+  if (!id) return null;
+
+  try {
+    if (!window.google?.maps?.places?.PlacesService) {
+      await loadGoogleMapsScript();
+    }
+  } catch {
+    return null;
+  }
+
+  if (!window.google?.maps?.places?.PlacesService) return null;
+
+  return new Promise((resolve) => {
+    const div = document.createElement('div');
+    div.style.display = 'none';
+    document.body.appendChild(div);
+    const service = new window.google.maps.places.PlacesService(div);
+
+    service.getDetails({ placeId: id, fields: ['geometry.location'] }, (result, status) => {
+      try {
+        div.remove();
+      } catch {
+        
+      }
+
+      if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
+        resolve(null);
+        return;
+      }
+      const loc = result?.geometry?.location;
+      if (!loc || typeof loc.lat !== 'function' || typeof loc.lng !== 'function') {
+        resolve(null);
+        return;
+      }
+      resolve({ lat: loc.lat(), lng: loc.lng() });
+    });
+  });
+}
+
+async function resolveAddressCoordinates(address, existingSelection, fallbackLat, fallbackLng) {
+  const selectedLat = existingSelection?.lat;
+  const selectedLng = existingSelection?.lng;
+  if (Number.isFinite(selectedLat) && Number.isFinite(selectedLng)) {
+    return { lat: selectedLat, lng: selectedLng };
+  }
+
+  const placeIdCoords = await resolveCoordsFromPlaceId(existingSelection?.id);
+  if (placeIdCoords) return placeIdCoords;
+
+  const googleCoords = await geocodeAddressWithGoogle(address);
+  if (googleCoords) return googleCoords;
+
+  const openMeteoCoords = await geocodeAddressWithOpenMeteo(address);
+  if (openMeteoCoords) return openMeteoCoords;
+
+  return { lat: fallbackLat, lng: fallbackLng };
+}
 
 export function useTripDetailsCustomItems({
   mapCenter,
@@ -40,19 +169,43 @@ export function useTripDetailsCustomItems({
   const [customPlaceTravelDocs, setCustomPlaceTravelDocs] = useState([]);
   const [customFoodTravelDocs, setCustomFoodTravelDocs] = useState([]);
 
+  useEffect(() => {
+    if (!customPlaceDateKey) return;
+    const desiredMinutes = (Number(customPlaceDurationHrs) || 0) * 60 + (Number(customPlaceDurationMins) || 0);
+    const next = getDefaultStartTimeForDate(tripExpenseItems, customPlaceDateKey, '07:00', desiredMinutes || 60);
+    setCustomPlaceStartTime(next);
+  }, [customPlaceDateKey, customPlaceDurationHrs, customPlaceDurationMins, tripExpenseItems]);
+
+  useEffect(() => {
+    if (!customFoodDateKey) return;
+    const desiredMinutes = (Number(customFoodDurationHrs) || 0) * 60 + (Number(customFoodDurationMins) || 0);
+    const next = getDefaultStartTimeForDate(tripExpenseItems, customFoodDateKey, '07:00', desiredMinutes || 60);
+    setCustomFoodStartTime(next);
+  }, [customFoodDateKey, customFoodDurationHrs, customFoodDurationMins, tripExpenseItems]);
+
   const onCloseAddCustomPlace = useCallback(() => {
     setAddCustomPlaceOpen(false);
   }, []);
 
   const handleAddCustomPlaceSubmit = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
       const costNum = parseFloat(customPlaceCost) || 0;
       const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
-      const resolvedAddress =
-        customPlaceAddressSelection ??
-        searchAddressSuggestions(trip.destination || trip.locations, customPlaceAddress)[0];
       const [fallbackLat, fallbackLng] = mapCenter;
+      const resolvedAddress = customPlaceAddressSelection ?? {
+        name: customPlaceAddress,
+        address: customPlaceAddress,
+        lat: fallbackLat,
+        lng: fallbackLng,
+        source: 'Manual input',
+      };
+      const resolvedCoords = await resolveAddressCoordinates(
+        customPlaceAddress || resolvedAddress?.address,
+        resolvedAddress,
+        fallbackLat,
+        fallbackLng,
+      );
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customPlaceDateKey,
         startTime: customPlaceStartTime,
@@ -63,6 +216,17 @@ export function useTripDetailsCustomItems({
         showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
         return;
       }
+
+      let placeImageUrl = '';
+      try {
+        placeImageUrl = await fileToDataUrl(customPlaceImage);
+      } catch {
+        showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
+      }
+
+      
+      const attachments = customPlaceTravelDocs.map((f) => createAttachmentFromFile(f));
+
       setTripExpenseItems((prev) => [
         ...prev,
         {
@@ -72,20 +236,17 @@ export function useTripDetailsCustomItems({
           categoryId: 'places',
           category: 'Places',
           date: customPlaceDateKey,
-          detail:
-            resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
-              ? resolvedAddress.address
-              : (customPlaceAddress || 'Custom place'),
+          detail: resolvedAddress?.address || customPlaceAddress || 'Custom place',
           Icon: Camera,
-          lat: resolvedAddress?.lat ?? fallbackLat,
-          lng: resolvedAddress?.lng ?? fallbackLng,
+          lat: resolvedCoords.lat,
+          lng: resolvedCoords.lng,
           notes: customPlaceNote || '',
-          attachments: [],
+          attachments,
           startTime: customPlaceStartTime,
           durationHrs: customPlaceDurationHrs,
           durationMins: customPlaceDurationMins,
           externalLink: '',
-          placeImageUrl: '',
+          placeImageUrl,
           rating: null,
           reviewCount: null,
         },
@@ -109,7 +270,6 @@ export function useTripDetailsCustomItems({
       currency,
       exchangeRates,
       customPlaceAddressSelection,
-      trip,
       customPlaceAddress,
       mapCenter,
       tripExpenseItems,
@@ -119,6 +279,8 @@ export function useTripDetailsCustomItems({
       customPlaceDurationMins,
       customPlaceName,
       customPlaceNote,
+      customPlaceImage,
+      customPlaceTravelDocs,
       showInAppNotice,
       setTripExpenseItems,
     ],
@@ -129,14 +291,24 @@ export function useTripDetailsCustomItems({
   }, []);
 
   const handleAddCustomFoodSubmit = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
       const costNum = parseFloat(customFoodCost) || 0;
       const costNumUsd = convertCurrencyToUsd(costNum, currency, exchangeRates);
-      const resolvedAddress =
-        customFoodAddressSelection ??
-        searchAddressSuggestions(trip.destination || trip.locations, customFoodAddress, 'custom-food')[0];
       const [fallbackLat, fallbackLng] = mapCenter;
+      const resolvedAddress = customFoodAddressSelection ?? {
+        name: customFoodAddress,
+        address: customFoodAddress,
+        lat: fallbackLat,
+        lng: fallbackLng,
+        source: 'Manual input',
+      };
+      const resolvedCoords = await resolveAddressCoordinates(
+        customFoodAddress || resolvedAddress?.address,
+        resolvedAddress,
+        fallbackLat,
+        fallbackLng,
+      );
       const overlapping = findTimeOverlapItem(tripExpenseItems, {
         date: customFoodDateKey,
         startTime: customFoodStartTime,
@@ -147,6 +319,17 @@ export function useTripDetailsCustomItems({
         showInAppNotice(`Time overlaps with ${overlapping.name}. Please choose another time slot.`, 'warning');
         return;
       }
+
+      let placeImageUrl = '';
+      try {
+        placeImageUrl = await fileToDataUrl(customFoodImage);
+      } catch {
+        showInAppNotice('Could not read the selected image. Please try another file.', 'warning');
+      }
+
+      
+      const attachments = customFoodTravelDocs.map((f) => createAttachmentFromFile(f));
+
       setTripExpenseItems((prev) => [
         ...prev,
         {
@@ -156,20 +339,17 @@ export function useTripDetailsCustomItems({
           categoryId: 'food',
           category: 'Food & Beverage',
           date: customFoodDateKey,
-          detail:
-            resolvedAddress?.address && resolvedAddress.address !== 'Custom location'
-              ? resolvedAddress.address
-              : (customFoodAddress || 'Custom food & beverage'),
+          detail: resolvedAddress?.address || customFoodAddress || 'Custom food & beverage',
           Icon: UtensilsCrossed,
-          lat: resolvedAddress?.lat ?? fallbackLat,
-          lng: resolvedAddress?.lng ?? fallbackLng,
+          lat: resolvedCoords.lat,
+          lng: resolvedCoords.lng,
           notes: customFoodNote || '',
-          attachments: [],
+          attachments,
           startTime: customFoodStartTime,
           durationHrs: customFoodDurationHrs,
           durationMins: customFoodDurationMins,
           externalLink: '',
-          placeImageUrl: '',
+          placeImageUrl,
           rating: null,
           reviewCount: null,
         },
@@ -193,7 +373,6 @@ export function useTripDetailsCustomItems({
       currency,
       exchangeRates,
       customFoodAddressSelection,
-      trip,
       customFoodAddress,
       mapCenter,
       tripExpenseItems,
@@ -203,6 +382,8 @@ export function useTripDetailsCustomItems({
       customFoodDurationMins,
       customFoodName,
       customFoodNote,
+      customFoodImage,
+      customFoodTravelDocs,
       showInAppNotice,
       setTripExpenseItems,
     ],

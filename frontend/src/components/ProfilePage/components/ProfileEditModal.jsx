@@ -1,6 +1,70 @@
+import { useState, useRef, useEffect } from 'react';
+import ReactCountryFlag from 'react-country-flag';
+import { ChevronDown } from 'lucide-react';
 import { platformIcon } from '../lib/profileSocialUtils';
 import { PUBLISH_CATEGORY_OPTIONS } from '../../../data/communitySearchConstants';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
+
+function NationalityDropdown({ value, onChange, countries }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const selected = countries.find((c) => c.label === value);
+
+  return (
+    <div className="nat-dropdown" ref={ref}>
+      <button
+        type="button"
+        className="nat-dropdown__trigger profile-page__modal-input"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected ? (
+          <>
+            <ReactCountryFlag countryCode={selected.code} svg style={{ width: '1.2em', height: '1.2em', borderRadius: '2px' }} />
+            <span>{selected.label}</span>
+          </>
+        ) : (
+          <span className="nat-dropdown__placeholder">Select nationality</span>
+        )}
+        <ChevronDown size={14} className="nat-dropdown__chevron" aria-hidden />
+      </button>
+      {open && (
+        <ul className="nat-dropdown__list" role="listbox">
+          <li
+            role="option"
+            aria-selected={!value}
+            className={`nat-dropdown__option${!value ? ' nat-dropdown__option--selected' : ''}`}
+            onMouseDown={() => { onChange(''); setOpen(false); }}
+          >
+            <span className="nat-dropdown__placeholder">Select nationality</span>
+          </li>
+          {countries.map((c) => (
+            <li
+              key={c.code}
+              role="option"
+              aria-selected={value === c.label}
+              className={`nat-dropdown__option${value === c.label ? ' nat-dropdown__option--selected' : ''}`}
+              onMouseDown={() => { onChange(c.label); setOpen(false); }}
+            >
+              <ReactCountryFlag countryCode={c.code} svg style={{ width: '1.2em', height: '1.2em', borderRadius: '2px', flexShrink: 0 }} />
+              <span>{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function ProfileEditModal({
   open,
@@ -138,23 +202,14 @@ export default function ProfileEditModal({
                   );
                 })}
               </div>
-              <label className="profile-page__modal-label" htmlFor="profile-nationality">
+              <label className="profile-page__modal-label">
                 Nationality
               </label>
-              <select
-                id="profile-nationality"
-                className="profile-page__modal-input profile-page__modal-select"
+              <NationalityDropdown
                 value={editDraft.nationality}
-                onChange={(e) => setEditDraft((prev) => ({ ...prev, nationality: e.target.value }))}
-              >
-                <option value="">Select nationality</option>
-                {!countries.some((c) => c.label === editDraft.nationality) && editDraft.nationality && (
-                  <option value={editDraft.nationality}>{editDraft.nationality}</option>
-                )}
-                {countries.map((c) => (
-                  <option key={c.code} value={c.label}>{`${c.label} ${flagForCountry(c.label)}`}</option>
-                ))}
-              </select>
+                onChange={(val) => setEditDraft((prev) => ({ ...prev, nationality: val }))}
+                countries={countries}
+              />
               <div className="profile-page__socials-edit">
                 <p className="profile-page__modal-label">Social Profiles</p>
                 <div className="profile-page__social-input">

@@ -1,4 +1,4 @@
-/* Day column */
+
 .trip-details__day-col {
   flex: 0 0 240px;
   min-width: 200px;
@@ -25,17 +25,17 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 28px; /* larger hit area for easier dragging */
+  width: 28px; 
   height: 100%;
   border: none;
-  background: transparent; /* removed grey gradient per request */
+  background: transparent; 
   cursor: col-resize;
   z-index: 12;
   padding: 0;
 }
 
 .trip-details__day-resize-handle::after {
-  content: '⇆'; /* expanding left/right arrows */
+  content: '⇆'; 
   position: absolute;
   top: 50%;
   left: 50%;
@@ -44,7 +44,7 @@
   line-height: 1;
   color: rgba(100, 116, 139, 0.45);
   transition: color 0.12s, transform 0.12s;
-  pointer-events: none; /* allow handle to receive pointer events */
+  pointer-events: none; 
 }
 
 .trip-details__day-col:hover .trip-details__day-resize-handle::after,

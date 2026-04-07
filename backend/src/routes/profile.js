@@ -627,7 +627,7 @@ router.delete('/:id/friends', requireAuth, async (req, res) => {
   }
 });
 
-// Share your own profile with a list of friends — sends each a profile_shared notification
+
 router.post('/me/share', requireAuth, async (req, res) => {
   try {
     const actor = await User.findById(req.userId).select('name').lean();
@@ -640,7 +640,7 @@ router.post('/me/share', requireAuth, async (req, res) => {
 
     if (validIds.length === 0) return res.json({ ok: true, sent: 0 });
 
-    // Verify each recipient is actually a friend
+    
     const [userA_base, userB_base] = [req.userId];
     const friendships = await Friendship.find({
       $or: validIds.map((fid) => {

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { applyImageFallback, resolveImageUrl } from '../../../lib/imageFallback';
 import TripMap from '../../TripMap/TripMap';
+import TripDetailsFilterDropdown from './TripDetailsFilterDropdown';
 import {
   EXPERIENCE_DURATIONS,
   EXPERIENCE_PRICE_RANGES,
@@ -433,64 +434,36 @@ export default function TripDetailsAddExperiencesModal({
                 <div className="trip-details__add-food-toolbar">
                   <p className="trip-details__add-places-results">{experiences.length} results found</p>
                   <div className="trip-details__add-food-toolbar-actions">
-                    <select
-                      className="trip-details__add-places-sort-select"
+                    <TripDetailsFilterDropdown
                       value={addModalCityFilter}
-                      onChange={(e) => setAddModalCityFilter(e.target.value)}
-                      aria-label="Filter by city"
-                    >
-                      {addModalCityOptions.map((city) => (
-                        <option key={city} value={city}>{city === 'All' ? 'All cities' : city}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={addModalCityOptions.map((city) => ({ value: city, label: city === 'All' ? 'All cities' : city }))}
+                      onChange={setAddModalCityFilter}
+                      ariaLabel="Filter by city"
+                    />
+                    <TripDetailsFilterDropdown
                       value={experienceTypeFilter}
-                      onChange={(e) => setExperienceTypeFilter(e.target.value)}
-                      aria-label="Filter by experience type"
-                    >
-                      {EXPERIENCE_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={EXPERIENCE_TYPES}
+                      onChange={setExperienceTypeFilter}
+                      ariaLabel="Filter by experience type"
+                    />
+                    <TripDetailsFilterDropdown
                       value={experiencePriceRange}
-                      onChange={(e) => setExperiencePriceRange(e.target.value)}
-                      aria-label="Filter by price range"
-                    >
-                      {EXPERIENCE_PRICE_RANGES.map((range) => (
-                        <option key={range} value={range}>
-                          {range}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={EXPERIENCE_PRICE_RANGES}
+                      onChange={setExperiencePriceRange}
+                      ariaLabel="Filter by price range"
+                    />
+                    <TripDetailsFilterDropdown
                       value={experienceDurationFilter}
-                      onChange={(e) => setExperienceDurationFilter(e.target.value)}
-                      aria-label="Filter by duration"
-                    >
-                      {EXPERIENCE_DURATIONS.map((duration) => (
-                        <option key={duration} value={duration}>
-                          Duration: {duration}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="trip-details__add-places-sort-select"
+                      options={EXPERIENCE_DURATIONS.map((duration) => ({ value: duration, label: `Duration: ${duration}` }))}
+                      onChange={setExperienceDurationFilter}
+                      ariaLabel="Filter by duration"
+                    />
+                    <TripDetailsFilterDropdown
                       value={experienceSortBy}
-                      onChange={(e) => setExperienceSortBy(e.target.value)}
-                      aria-label="Sort experiences"
-                    >
-                      {EXPERIENCE_SORT_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          Sort by: {option}
-                        </option>
-                      ))}
-                    </select>
+                      options={EXPERIENCE_SORT_OPTIONS.map((option) => ({ value: option, label: `Sort by: ${option}` }))}
+                      onChange={setExperienceSortBy}
+                      ariaLabel="Sort experiences"
+                    />
                   </div>
                 </div>
 

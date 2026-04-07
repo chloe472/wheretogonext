@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import path from 'path';
 
-// Load environment variables FIRST
 dotenv.config();
 
 console.log('[Server] GOOGLE_PLACES_API_KEY loaded:', Boolean(process.env.GOOGLE_PLACES_API_KEY));
@@ -17,7 +16,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -30,7 +28,7 @@ app.get('/api/health', (req, res) => {
 });
 
 async function start() {
-  // Dynamically import routes AFTER env vars are loaded
+  
   const { default: authRoutes } = await import('./routes/auth.js');
   const { default: discoveryRoutes } = await import('./routes/discovery.js');
   const { default: itinerariesRoutes } = await import('./routes/itineraries.js');

@@ -48,9 +48,9 @@ function extractLocalityFromAddressComponents(place) {
   return '';
 }
 
-/**
- * Fallback when addressComponents missing: guess city segment from Google's formatted address.
- */
+
+
+
 function inferCityFromFormattedAddress(formattedAddress) {
   const raw = String(formattedAddress || '').trim();
   if (!raw) return '';
@@ -74,7 +74,7 @@ function parseTripDestinations(rawTripDestinations, fallbackDestination) {
       .filter(Boolean);
     if (cleaned.length > 0) return cleaned;
   } catch {
-    // fall through to destination fallback
+    
   }
   const fallback = String(fallbackDestination || '').trim();
   return fallback ? [fallback] : [];
@@ -96,9 +96,9 @@ function citiesRoughlyMatch(tripCity, placeCity) {
   return false;
 }
 
-/**
- * When resolved places are in a different city than the trip destination, surface a banner + CTA.
- */
+
+
+
 function computeLocationInsight(places, tripDestinations) {
   const knownTripCities = (Array.isArray(tripDestinations) ? tripDestinations : [])
     .map((destination) => primaryCityFromTripDestination(destination))
@@ -132,9 +132,9 @@ function computeLocationInsight(places, tripDestinations) {
   };
 }
 
-/**
- * One Text Search call; returns first place or null.
- */
+
+
+
 async function searchTextTopPlace(textQuery, apiKey) {
   const res = await fetch(PLACES_SEARCH_TEXT_URL, {
     method: 'POST',
@@ -166,9 +166,9 @@ async function searchTextTopPlace(textQuery, apiKey) {
   return places[0] || null;
 }
 
-/**
- * Free geocoding fallback when Google Places Text Search returns nothing (wrong key, API not enabled, or no match).
- */
+
+
+
 async function nominatimSearchTop(query) {
   const q = String(query || '').trim();
   if (q.length < 2) return null;
@@ -220,10 +220,10 @@ function mapNominatimToPlaceRow(hit, idx) {
   };
 }
 
-/**
- * Prefer unbiased search (place name / signal only). If no result, optionally
- * disambiguate with trip destination — avoids forcing e.g. "Moraine Lake" into Vancouver.
- */
+
+
+
+
 async function searchTextTopPlaceWithDestinationFallback(textSignal, apiKey, destination) {
   const trimmed = String(textSignal || '').trim();
   if (!trimmed || !apiKey) return null;
@@ -390,7 +390,7 @@ router.post('/analyze', upload.array('images', 8), async (req, res) => {
             i,
           );
 
-          // Gemini coords path used to skip Places entirely → no photo URL. Enrich with Text Search for thumbnail.
+          
           if (GOOGLE_PLACES_API_KEY && textSignal) {
             try {
               const resolved = await searchTextTopPlaceWithDestinationFallback(
@@ -480,7 +480,7 @@ router.post('/analyze', upload.array('images', 8), async (req, res) => {
         try {
           await fs.unlink(tempPath);
         } catch {
-          /* ignore */
+          
         }
       }
     }

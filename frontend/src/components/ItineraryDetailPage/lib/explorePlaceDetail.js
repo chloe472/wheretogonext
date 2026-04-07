@@ -1,6 +1,4 @@
-/**
- * Normalize a published itinerary stop or map marker into the shape TripDetails place-detail UI expects.
- */
+
 export function publishedStopToDetailPlace(raw, index = 0) {
   const p = raw || {};
   const id = p.id != null ? String(p.id) : `pub-place-${index}`;

@@ -1,9 +1,6 @@
 import { MapPin } from 'lucide-react';
 
-/**
- * Reused by social import results and Explore add-to-trip.
- * Styles: trip-details__social-import-location-* in TripDetailsPage/styles/trip-details-social-import-modal.css.
- */
+
 export default function SocialImportLocationMismatchBanner({ locationInsight, onAddDetectedDestination }) {
   if (!locationInsight?.mismatch || !locationInsight.detectedLabel) return null;
 

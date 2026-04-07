@@ -1,10 +1,10 @@
-/** Destination metadata for trip cards (image fallback + flags + date labels). */
 
-/** Generic travel photo when no destination matches. */
+
+
 export const DEFAULT_TRIP_COVER_FALLBACK =
   'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=480&fit=crop&q=80';
 
-/** Legacy default used before per-destination images — treat as generic for display upgrade. */
+
 export const LEGACY_DEFAULT_TRIP_COVER =
   'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=240&fit=crop';
 
@@ -12,17 +12,14 @@ function normalizeLocationText(value = '') {
   return String(value || '')
     .toLowerCase()
     .trim()
-    // Normalize separators/punctuation to spaces.
+    
     .replace(/['’`"]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/**
- * Country / city / region names → ISO 3166-1 alpha-2 country code + display name.
- * Rendered via FlagCDN for consistent cross-platform appearance.
- */
+
 const FLAG_LOOKUP = [
   ['united states', 'us', 'United States'],
   ['new york', 'us', 'United States'],
@@ -144,22 +141,14 @@ function haystack(destination = '', locations = '') {
   return normalizeLocationText(`${destination} ${locations}`);
 }
 
-/**
- * @param {string} [destination]
- * @param {string} [locations]
- * @returns {string} image URL
- */
+
 export function getCoverImageForDestination(destination = '', locations = '') {
   const h = haystack(destination, locations);
   if (!h) return DEFAULT_TRIP_COVER_FALLBACK;
   return DEFAULT_TRIP_COVER_FALLBACK;
 }
 
-/**
- * @param {string} [destination]
- * @param {string} [locations]
- * @returns {{code: string, countryName: string, url: string} | null}
- */
+
 export function getFlagImageForDestination(destination = '', locations = '') {
   const h = haystack(destination, locations);
   if (!h) return null;
@@ -175,31 +164,26 @@ export function getFlagImageForDestination(destination = '', locations = '') {
   return null;
 }
 
-/**
- * True if the stored URL is our generic legacy default (safe to replace display with destination-based cover).
- */
+
 export function isGenericDefaultCoverUrl(url) {
   if (!url || typeof url !== 'string') return true;
   const u = url.trim().toLowerCase();
   return (
     u === DEFAULT_TRIP_COVER_FALLBACK.toLowerCase()
     || u === LEGACY_DEFAULT_TRIP_COVER.toLowerCase()
-    || u.includes('photo-1488646953014') // same Unsplash photo id as legacy default
+    || u.includes('photo-1488646953014') 
   );
 }
 
-/**
- * Resolve image shown on dashboard: prefer real uploads, else destination-based default.
- * @param {object} raw itinerary API doc
- */
+
 export function resolveTripCardCoverImage(raw) {
   const coverImages = Array.isArray(raw.coverImages) ? raw.coverImages.filter(Boolean) : [];
   const image = raw.image && String(raw.image).trim();
   const primary = coverImages[0] || image || '';
   const destination = String(raw?.destination || '').trim();
   const locations = String(raw?.locations || '').trim();
-  // When a user duplicates a public itinerary ("Customize trip"), keep the source cover exactly.
-  // Do not replace copied covers — the duplicate should look identical.
+  
+  
   if (raw?.customizedFromItineraryId) {
     return primary;
   }
@@ -211,11 +195,7 @@ export function resolveTripCardCoverImage(raw) {
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/**
- * @param {string} [startDate] YYYY-MM-DD
- * @param {string} [endDate] YYYY-MM-DD
- * @param {string} [datesFallback] e.g. legacy human-readable dates string
- */
+
 export function formatTripCardDateRange(startDate = '', endDate = '', datesFallback = '') {
   const s = String(startDate).trim();
   const e = String(endDate).trim();

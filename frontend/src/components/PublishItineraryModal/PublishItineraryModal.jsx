@@ -41,15 +41,7 @@ function validateFile(file) {
   return null;
 }
 
-/**
- * @param {object} props
- * @param {boolean} props.open
- * @param {function} props.onClose
- * @param {object} props.itinerary — raw itinerary from API (must include _id)
- * @param {function} [props.onPublished]
- * @param {number} [props.initialStep]
- * @param {'publish'|'edit'} [props.mode]
- */
+
 export default function PublishItineraryModal({
   open,
   onClose,
@@ -68,7 +60,7 @@ export default function PublishItineraryModal({
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [openKebab, setOpenKebab] = useState(null);
-  /** Highest step the user has reached via Next (breadcrumbs can only go to steps ≤ this). */
+  
   const [farthestStep, setFarthestStep] = useState(1);
   const fileInputRef = useRef(null);
   const revokeUrls = useRef([]);

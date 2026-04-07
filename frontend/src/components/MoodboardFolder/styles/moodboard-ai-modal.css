@@ -1,4 +1,4 @@
-/* AI Analysis modal */
+
 .ai-modal-overlay {
   position: fixed;
   top: 0;
@@ -108,7 +108,7 @@
   opacity: 0.8;
 }
 
-/* ── Loading spinner ────────────────────────────────────────── */
+
 .ai-loading {
   display: flex;
   flex-direction: column;

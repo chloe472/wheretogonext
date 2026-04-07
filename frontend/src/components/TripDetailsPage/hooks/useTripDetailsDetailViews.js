@@ -1,8 +1,59 @@
 import { useCallback } from 'react';
+import { loadGoogleMapsScript } from '../../../lib/loadGoogleMaps';
 import {
   enrichFoodDetails,
+  hasValidLatLng,
   hasStayBookingData,
 } from '../lib/tripDetailsPageHelpers';
+
+async function geocodeAddressForDetail(address) {
+  const q = String(address || '').trim();
+  if (!q) return null;
+
+  try {
+    if (!window.google?.maps?.Geocoder) {
+      await loadGoogleMapsScript();
+    }
+  } catch {
+    
+  }
+
+  if (window.google?.maps?.Geocoder) {
+    const googleCoords = await new Promise((resolve) => {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: q }, (results, status) => {
+        const okStatus = window.google?.maps?.GeocoderStatus?.OK || 'OK';
+        if (status !== okStatus && status !== 'OK') {
+          resolve(null);
+          return;
+        }
+        const loc = results?.[0]?.geometry?.location;
+        if (!loc || typeof loc.lat !== 'function' || typeof loc.lng !== 'function') {
+          resolve(null);
+          return;
+        }
+        resolve({ lat: loc.lat(), lng: loc.lng() });
+      });
+    });
+    if (googleCoords) return googleCoords;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const first = Array.isArray(data?.results) ? data.results[0] : null;
+    if (!first || typeof first.latitude !== 'number' || typeof first.longitude !== 'number') return null;
+    return { lat: first.latitude, lng: first.longitude };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export function useTripDetailsDetailViews({
   cityQuery,
@@ -22,7 +73,7 @@ export function useTripDetailsDetailViews({
   setSelectedPlaceMarkerId,
   setEditPlaceItem,
 }) {
-  const openInternalItemOverview = useCallback((item) => {
+  const openInternalItemOverview = useCallback(async (item) => {
     if (!item) return;
     const raw = String(item.categoryId || item.category || '').toLowerCase();
 
@@ -74,20 +125,23 @@ export function useTripDetailsDetailViews({
       : null;
 
     const canonical = byId || byNameAndAddress || byCoords || null;
+    const keepItemCoords = hasValidLatLng(item);
     const detailItem = canonical
       ? {
         ...item,
         ...canonical,
-        id: canonical.id || item.id,
+        
+        id: item.id || canonical.id,
+        sourcePlaceId: item.sourcePlaceId || canonical.id,
         name: canonical.name || item.name,
         image: canonical.image || item.image || item.placeImageUrl,
         images: Array.isArray(canonical.images) && canonical.images.length > 0
           ? canonical.images
           : (item.image || item.placeImageUrl ? [item.image || item.placeImageUrl] : []),
-        address: canonical.address || item.address || item.detail,
+        address: item.address || item.detail || canonical.address,
         website: canonical.website || item.website || item.externalLink || '',
-        lat: canonical.lat ?? item.lat,
-        lng: canonical.lng ?? item.lng,
+        lat: keepItemCoords ? item.lat : (canonical.lat ?? item.lat),
+        lng: keepItemCoords ? item.lng : (canonical.lng ?? item.lng),
       }
       : {
         ...item,
@@ -96,9 +150,15 @@ export function useTripDetailsDetailViews({
         address: item.address || item.detail,
       };
 
+    const addressForPin = detailItem?.address || detailItem?.detail || item?.detail || '';
+    const geocodedForDetail = await geocodeAddressForDetail(addressForPin);
+    const detailWithPin = geocodedForDetail
+      ? { ...detailItem, lat: geocodedForDetail.lat, lng: geocodedForDetail.lng }
+      : detailItem;
+
     setPlaceDetailsTab('overview');
-    setSelectedPlaceMarkerId(detailItem.id || null);
-    setPlaceDetailsView(detailItem);
+    setSelectedPlaceMarkerId(item?.id || detailWithPin.id || null);
+    setPlaceDetailsView(detailWithPin);
     setAddPlacesOpen(true);
     setEditPlaceItem(null);
   }, [
