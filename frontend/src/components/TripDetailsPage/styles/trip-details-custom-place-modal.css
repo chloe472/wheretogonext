@@ -217,6 +217,26 @@
   box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
 }
 
+.trip-details__custom-place-select {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.2;
+  background: var(--wtg-surface);
+  color: var(--wtg-text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.trip-details__custom-place-select:focus {
+  border-color: var(--wtg-accent, #78716c);
+}
+
+#add-to-trip-date {
+  background: #fff;
+}
+
 .trip-details__custom-place-input-wrap {
   display: flex;
   align-items: center;

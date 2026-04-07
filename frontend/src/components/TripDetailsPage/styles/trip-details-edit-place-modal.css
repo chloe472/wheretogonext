@@ -177,18 +177,22 @@
 
 .trip-details__edit-place-select {
   width: 100%;
-  padding: 0.625rem 0.875rem;
+  padding: 0.5rem 0.8rem;
   font-size: 0.9375rem;
+  font-family: inherit;
+  font-weight: 400;
   color: var(--wtg-text);
   background: var(--wtg-surface);
   border: 1px solid var(--wtg-border);
   border-radius: 8px;
   cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .trip-details__edit-place-select:focus {
   outline: none;
-  border-color: #dc2626;
+  border-color: var(--wtg-accent, #78716c);
 }
 
 .trip-details__edit-place-input-wrap {

@@ -146,12 +146,19 @@
 }
 
 .trip-details__budget-sort-select {
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem 0.8rem;
   font-size: 0.875rem;
   border: 1px solid var(--wtg-border);
   border-radius: 6px;
   background: var(--wtg-surface);
   color: var(--wtg-text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.trip-details__budget-sort-select:focus {
+  border-color: var(--wtg-accent, #78716c);
 }
 
 .trip-details__budget-item-list {
