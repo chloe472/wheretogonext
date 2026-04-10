@@ -1,4 +1,5 @@
-import { Check, X } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Search, X } from 'lucide-react';
 
 export default function TripDetailsCurrencyModal({
   onClose,
@@ -8,6 +9,15 @@ export default function TripDetailsCurrencyModal({
   setModalCurrency,
   onApply,
 }) {
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const visibleCurrencies = query
+    ? currencyOptionsForModal.filter(
+        ({ code, name }) =>
+          code.toLowerCase().includes(query) || name.toLowerCase().includes(query),
+      )
+    : currencyOptionsForModal;
+
   return (
     <>
       <button
@@ -26,8 +36,32 @@ export default function TripDetailsCurrencyModal({
         {currencyOptions.length === 0 ? (
           <p className="trip-details__itinerary-meta-line">Live exchange rates are loading. Showing USD for now.</p>
         ) : null}
+        <div className="trip-details__currency-search-wrap">
+          <Search size={15} className="trip-details__currency-search-icon" aria-hidden />
+          <input
+            className="trip-details__currency-search"
+            type="text"
+            placeholder="Search currencies…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+          />
+          {search && (
+            <button
+              type="button"
+              className="trip-details__currency-search-clear"
+              aria-label="Clear search"
+              onClick={() => setSearch('')}
+            >
+              <X size={13} aria-hidden />
+            </button>
+          )}
+        </div>
         <ul className="trip-details__currency-list">
-          {currencyOptionsForModal.map(({ code, name }) => (
+          {visibleCurrencies.length === 0 ? (
+            <li className="trip-details__currency-empty">No currencies match "{search}"</li>
+          ) : null}
+          {visibleCurrencies.map(({ code, name }) => (
             <li key={code}>
               <button
                 type="button"
