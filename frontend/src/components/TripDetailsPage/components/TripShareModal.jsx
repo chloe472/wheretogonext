@@ -224,7 +224,7 @@ export default function TripShareModal({
 
   if (!open) return null;
 
-  const ownerName = owner?.name || owner?.username || owner?.email || 'Owner';
+  const ownerName = owner?.name || owner?.email || 'Owner';
   const ownerEmail = owner?.email || '';
   const ownerId = String(owner?._id || owner?.id || '').trim();
   const meId = String(currentUserId || '').trim();
@@ -249,7 +249,7 @@ export default function TripShareModal({
       ...prev,
       {
         id: userId,
-        name: user.name || user.username || 'User',
+        name: user.name || 'User',
         email: user.email,
         picture: user.picture,
       },

@@ -131,7 +131,7 @@ export default function ProfileShareModal({
                 <input
                   className="trip-share__invite-input"
                   type="text"
-                  placeholder="Invite by name or email"
+                  placeholder="Share by name or email"
                   value={inviteQuery}
                   onChange={(e) => { setInviteQuery(e.target.value); setInviteError(''); }}
                   onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}

@@ -79,9 +79,6 @@ export default function ProfileAddFriendModal({
                       </div>
                       <div className="add-friend-preview__info">
                         <span className="add-friend-preview__name">{u.name || 'Traveler'}</span>
-                        {u.email && (
-                          <span className="add-friend-preview__handle">@{u.email.split('@')[0]}</span>
-                        )}
                       </div>
                       {selected && <span className="add-friend-preview__check">✓</span>}
                     </button>

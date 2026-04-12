@@ -1006,7 +1006,7 @@ export default function ItineraryDetailPage({ user, onLogout, onRequireLogin }) 
               )}
             </Link>
             <h3 className="itinerary-detail__creator-name">
-              {itinerary.creator?.name || itinerary.creator?.username || 'Creator'}
+              {itinerary.creator?.name || 'Creator'}
             </h3>
             {itinerary.creator?.intro ? (
               <p className="itinerary-detail__creator-bio">{itinerary.creator.intro}</p>

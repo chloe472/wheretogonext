@@ -59,7 +59,7 @@ export default function ProfileAddDestinationModal({
                 }}
                 onFocus={() => {
                   setDestinationCountryInput('');
-                  setDestinationCountryOpen(true);
+                  setDestinationCountryOpen(false);
                 }}
                 onBlur={() => {
                   const match = (Array.isArray(destinationCountrySuggestions) ? destinationCountrySuggestions : []).find(
@@ -85,7 +85,7 @@ export default function ProfileAddDestinationModal({
                   }
                 }}
               />
-              {destinationCountryOpen && (
+              {destinationCountryOpen && (destinationSuggestionsLoading || (Array.isArray(destinationCountrySuggestions) && destinationCountrySuggestions.length > 0)) && (
                 <ul className="profile-page__dest-dropdown">
                   {destinationSuggestionsLoading && <li className="profile-page__dest-dropdown-item">Searching...</li>}
                   {!destinationSuggestionsLoading && (Array.isArray(destinationCountrySuggestions) ? destinationCountrySuggestions : [])
@@ -126,14 +126,14 @@ export default function ProfileAddDestinationModal({
                 }}
                 onFocus={() => {
                   setDestinationCity('');
-                  setDestinationCityOpen(true);
+                  setDestinationCityOpen(false);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { setDestinationCityOpen(false); return; }
                   if (e.key === 'Enter') submitDestination();
                 }}
               />
-              {destinationCityOpen && (
+              {destinationCityOpen && (destinationSuggestionsLoading || (Array.isArray(destinationCitySuggestions) && destinationCitySuggestions.length > 0)) && (
                 <ul className="profile-page__dest-dropdown">
                   {destinationSuggestionsLoading && <li className="profile-page__dest-dropdown-item">Searching...</li>}
                   {!destinationSuggestionsLoading && (Array.isArray(destinationCitySuggestions) ? destinationCitySuggestions : [])

@@ -55,7 +55,7 @@ async function createNotificationDeduped(payload) {
     const exists = await Notification.findOne(filter).lean();
     if (exists?._id) {
       const populated = await Notification.findById(exists._id)
-        .populate('actor', 'name username picture')
+        .populate('actor', 'name picture')
         .lean();
       if (populated) {
         pushToUser(String(populated.recipient), 'notification', serializeNotification(populated));
@@ -65,7 +65,7 @@ async function createNotificationDeduped(payload) {
   }
   const doc = await Notification.create(payload);
   if (doc) {
-    const populated = await doc.populate('actor', 'name username picture');
+    const populated = await doc.populate('actor', 'name picture');
     pushToUser(String(doc.recipient), 'notification', serializeNotification(populated));
   }
   return doc;

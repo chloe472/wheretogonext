@@ -24,7 +24,7 @@ export function computeExploreDayCount(it) {
  */
 export function mapItineraryToCard(it) {
   const creator = it.creator && typeof it.creator === 'object' ? it.creator : {};
-  const creatorName = creator.name || creator.username || creator.email || 'Traveler';
+  const creatorName = creator.name || creator.email || 'Traveler';
   const creatorPicture = creator.picture || null;
   const creatorId = creator._id || creator.id || '';
   const days = computeExploreDayCount(it);

@@ -61,6 +61,7 @@ const setTimedCache = (map, key, value) => map.set(key, { value, createdAt: Date
 const parseDestination = (input = '') => { const raw = String(input).trim(); if (!raw) return ''; const pieces = raw.split(';').map((s) => s.trim()).filter(Boolean); return (pieces[0] || raw).split(',')[0].trim(); };
 const cacheKey = (destination, limit) => `${String(destination || '').toLowerCase()}::${Number(limit) || 24}`;
 const citySuggestionCacheKey = (query, limit) => `cities::${String(query || '').trim().toLowerCase()}::${Number(limit) || 12}`;
+const countrySuggestionCacheKey = (query, limit) => `countries::${String(query || '').trim().toLowerCase()}::${Number(limit) || 12}`;
 
 function dedupeBy(items = [], keyFn = (item) => item, limit = Number.POSITIVE_INFINITY) { const seen = new Set(); const deduped = []; for (const item of items) { const key = keyFn(item); if (!key || seen.has(key)) continue; seen.add(key); deduped.push(item); if (deduped.length >= limit) break; } return deduped; }
 const cityIdentity = (item = {}) => `${String(item.name || '').toLowerCase()}::${String(item.country || '').toLowerCase()}`;
@@ -106,48 +107,98 @@ async function fetchGoogleCitySuggestions(query, limit = 12) {
   return dedupeBy(mapped, cityIdentity, limit);
 }
 
-async function fetchNominatimCitySuggestions(query, limit = 12) {
+async function fetchPhotonCitySuggestions(query, limit = 12) {
   const params = new URLSearchParams({
     q: String(query || '').trim(),
-    format: 'jsonv2',
-    addressdetails: '1',
-    limit: String(Math.max(8, Math.min(30, limit * 2))),
+    limit: String(Math.min(50, limit * 3)),
+    lang: 'en',
   });
-  const res = await fetchWithTimeout(`${NOMINATIM_URL}?${params.toString()}`, {}, 10000);
+  const res = await fetchWithTimeout(`https://photon.komoot.io/api/?${params.toString()}`, {}, 10000);
   if (!res.ok) {
-    throw new Error(`Nominatim autocomplete failed (${res.status})`);
+    throw new Error(`Photon autocomplete failed (${res.status})`);
   }
 
   const data = await res.json();
-  if (!Array.isArray(data)) return [];
-  const allowedTypes = new Set(['city', 'town', 'village', 'municipality', 'hamlet']);
+  const features = Array.isArray(data?.features) ? data.features : [];
+  const allowedTypes = new Set(['city', 'town', 'village', 'municipality', 'hamlet', 'borough', 'suburb']);
 
-  const mapped = data.map((hit) => {
-    const addr = hit?.address || {};
-    const addresstype = String(hit?.addresstype || '').toLowerCase();
-    const type = String(hit?.type || '').toLowerCase();
-    const isCityLike = allowedTypes.has(addresstype) || allowedTypes.has(type);
-    if (!isCityLike) return null;
+  const mapped = features.map((feature) => {
+    const props = feature?.properties || {};
+    const type = String(props.type || props.osm_value || '').toLowerCase();
+    if (!allowedTypes.has(type)) return null;
 
-    const name = String(
-      addr.city
-      || addr.town
-      || addr.village
-      || addr.municipality
-      || addr.hamlet
-      || hit?.name
-      || ''
-    ).trim();
-    const country = String(addr.country || '').trim();
+    const name = String(props.name || props.city || '').trim();
+    const country = String(props.country || '').trim();
+    if (!name) return null;
 
     return normalizeCitySuggestion({
-      id: `osm-city-${hit?.osm_type || 'n'}-${hit?.osm_id || name}`,
+      id: `photon-${props.osm_type || 'n'}${props.osm_id || name}`,
       name,
       country,
     });
   }).filter(Boolean);
 
   return dedupeBy(mapped, cityIdentity, limit);
+}
+
+async function fetchGoogleCountrySuggestions(query, limit = 12) {
+  const params = new URLSearchParams({
+    input: String(query || '').trim(),
+    types: '(regions)',
+    language: 'en',
+    key: GOOGLE_PLACES_API_KEY,
+  });
+  const res = await fetchWithTimeout(`${GOOGLE_PLACES_AUTOCOMPLETE_URL}?${params.toString()}`, {}, 10000);
+  if (!res.ok) throw new Error(`Google country autocomplete failed (${res.status})`);
+
+  const data = await res.json();
+  if (!Array.isArray(data?.predictions)) return [];
+
+  const seen = new Set();
+  const results = [];
+  for (const prediction of data.predictions) {
+    const types = Array.isArray(prediction?.types) ? prediction.types : [];
+    if (!types.includes('country')) continue;
+    const name = String(prediction?.structured_formatting?.main_text || prediction?.description || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ name });
+    if (results.length >= limit) break;
+  }
+  return results;
+}
+
+async function fetchNominatimCountrySuggestions(query, limit = 12) {
+  const params = new URLSearchParams({
+    q: String(query || '').trim(),
+    format: 'jsonv2',
+    addressdetails: '1',
+    featuretype: 'country',
+    limit: '20',
+  });
+  const res = await fetchWithTimeout(`${NOMINATIM_URL}?${params.toString()}`, {}, 10000);
+  if (!res.ok) throw new Error(`Nominatim country search failed (${res.status})`);
+
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+
+  const seen = new Set();
+  const results = [];
+  for (const hit of data) {
+    const addresstype = String(hit?.addresstype || '').toLowerCase();
+    const type = String(hit?.type || '').toLowerCase();
+    if (addresstype !== 'country' && type !== 'country') continue;
+    const name = String(hit?.address?.country || hit?.name || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ name });
+    if (results.length >= limit) break;
+  }
+  return results;
 }
 
 const setCached = (key, value) => DISCOVERY_CACHE.set(key, { value, createdAt: Date.now() });
@@ -2175,7 +2226,7 @@ router.get('/city-suggestions', async (req, res) => {
   const rawQuery = String(req.query.query || req.query.q || '').trim();
   const limit = Math.max(1, Math.min(20, Number(req.query.limit) || 12));
 
-  if (rawQuery.length < 2) {
+  if (rawQuery.length < 1) {
     return res.json({ suggestions: [] });
   }
 
@@ -2193,7 +2244,7 @@ router.get('/city-suggestions', async (req, res) => {
     }
 
     if (!Array.isArray(suggestions) || suggestions.length === 0) {
-      suggestions = await fetchNominatimCitySuggestions(rawQuery, limit);
+      suggestions = await fetchPhotonCitySuggestions(rawQuery, limit);
     }
 
     const finalSuggestions = Array.isArray(suggestions) ? suggestions.slice(0, limit) : [];
@@ -2203,6 +2254,43 @@ router.get('/city-suggestions', async (req, res) => {
     console.error('City suggestions failed:', error.message);
     return res.status(502).json({
       message: 'Failed to fetch city suggestions right now.',
+      suggestions: [],
+    });
+  }
+});
+
+router.get('/country-suggestions', async (req, res) => {
+  const rawQuery = String(req.query.query || req.query.q || '').trim();
+  const limit = Math.max(1, Math.min(20, Number(req.query.limit) || 12));
+
+  if (rawQuery.length < 1) {
+    return res.json({ suggestions: [] });
+  }
+
+  const key = countrySuggestionCacheKey(rawQuery, limit);
+  const cached = getCached(key);
+  if (cached) {
+    return res.json({ suggestions: cached });
+  }
+
+  try {
+    let suggestions = [];
+
+    if (GOOGLE_PLACES_API_KEY) {
+      suggestions = await fetchGoogleCountrySuggestions(rawQuery, limit);
+    }
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      suggestions = await fetchNominatimCountrySuggestions(rawQuery, limit);
+    }
+
+    const finalSuggestions = Array.isArray(suggestions) ? suggestions.slice(0, limit) : [];
+    setCached(key, finalSuggestions);
+    return res.json({ suggestions: finalSuggestions });
+  } catch (error) {
+    console.error('Country suggestions failed:', error.message);
+    return res.status(502).json({
+      message: 'Failed to fetch country suggestions right now.',
       suggestions: [],
     });
   }

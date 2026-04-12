@@ -29,7 +29,7 @@ router.get('/', requireAuth, async (req, res) => {
       Notification.find(filter)
         .sort({ createdAt: -1 })
         .limit(limit)
-        .populate('actor', 'name username picture')
+        .populate('actor', 'name picture')
         .lean(),
       Notification.countDocuments({ recipient: req.userId, readAt: null }),
     ]);
@@ -79,7 +79,7 @@ router.post('/:id/read', requireAuth, async (req, res) => {
       { $set: { readAt: new Date() } },
       { new: true }
     )
-      .populate('actor', 'name username picture')
+      .populate('actor', 'name picture')
       .lean();
 
     if (!updated) {

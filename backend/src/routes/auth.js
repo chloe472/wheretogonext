@@ -83,7 +83,7 @@ router.post('/register', requireJwt, async (req, res) => {
               error: 'Database index issue: drop the old googleId index. In MongoDB Atlas or shell run: db.users.dropIndex("googleId_1") then restart the server.',
             });
           }
-          return res.status(409).json({ error: 'Email or username already in use.' });
+          return res.status(409).json({ error: 'Email already in use.' });
         }
         return res.status(503).json({ error: 'Database error. Try again.' });
       }
@@ -99,12 +99,12 @@ router.post('/register', requireJwt, async (req, res) => {
 
 router.post('/login', requireJwt, async (req, res) => {
   try {
-    const { emailOrUsername, password } = req.body;
-    if (!emailOrUsername || !password) {
+    const { email: emailInput, password } = req.body;
+    if (!emailInput || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const user = await User.findOne({ email: String(emailOrUsername).trim().toLowerCase() });
+    const user = await User.findOne({ email: String(emailInput).trim().toLowerCase() });
     if (!user || !user.password) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }

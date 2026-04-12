@@ -188,7 +188,7 @@ router.get('/lookup', requireAuth, async (req, res) => {
     }
 
     const user = await User.findOne({ email })
-      .select('_id email name username picture')
+      .select('_id email name picture')
       .lean();
 
     if (!user) {
@@ -201,7 +201,6 @@ router.get('/lookup', requireAuth, async (req, res) => {
         id: String(user._id),
         email: user.email || '',
         name: user.name || '',
-        username: user.username || '',
         picture: user.picture || '',
       },
     });
@@ -402,16 +401,15 @@ router.get('/search', requireAuth, async (req, res) => {
     const regex = new RegExp(escapeRegex(q), 'i');
     const users = await User.find({
       _id: { $ne: req.userId },
-      $or: [{ name: regex }, { username: regex }, { email: regex }],
+      $or: [{ name: regex }, { email: regex }],
     })
-      .select('name username picture email')
+      .select('name picture email')
       .limit(5)
       .lean();
     return res.json({
       users: users.map((u) => ({
         id: String(u._id),
         name: u.name || '',
-        username: u.username || '',
         picture: u.picture || '',
         email: u.email || '',
       })),

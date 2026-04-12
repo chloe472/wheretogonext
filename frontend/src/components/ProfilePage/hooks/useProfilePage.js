@@ -24,7 +24,7 @@ import {
   shareProfileWithFriends,
   lookupUserByEmail,
 } from '../../../api/profileApi';
-import { fetchCitySuggestions } from '../../../api/locationsApi';
+import { fetchCitySuggestions, fetchCountrySuggestions } from '../../../api/locationsApi';
 import { getCurrentUserCollaboratorRole } from '../../TripDetailsPage/lib/tripCollaborationAccess';
 
 const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
@@ -708,40 +708,58 @@ const shareUrl = profile?.id || profileId
     return () => clearTimeout(timer);
   }, [addFriendValue, addFriendOpen]);
 
+  // Country suggestions — driven by the country input field
   useEffect(() => {
     if (!addDestinationOpen) return () => {};
 
-    const query = String(destinationCity || destinationCountryInput || '').trim();
+    const query = String(destinationCountryInput || '').trim();
+    if (query.length < 1) {
+      setDestinationCountrySuggestions([]);
+      return () => {};
+    }
+
+    setDestinationCountrySuggestions([]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      try {
+        const results = await fetchCountrySuggestions(query, { signal: controller.signal, limit: 16 });
+        setDestinationCountrySuggestions(Array.isArray(results) ? results : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setDestinationCountrySuggestions([]);
+        }
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [addDestinationOpen, destinationCountryInput]);
+
+  // City suggestions — driven by the city input field (scoped to selected country if set)
+  useEffect(() => {
+    if (!addDestinationOpen) return () => {};
+
+    const query = String(destinationCity || '').trim();
     if (query.length < 2) {
       setDestinationCitySuggestions([]);
-      setDestinationCountrySuggestions([]);
       setDestinationSuggestionsLoading(false);
       return () => {};
     }
+
+    setDestinationCitySuggestions([]);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(async () => {
       setDestinationSuggestionsLoading(true);
       try {
         const next = await fetchCitySuggestions(query, { signal: controller.signal, limit: 16 });
-        const cityList = Array.isArray(next) ? next : [];
-        setDestinationCitySuggestions(cityList);
-
-        const seenCountries = new Set();
-        const countryList = [];
-        cityList.forEach((item) => {
-          const country = String(item?.country || '').trim();
-          if (!country) return;
-          const key = country.toLowerCase();
-          if (seenCountries.has(key)) return;
-          seenCountries.add(key);
-          countryList.push(country);
-        });
-        setDestinationCountrySuggestions(countryList.slice(0, 16));
+        setDestinationCitySuggestions(Array.isArray(next) ? next : []);
       } catch (error) {
         if (error?.name !== 'AbortError') {
           setDestinationCitySuggestions([]);
-          setDestinationCountrySuggestions([]);
         }
       } finally {
         setDestinationSuggestionsLoading(false);
@@ -752,7 +770,7 @@ const shareUrl = profile?.id || profileId
       controller.abort();
       clearTimeout(timeoutId);
     };
-  }, [addDestinationOpen, destinationCity, destinationCountryInput]);
+  }, [addDestinationOpen, destinationCity]);
 
   const submitAddFriend = async () => {
     const selected = addFriendResults.find((u) => u.id === addFriendSelectedId) || null;

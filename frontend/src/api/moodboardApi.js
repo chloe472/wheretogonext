@@ -93,13 +93,13 @@ export async function deleteMoodboardImage(tripId, folderId, imageId) {
   return Array.isArray(data) ? data.map(normalizeImage) : [];
 }
 
-export async function reactToMoodboardImage(tripId, folderId, imageId, emoji, username) {
+export async function reactToMoodboardImage(tripId, folderId, imageId, emoji, userName) {
   const res = await fetch(
     apiUrl(`/api/moodboard/trip/${encodeURIComponent(tripId)}/folder/${encodeURIComponent(folderId)}/image/${encodeURIComponent(imageId)}/reaction`),
     {
       method: 'POST',
       headers: getBearerAuthHeaders(),
-      body: JSON.stringify({ emoji, user: username }),
+      body: JSON.stringify({ emoji, user: userName }),
     }
   );
   return await parseResponse(res);
