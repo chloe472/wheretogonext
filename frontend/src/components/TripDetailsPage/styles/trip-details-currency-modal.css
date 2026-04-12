@@ -7,7 +7,7 @@
   z-index: 70;
   width: 100%;
   max-width: 380px;
-  max-height: 85vh;
+  height: min(420px, 85vh);
   display: flex;
   flex-direction: column;
   padding: 1.25rem;
@@ -30,13 +30,66 @@
   color: var(--wtg-text);
 }
 
+.trip-details__currency-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.trip-details__currency-search-icon {
+  position: absolute;
+  left: 0.625rem;
+  color: var(--wtg-text-muted, #888);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.trip-details__currency-search {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 2rem;
+  font-size: 0.9rem;
+  color: var(--wtg-text);
+  background: var(--wtg-hover);
+  border: 1px solid var(--wtg-border, #e5e7eb);
+  border-radius: 8px;
+  outline: none;
+}
+
+.trip-details__currency-search:focus {
+  border-color: #dc2626;
+}
+
+.trip-details__currency-search-clear {
+  position: absolute;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  color: var(--wtg-text-muted, #888);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.trip-details__currency-search-clear:hover {
+  color: var(--wtg-text);
+}
+
+.trip-details__currency-empty {
+  padding: 1rem 0.5rem;
+  font-size: 0.9rem;
+  color: var(--wtg-text-muted, #888);
+  text-align: center;
+}
+
 .trip-details__currency-list {
   margin: 0 0 1rem;
   padding: 0;
   list-style: none;
   overflow-y: auto;
   flex: 1;
-  min-height: 200px;
 }
 
 .trip-details__currency-option {

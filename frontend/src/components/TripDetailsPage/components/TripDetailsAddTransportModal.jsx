@@ -72,12 +72,7 @@ export default function TripDetailsAddTransportModal({
       const normalizedCode = `${airlineCode}${flightNumber}`;
       const homeCountry = String(transportHomeCountry || '').trim();
       const targetCountry = String(destinationCountry || '').trim();
-
-      if (!homeCountry || !targetCountry) {
-        throw new Error('Unable to determine home/destination country for route filtering.');
-      }
-
-      const routeCountries = new Set([homeCountry, targetCountry]);
+      const routeCountries = homeCountry && targetCountry ? new Set([homeCountry, targetCountry]) : null;
       const airportByCode = new Map(
         AIRPORTS_AND_CITIES
           .filter((item) => item.type === 'Airport')
@@ -210,6 +205,7 @@ export default function TripDetailsAddTransportModal({
               })
               .filter((f) => {
                 if (!String(f.flight_code || '').toUpperCase().includes(normalizedCode)) return false;
+                if (!routeCountries) return true;
                 const depCountry = airportByCode.get(String(f.departure_airport || '').toUpperCase())?.country || '';
                 const arrCountry = airportByCode.get(String(f.arrival_airport || '').toUpperCase())?.country || '';
                 if (!depCountry || !arrCountry) return true;
@@ -241,7 +237,10 @@ export default function TripDetailsAddTransportModal({
       const destinationAirports = airportsByCountry[targetCountry] || [];
 
       if (homeAirports.length === 0 || destinationAirports.length === 0) {
-        throw new Error('No airports available for selected home/destination country pair.');
+        setFlightSearchResults([]);
+        setFlightSearchError('No live results found. Enter flight details manually.');
+        setFlightSearchLoading(false);
+        return;
       }
 
       const seed = `${normalizedCode}${flightDepartDate}${homeCountry}${targetCountry}`.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
