@@ -129,6 +129,15 @@
   background: var(--dash-hover);
 }
 
+.trip-card__owner-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.trip-card__owner-option:disabled:hover {
+  background: transparent;
+}
+
 .trip-card__owner-option--danger {
   color: #b42318;
 }

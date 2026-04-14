@@ -11,6 +11,10 @@ import {
   lookupUserByEmail,
   searchUsers,
 } from '../../../api/profileApi';
+import {
+  canUserPublishItinerary,
+  PUBLISH_TO_EXPLORE_DISABLED_HINT,
+} from '../../TripDetailsPage/lib/tripCollaborationAccess';
 
 const DIALOG_CLOSED = {
   open: false,
@@ -196,6 +200,10 @@ export default function useDashboardTripActions({ setMyTrips, refreshTrips, user
     }
 
     if (action === 'publish') {
+      if (!canUserPublishItinerary(user, rawItinerary)) {
+        toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+        return;
+      }
       if (rawItinerary?.published && rawItinerary?.visibility === 'public') {
         (async () => {
           try {
@@ -222,6 +230,10 @@ export default function useDashboardTripActions({ setMyTrips, refreshTrips, user
     }
 
     if (action === 'edit-published-content') {
+      if (!canUserPublishItinerary(user, rawItinerary)) {
+        toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+        return;
+      }
       setPublishTarget({ itinerary: rawItinerary, initialStep: 1, mode: 'edit' });
       return;
     }

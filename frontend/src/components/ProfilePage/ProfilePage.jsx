@@ -254,6 +254,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               {activeTab === 'trips' && (
                 <ProfileTrips
                   isSelf={isSelf}
+                  user={user}
                   trips={trips}
                   openOwnerMenuId={openOwnerMenuId}
                   openStatusDropdownId={openStatusDropdownId}

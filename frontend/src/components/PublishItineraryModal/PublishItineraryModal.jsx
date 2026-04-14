@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
 import { publishItinerary, uploadItineraryImage } from '../../api/itinerariesApi';
+import { PUBLISH_TO_EXPLORE_DISABLED_HINT } from '../TripDetailsPage/lib/tripCollaborationAccess';
 import { PUBLISH_CATEGORY_OPTIONS } from '../../data/communitySearchConstants';
 import { resolveImageUrl } from '../../lib/imageFallback';
 import './PublishItineraryModal.css';
@@ -12,6 +13,8 @@ const MAX_OVERVIEW = 1000;
 const MIN_IMAGES = 3;
 const MAX_IMAGES = 15;
 const MAX_BYTES = 5 * 1024 * 1024;
+
+const DRAFT_STORAGE_PREFIX = 'wtg.publishDraft.v1';
 
 const PUBLISH_STEPS = [
   { id: 1, label: 'Details' },
@@ -41,6 +44,49 @@ function validateFile(file) {
   return null;
 }
 
+function draftKeyForItineraryId(itineraryId) {
+  const id = String(itineraryId || '').trim();
+  return id ? `${DRAFT_STORAGE_PREFIX}:${id}` : '';
+}
+
+function loadDraft(itineraryId) {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const key = draftKeyForItineraryId(itineraryId);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(itineraryId, patch = {}) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const key = draftKeyForItineraryId(itineraryId);
+    if (!key) return;
+    const prev = loadDraft(itineraryId) || {};
+    const next = { ...prev, ...patch, updatedAt: Date.now() };
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
+
+function clearDraft(itineraryId) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const key = draftKeyForItineraryId(itineraryId);
+    if (!key) return;
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 
 export default function PublishItineraryModal({
   open,
@@ -67,6 +113,7 @@ export default function PublishItineraryModal({
 
   const resetFromItinerary = useCallback(() => {
     if (!itinerary) return;
+    const itineraryId = String(itinerary?._id || itinerary?.id || '').trim();
     const nextStep = initialStep === 2 ? 2 : 1;
     setStep(nextStep);
     setFarthestStep(nextStep);
@@ -78,13 +125,23 @@ export default function PublishItineraryModal({
     setSubmitError('');
     revokeUrls.current.forEach((u) => URL.revokeObjectURL(u));
     revokeUrls.current = [];
-    const existing = Array.isArray(itinerary.coverImages)
-      ? itinerary.coverImages.filter(Boolean).map((url) => ({
+
+    const itineraryRemote = Array.isArray(itinerary.coverImages)
+      ? itinerary.coverImages.filter(Boolean).map((u) => String(u))
+      : [];
+    const draft = loadDraft(itineraryId);
+    const draftRemote = Array.isArray(draft?.remoteCoverImages)
+      ? draft.remoteCoverImages.map((u) => String(u)).filter(Boolean)
+      : null;
+    const remoteFinal = Array.isArray(draftRemote)
+      ? draftRemote.filter((u) => itineraryRemote.includes(u))
+      : itineraryRemote;
+
+    const existing = remoteFinal.map((url) => ({
           id: newId(),
           kind: 'remote',
           url: String(url),
-        }))
-      : [];
+        }));
     setImages(existing);
   }, [itinerary, initialStep]);
 
@@ -139,6 +196,16 @@ export default function PublishItineraryModal({
   const removeImage = (id) => {
     setImages((prev) => {
       const found = prev.find((x) => x.id === id);
+      if (found?.kind === 'remote' && found.url) {
+        const itineraryId = String(itinerary?._id || itinerary?.id || '').trim();
+        if (itineraryId) {
+          const remoteAfter = prev
+            .filter((x) => x.kind === 'remote' && x.id !== id)
+            .map((x) => String(x.url))
+            .filter(Boolean);
+          saveDraft(itineraryId, { remoteCoverImages: remoteAfter });
+        }
+      }
       if (found?.kind === 'file' && found.preview) {
         URL.revokeObjectURL(found.preview);
         revokeUrls.current = revokeUrls.current.filter((u) => u !== found.preview);
@@ -155,6 +222,14 @@ export default function PublishItineraryModal({
       const copy = [...prev];
       const [item] = copy.splice(idx, 1);
       copy.unshift(item);
+      const itineraryId = String(itinerary?._id || itinerary?.id || '').trim();
+      if (itineraryId) {
+        const remoteAfter = copy
+          .filter((x) => x.kind === 'remote')
+          .map((x) => String(x.url))
+          .filter(Boolean);
+        saveDraft(itineraryId, { remoteCoverImages: remoteAfter });
+      }
       return copy;
     });
     setOpenKebab(null);
@@ -228,11 +303,25 @@ export default function PublishItineraryModal({
         coverImages: coverUrls,
       });
       toast.success(mode === 'edit' ? 'Published itinerary updated!' : 'Itinerary published!');
+      clearDraft(String(itinerary?._id || itinerary?.id || '').trim());
       setSuccess(true);
       onPublished?.();
     } catch (e) {
-      toast.error(mode === 'edit' ? 'Failed to update published itinerary' : 'Failed to publish');
-      setSubmitError(e?.message || (mode === 'edit' ? 'Update failed' : 'Publish failed'));
+      const rawMsg = String(e?.message || '');
+      const permissionDenied = /only the owner or an editor collaborator can publish|not allowed to publish this itinerary/i.test(
+        rawMsg,
+      );
+      const friendlyMsg = permissionDenied
+        ? `${PUBLISH_TO_EXPLORE_DISABLED_HINT} If you need access, ask the owner to make you an editor.`
+        : rawMsg;
+      toast.error(
+        permissionDenied
+          ? friendlyMsg
+          : (mode === 'edit' ? 'Failed to update published itinerary' : 'Failed to publish'),
+      );
+      setSubmitError(
+        friendlyMsg || (mode === 'edit' ? 'Update failed' : 'Publish failed'),
+      );
     } finally {
       setSubmitting(false);
     }

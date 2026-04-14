@@ -191,6 +191,7 @@ export default function Dashboard({ user, onLogout }) {
         <main className="dashboard__main">
           <DashboardWelcome />
           <DashboardTripsSection
+            user={user}
             tripFilter={tripFilter}
             setTripFilter={setTripFilter}
             openTripFilterDropdown={openTripFilterDropdown}

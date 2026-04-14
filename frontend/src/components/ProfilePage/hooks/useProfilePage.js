@@ -25,7 +25,11 @@ import {
   lookupUserByEmail,
 } from '../../../api/profileApi';
 import { fetchCitySuggestions, fetchCountrySuggestions } from '../../../api/locationsApi';
-import { getCurrentUserCollaboratorRole } from '../../TripDetailsPage/lib/tripCollaborationAccess';
+import {
+  getCurrentUserCollaboratorRole,
+  canUserPublishItinerary,
+  PUBLISH_TO_EXPLORE_DISABLED_HINT,
+} from '../../TripDetailsPage/lib/tripCollaborationAccess';
 
 const WORLD_GEOJSON_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
 
@@ -879,6 +883,16 @@ const shareUrl = profile?.id || profileId
       return;
     }
     if (action === 'publish') {
+      const tripDocForPublish = {
+        ...trip,
+        _id: trip.id ?? trip._id,
+        collaborators: trip.collaborators,
+        creator: trip.creator,
+      };
+      if (!canUserPublishItinerary(user, tripDocForPublish)) {
+        toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+        return;
+      }
       if (trip.published && trip.visibility === 'public') {
         try {
           await updateItinerary(trip.id, { published: false, visibility: 'private', publishedAt: null });
@@ -898,6 +912,16 @@ const shareUrl = profile?.id || profileId
       return;
     }
     if (action === 'edit-published-content') {
+      const tripDocForPublish = {
+        ...trip,
+        _id: trip.id ?? trip._id,
+        collaborators: trip.collaborators,
+        creator: trip.creator,
+      };
+      if (!canUserPublishItinerary(user, tripDocForPublish)) {
+        toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+        return;
+      }
       try {
         const full = await fetchItineraryById(trip.id);
         setPublishTarget({ itinerary: full, initialStep: 1, mode: 'edit' });

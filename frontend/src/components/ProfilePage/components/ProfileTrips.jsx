@@ -3,6 +3,7 @@ import { mapItineraryToTripRow } from '../../Dashboard/lib/dashboardTripUtils';
 
 export default function ProfileTrips({
   isSelf,
+  user,
   trips,
   openOwnerMenuId,
   openStatusDropdownId,
@@ -30,6 +31,7 @@ export default function ProfileTrips({
             return (
               <DashboardTripCard
                 key={row.id}
+                user={user}
                 trip={row}
                 tripStatuses={tripStatuses}
                 openOwnerMenuId={isSelf ? openOwnerMenuId : null}

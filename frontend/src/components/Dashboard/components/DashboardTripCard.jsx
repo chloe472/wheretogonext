@@ -1,9 +1,11 @@
 import { ChevronDown, MoreVertical } from 'lucide-react';
 import { applyImageFallback } from '../../../lib/imageFallback';
 import { resolveDashboardTripImage, getTripDestinationQuery, getStatusClass, TRIP_STATUS_OPTIONS } from '../lib/dashboardTripUtils';
+import { canUserPublishItinerary, PUBLISH_TO_EXPLORE_DISABLED_HINT } from '../../TripDetailsPage/lib/tripCollaborationAccess';
 import './DashboardTripCard.css';
 
 export default function DashboardTripCard({
+  user,
   trip,
   tripStatuses,
   openOwnerMenuId,
@@ -18,6 +20,7 @@ export default function DashboardTripCard({
   onOpenTrip,
 }) {
   const resolvedStatus = tripStatuses[trip.id] ?? trip.status;
+  const canPublish = canUserPublishItinerary(user, trip.raw);
 
   return (
     <li
@@ -84,8 +87,11 @@ export default function DashboardTripCard({
                 type="button"
                 role="menuitem"
                 className="trip-card__owner-option"
+                disabled={!canPublish}
+                title={!canPublish ? PUBLISH_TO_EXPLORE_DISABLED_HINT : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!canPublish) return;
                   setOpenOwnerMenuId(null);
                   handleItineraryOwnerMenu(trip.raw, 'publish');
                 }}
@@ -109,8 +115,11 @@ export default function DashboardTripCard({
                   type="button"
                   role="menuitem"
                   className="trip-card__owner-option"
+                  disabled={!canPublish}
+                  title={!canPublish ? PUBLISH_TO_EXPLORE_DISABLED_HINT : undefined}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canPublish) return;
                     setOpenOwnerMenuId(null);
                     handleItineraryOwnerMenu(trip.raw, 'edit-published-content');
                   }}

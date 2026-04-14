@@ -120,6 +120,8 @@ import {
   isCurrentUserTripCollaborator,
   getCurrentUserCollaboratorRole,
   collaboratorRoleForApi,
+  canUserPublishItinerary,
+  PUBLISH_TO_EXPLORE_DISABLED_HINT,
 } from './lib/tripCollaborationAccess';
 import { TripAccessContext } from './lib/TripAccessContext';
 
@@ -535,6 +537,10 @@ export default function TripDetailsPage({ user, onLogout }) {
 
   const handlePublishTrip = useCallback(async () => {
     if (!serverItinerary?._id) return;
+    if (!canUserPublishItinerary(user, serverItinerary)) {
+      toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+      return;
+    }
     if (serverItinerary?.published && serverItinerary?.visibility === 'public') {
       try {
         const updated = await updateItinerary(String(serverItinerary._id), {
@@ -555,16 +561,20 @@ export default function TripDetailsPage({ user, onLogout }) {
       initialStep: 1,
       mode: 'publish',
     });
-  }, [serverItinerary, setServerItinerary]);
+  }, [user, serverItinerary, setServerItinerary]);
 
   const handleEditPublishedContent = useCallback(() => {
     if (!serverItinerary?._id) return;
+    if (!canUserPublishItinerary(user, serverItinerary)) {
+      toast.error(PUBLISH_TO_EXPLORE_DISABLED_HINT);
+      return;
+    }
     setPublishTarget({
       itinerary: serverItinerary,
       initialStep: 1,
       mode: 'edit',
     });
-  }, [serverItinerary]);
+  }, [user, serverItinerary]);
 
   const handleSetCoverPage = useCallback(() => {
     if (!serverItinerary?._id) return;
@@ -675,7 +685,8 @@ export default function TripDetailsPage({ user, onLogout }) {
       !isCreator &&
       (collaboratorRole === 'viewer' ||
         (linkAnyone && linkPerm === 'viewer' && !isInvitedCollaborator));
-    return { userId, creatorId, isCreator, collaboratorRole, readOnly };
+    const canPublish = isCreator || collaboratorRole === 'editor';
+    return { userId, creatorId, isCreator, collaboratorRole, readOnly, canPublish };
   }, [user, serverItinerary]);
 
   const serverDayTitles = useMemo(
@@ -1272,7 +1283,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   }
 
   return (
-    <TripAccessContext.Provider value={{ readOnly }}>
+    <TripAccessContext.Provider value={{ readOnly, canPublish: accessInfo.canPublish }}>
     <div className="trip-details">
       <TripDetailsPageLayout
         trip={trip}

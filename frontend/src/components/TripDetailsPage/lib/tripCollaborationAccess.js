@@ -45,3 +45,21 @@ export function isCurrentUserTripCollaborator(user, collaborators) {
     return false;
   });
 }
+
+/** Shown when Publish / Make private / Edit published is disabled (viewers, link-only editors, etc.). */
+export const PUBLISH_TO_EXPLORE_DISABLED_HINT =
+  'Only the trip owner or an editor collaborator can publish to Explore. Duplicate this trip to publish your own copy.';
+
+/**
+ * Matches backend: owner or invited collaborator with editor role (not link-only “anyone” editors).
+ * @param {object} user
+ * @param {object} itineraryDoc itinerary-like object with creator + collaborators
+ */
+export function canUserPublishItinerary(user, itineraryDoc = {}) {
+  const userId = String(user?.id || user?._id || '').trim();
+  const creatorId = normalizeId(
+    itineraryDoc?.creator?._id ?? itineraryDoc?.creator?.id ?? itineraryDoc?.creator,
+  );
+  if (userId && creatorId && userId === creatorId) return true;
+  return getCurrentUserCollaboratorRole(user, itineraryDoc.collaborators) === 'editor';
+}

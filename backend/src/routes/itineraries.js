@@ -1255,7 +1255,8 @@ router.put('/:id', requireAuth, async (req, res) => {
     } else if (placesDerivedFromTripExpense || body.places != null) {
       existing.days = computeDaysFromPlaces(existing.places);
     }
-    if (isCreator) {
+    const canManagePublishState = isCreator || isCollaboratorEditor;
+    if (canManagePublishState) {
       if (body.published != null) existing.published = Boolean(body.published);
       if (body.visibility === 'public' || body.visibility === 'private') {
         existing.visibility = body.visibility;
@@ -1389,8 +1390,12 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'Itinerary not found' });
     }
-    if (String(existing.creator) !== req.userId) {
-      return res.status(403).json({ error: 'Not allowed to publish this itinerary' });
+    const isCreator = String(existing.creator) === req.userId;
+    const isEditorCollaborator = !isCreator && (await isCollaboratorEditorUser(req.userId, existing));
+    if (!isCreator && !isEditorCollaborator) {
+      return res.status(403).json({
+        error: 'Only the owner or an editor collaborator can publish this itinerary',
+      });
     }
 
     const wasPublic = Boolean(existing.published && existing.visibility === 'public');

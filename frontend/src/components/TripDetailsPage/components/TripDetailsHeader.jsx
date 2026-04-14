@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTripAccess } from '../lib/TripAccessContext';
+import { PUBLISH_TO_EXPLORE_DISABLED_HINT } from '../lib/tripCollaborationAccess';
 import {
   BookOpen,
   Calendar as CalendarIcon,
@@ -47,7 +48,7 @@ export default function TripDetailsHeader({
   setViewMode,
 }) {
   const navigate = useNavigate();
-  const { readOnly } = useTripAccess();
+  const { readOnly, canPublish } = useTripAccess();
   const routeSummary = buildTripRouteSummary(trip?.destination, trip?.locations);
 
   return (
@@ -144,7 +145,10 @@ export default function TripDetailsHeader({
                           type="button"
                           className="trip-details__title-dropdown-item"
                           role="menuitem"
+                          disabled={!canPublish}
+                          title={!canPublish ? PUBLISH_TO_EXPLORE_DISABLED_HINT : undefined}
                           onClick={() => {
+                            if (!canPublish) return;
                             setTitleDropdownOpen(false);
                             onPublishTrip?.();
                           }}
@@ -170,7 +174,10 @@ export default function TripDetailsHeader({
                           type="button"
                           className="trip-details__title-dropdown-item"
                           role="menuitem"
+                          disabled={!canPublish}
+                          title={!canPublish ? PUBLISH_TO_EXPLORE_DISABLED_HINT : undefined}
                           onClick={() => {
+                            if (!canPublish) return;
                             setTitleDropdownOpen(false);
                             onEditPublishedContent?.();
                           }}

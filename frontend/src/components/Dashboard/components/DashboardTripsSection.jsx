@@ -7,6 +7,7 @@ import './DashboardTripsSection.css';
 const TRIPS_PER_PAGE = 9;
 
 export default function DashboardTripsSection({
+  user,
   tripFilter,
   setTripFilter,
   openTripFilterDropdown,
@@ -107,6 +108,7 @@ export default function DashboardTripsSection({
         {!myTripsLoading && paginatedTrips.map((trip) => (
           <DashboardTripCard
             key={trip.id}
+            user={user}
             trip={trip}
             tripStatuses={tripStatuses}
             openOwnerMenuId={openOwnerMenuId}
