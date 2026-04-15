@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { updateItinerary } from '../../../api/itinerariesApi';
+import { mergeItineraryFromApi } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsNotes({
   tripId,
@@ -23,7 +24,7 @@ export function useTripDetailsNotes({
         generalAttachments,
         overview: generalNotes,
       });
-      if (updated) setServerItinerary(updated);
+      if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
       toast.success('General notes saved', { id: 'trip-notes-saved' });
     } catch (e) {
       console.error('Failed to save general notes/documents', e);
@@ -39,7 +40,7 @@ export function useTripDetailsNotes({
     try {
       skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
       const updated = await updateItinerary(tripId, { tripExpenseItems });
-      if (updated) setServerItinerary(updated);
+      if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
       toast.success(`${dayLabel} notes saved`, { id: 'trip-day-notes-saved' });
     } catch (e) {
       console.error('Failed to save day notes/documents', e);

@@ -111,6 +111,7 @@ import {
   isStayItem,
   itemSpillsIntoNextDay,
   itineraryDocToTrip,
+  mergeItineraryFromApi,
   parseDurationTextToMinutes,
   parseFoodHours,
   rangesOverlap,
@@ -231,6 +232,7 @@ export default function TripDetailsPage({ user, onLogout }) {
   const tripDatePersistKeyRef = useRef('');
   
   const expensePersistCountByTripRef = useRef({ tripId: null, count: 0 });
+  const kanbanReorderUndoStackRef = useRef([]);
   const [transportModeBySegment, setTransportModeBySegment] = useState({});
   const [openTravelDropdownKey, setOpenTravelDropdownKey] = useState(null);
   const [publicTransportModalOpen, setPublicTransportModalOpen] = useState(false);
@@ -548,7 +550,7 @@ export default function TripDetailsPage({ user, onLogout }) {
           visibility: 'private',
           publishedAt: null,
         });
-        setServerItinerary(updated);
+        setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
         toast.success('Trip moved to private');
       } catch (error) {
         toast.error(error?.message || 'Could not make this trip private.');
@@ -598,7 +600,7 @@ export default function TripDetailsPage({ user, onLogout }) {
     if (!serverItinerary?._id) return;
     try {
       const updated = await fetchItineraryById(String(serverItinerary._id));
-      setServerItinerary(updated);
+      setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
     } catch (error) {
       toast.error(error?.message || 'Trip updated, but it could not be reloaded.');
     }
@@ -730,6 +732,50 @@ export default function TripDetailsPage({ user, onLogout }) {
     };
   }, [accessInfo.readOnly, dayTitles, normalizeDayTitles, serverDayTitles, setServerItinerary, showInAppNotice, tripId]);
 
+  useEffect(() => {
+    if (accessInfo.readOnly) return undefined;
+
+    const isEditableTarget = (el) => {
+      if (!el) return false;
+      const tag = String(el.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      return Boolean(el.isContentEditable);
+    };
+
+    const onKeyDown = (e) => {
+      const key = String(e?.key || '').toLowerCase();
+      const wantsUndo = (e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && !e.altKey;
+      if (!wantsUndo) return;
+      if (isEditableTarget(e.target)) return;
+
+      const stack = kanbanReorderUndoStackRef.current;
+      if (!Array.isArray(stack) || stack.length === 0) return;
+      e.preventDefault();
+
+      const snapshot = stack.pop();
+      if (!snapshot) return;
+
+      skipExpenseSaveToastUntilRef.current = Date.now() + 4000;
+      setTripExpenseItems(snapshot.tripExpenseItems || []);
+      setDayTitles(snapshot.dayTitles || {});
+      setDayColors(snapshot.dayColors || {});
+      setDayColumnWidths(snapshot.dayColumnWidths || {});
+      setMapDayFilterSelected(snapshot.mapDayFilterSelected || []);
+      showInAppNotice('Undid day reorder.', 'success');
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    accessInfo.readOnly,
+    setTripExpenseItems,
+    setDayTitles,
+    setDayColors,
+    setDayColumnWidths,
+    setMapDayFilterSelected,
+    showInAppNotice,
+  ]);
+
   const reorderKanbanDays = useCallback((sourceDayNum, targetDayNum) => {
     const fromDayNum = Number(sourceDayNum);
     const toDayNum = Number(targetDayNum);
@@ -738,6 +784,17 @@ export default function TripDetailsPage({ user, onLogout }) {
     const sourceIndex = days.findIndex((day) => Number(day.dayNum) === fromDayNum);
     const targetIndex = days.findIndex((day) => Number(day.dayNum) === toDayNum);
     if (sourceIndex < 0 || targetIndex < 0) return;
+
+    kanbanReorderUndoStackRef.current = [
+      ...(Array.isArray(kanbanReorderUndoStackRef.current) ? kanbanReorderUndoStackRef.current : []).slice(-19),
+      {
+        tripExpenseItems: Array.isArray(tripExpenseItems) ? tripExpenseItems : [],
+        dayTitles: dayTitles && typeof dayTitles === 'object' ? dayTitles : {},
+        dayColors: dayColors && typeof dayColors === 'object' ? dayColors : {},
+        dayColumnWidths: dayColumnWidths && typeof dayColumnWidths === 'object' ? dayColumnWidths : {},
+        mapDayFilterSelected: Array.isArray(mapDayFilterSelected) ? mapDayFilterSelected : [],
+      },
+    ];
 
     const orderedDates = days.map((day) => day.date);
     const moveArrayItem = (list, fromIndex, toIndex) => {
@@ -787,7 +844,20 @@ export default function TripDetailsPage({ user, onLogout }) {
     });
 
     showInAppNotice(`Moved Day ${fromDayNum} to position ${toDayNum}.`, 'success');
-  }, [days, setDayTitles, setDayColors, setDayColumnWidths, setMapDayFilterSelected, setTripExpenseItems, showInAppNotice]);
+  }, [
+    days,
+    tripExpenseItems,
+    dayTitles,
+    dayColors,
+    dayColumnWidths,
+    mapDayFilterSelected,
+    setDayTitles,
+    setDayColors,
+    setDayColumnWidths,
+    setMapDayFilterSelected,
+    setTripExpenseItems,
+    showInAppNotice,
+  ]);
 
   const handleKanbanDayDragStart = useCallback((dayNum) => {
     setKanbanDraggingDayNum(dayNum);
@@ -1215,7 +1285,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         destination: merged.destination,
         locations: merged.locations,
       });
-      if (updated) setServerItinerary(updated);
+      if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
       setLocationUpdateKey((k) => k + 1);
       toast.success(`Added ${raw.split(',')[0].trim()} to your destinations`);
     } catch (e) {
@@ -1422,7 +1492,7 @@ export default function TripDetailsPage({ user, onLogout }) {
         itinerary={coverImageTarget}
         onClose={() => setCoverImageTarget(null)}
         onSaved={(updated) => {
-          setServerItinerary(updated);
+          setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
         }}
       />
 

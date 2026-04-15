@@ -394,6 +394,11 @@
   cursor: pointer;
 }
 
+a.publish-modal__btn {
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
 .publish-modal__btn--ghost {
   background: transparent;
   color: #57534e;
@@ -441,8 +446,24 @@
 }
 
 .publish-modal__success-text {
-  margin: 0 0 1.25rem;
+  margin: 0 0 0.5rem;
   font-size: 1rem;
   font-weight: 600;
   color: #292524;
+}
+
+.publish-modal__success-hint {
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #57534e;
+}
+
+.publish-modal__success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }

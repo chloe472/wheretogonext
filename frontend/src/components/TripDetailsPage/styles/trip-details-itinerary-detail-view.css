@@ -180,6 +180,31 @@
   font-weight: 600;
 }
 
+.trip-details__itinerary-detail-place-footer {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.trip-details__itinerary-detail-place-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--place-accent, #5c4a3d);
+  background: var(--place-accent, #5c4a3d);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.trip-details__itinerary-detail-place-add:hover {
+  opacity: 0.92;
+}
+
 .trip-details__place-detail-header {
   padding: 1rem 1.25rem;
   flex-shrink: 0;

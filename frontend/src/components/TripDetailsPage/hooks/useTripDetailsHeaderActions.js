@@ -5,6 +5,7 @@ import {
   buildWhereDefaultCityDayRanges,
   getTripDayCount,
   getWhereLocationKey,
+  mergeItineraryFromApi,
 } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsHeaderActions({
@@ -30,7 +31,7 @@ export function useTripDetailsHeaderActions({
     async (trimmedTitle) => {
       try {
         const updated = await updateItinerary(tripId, { title: trimmedTitle });
-        if (updated) setServerItinerary(updated);
+        if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
         setTitleDisplay(trimmedTitle);
         toast.success('Changes saved', { id: 'trip-details-saved' });
       } catch (e) {

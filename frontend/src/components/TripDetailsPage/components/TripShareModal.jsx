@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { ChevronDown, Globe, X } from 'lucide-react';
 import { resolveImageUrl, applyImageFallback } from '../../../lib/imageFallback';
@@ -17,13 +18,67 @@ function isMe(meId, meEmail, rowUserId, rowEmail) {
   return Boolean(a && b && a === b);
 }
 
-function OptionDropdown({ value, onChange, disabled, labels, ariaLabel = 'Options' }) {
+function OptionDropdown({
+  value,
+  onChange,
+  disabled,
+  labels,
+  ariaLabel = 'Options',
+  /** When "right", menu aligns to the trigger's right edge (collaborator rows). */
+  menuAlign = 'left',
+}) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: null, right: null, minWidth: 140 });
+  const buttonRef = useRef(null);
+  const menuPortalRef = useRef(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const minW = Math.max(140, rect.width);
+    const alignRight = menuAlign === 'right';
+    const base = {
+      minWidth: minW,
+      left: alignRight ? null : rect.left,
+      right: alignRight ? window.innerWidth - rect.right : null,
+    };
+    let top = rect.bottom + 6;
+    const menuEl = menuPortalRef.current;
+    const h = menuEl?.offsetHeight ?? 88;
+    if (top + h > window.innerHeight - 10) {
+      top = Math.max(10, rect.top - h - 6);
+    }
+    setMenuPos({ top, ...base });
+  }, [menuAlign]);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    updateMenuPosition();
+    let cancelled = false;
+    const rafOuter = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) updateMenuPosition();
+      });
+    });
+
+    const onReposition = () => updateMenuPosition();
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafOuter);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+  }, [open, updateMenuPosition, value]);
 
   useEffect(() => {
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      const inBtn = buttonRef.current?.contains(e.target);
+      const inMenu = menuPortalRef.current?.contains(e.target);
+      if (!inBtn && !inMenu) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -33,9 +88,45 @@ function OptionDropdown({ value, onChange, disabled, labels, ariaLabel = 'Option
     return <span className="trip-share__role-static">{labels[value] ?? value}</span>;
   }
 
+  const menu = open
+    ? createPortal(
+      <div
+        ref={menuPortalRef}
+        className="dashboard__filter-menu dashboard__filter-menu--fixed-portal"
+        style={{
+          position: 'fixed',
+          top: menuPos.top,
+          left: menuPos.left != null ? menuPos.left : 'auto',
+          right: menuPos.right != null ? menuPos.right : 'auto',
+          minWidth: menuPos.minWidth,
+          marginTop: 0,
+          zIndex: 10050,
+        }}
+        role="listbox"
+        aria-label={ariaLabel}
+      >
+        {Object.entries(labels).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="option"
+            aria-selected={value === key}
+            className={`dashboard__filter-option${value === key ? ' dashboard__filter-option--active' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onChange(key); setOpen(false); }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>,
+      document.body,
+    )
+    : null;
+
   return (
-    <div className="dashboard__filter-dropdown" ref={ref}>
+    <div className="dashboard__filter-dropdown">
       <button
+        ref={buttonRef}
         type="button"
         className={`dashboard__filter-btn${open ? ' dashboard__filter-btn--open' : ''}`}
         onClick={() => setOpen((o) => !o)}
@@ -46,23 +137,7 @@ function OptionDropdown({ value, onChange, disabled, labels, ariaLabel = 'Option
         <span className="dashboard__filter-btn-text">{labels[value] ?? value}</span>
         <ChevronDown size={14} className="dashboard__filter-chevron" aria-hidden />
       </button>
-      {open && (
-        <div className="dashboard__filter-menu" role="listbox" aria-label={ariaLabel}>
-          {Object.entries(labels).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="option"
-              aria-selected={value === key}
-              className={`dashboard__filter-option${value === key ? ' dashboard__filter-option--active' : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(key); setOpen(false); }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {menu}
     </div>
   );
 }
@@ -511,6 +586,7 @@ export default function TripShareModal({
                         value={currentRole}
                         onChange={(role) => setPendingRoles((prev) => ({ ...prev, [userId]: role }))}
                         disabled={roleControlsDisabled}
+                        menuAlign="right"
                       />
                       {!lockAccess && !readOnly && (
                         <button

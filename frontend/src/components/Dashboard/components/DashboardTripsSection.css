@@ -92,6 +92,25 @@
   z-index: 100;
 }
 
+/* Rendered via portal on document.body — --dash-* tokens are often undefined there */
+.dashboard__filter-menu--fixed-portal {
+  background: var(--dash-surface, var(--wtg-surface, #faf8f5));
+  border: 1px solid var(--dash-border, var(--wtg-border, #d4c4b0));
+  box-shadow: 0 10px 28px rgba(61, 52, 40, 0.18);
+}
+
+.dashboard__filter-menu--fixed-portal .dashboard__filter-option {
+  color: var(--dash-text, var(--wtg-text, #3d3428));
+}
+
+.dashboard__filter-menu--fixed-portal .dashboard__filter-option:hover {
+  background: var(--dash-hover, var(--wtg-hover, #e8e0d5));
+}
+
+.dashboard__filter-menu--fixed-portal .dashboard__filter-option--active {
+  color: var(--dash-text, var(--wtg-text, #3d3428));
+}
+
 .dashboard__filter-option {
   display: flex;
   align-items: center;

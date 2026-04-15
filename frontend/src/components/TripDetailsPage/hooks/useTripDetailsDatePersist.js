@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { updateItinerary } from '../../../api/itinerariesApi';
-import { getTripDaysFromTrip } from '../lib/tripDetailsPageHelpers';
+import { getTripDaysFromTrip, mergeItineraryFromApi } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsDatePersist({
   tripId,
@@ -29,7 +29,7 @@ export function useTripDetailsDatePersist({
           days: computedDays,
         });
         if (cancelled) return;
-        if (updated) setServerItinerary(updated);
+        if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
       } catch (e) {
         if (cancelled) return;
         console.error('Failed to save trip date range', e);

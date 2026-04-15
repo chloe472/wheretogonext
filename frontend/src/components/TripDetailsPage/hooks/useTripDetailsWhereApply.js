@@ -9,6 +9,7 @@ import {
   getWhereLocationLabel,
   getWhereLocationKey,
   isCityWhereLocation,
+  mergeItineraryFromApi,
 } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsWhereApply({
@@ -106,7 +107,7 @@ export function useTripDetailsWhereApply({
           locations: routeSummary.displayLocations || locationsStr,
           citySegments,
         });
-        if (updated) setServerItinerary(updated);
+        if (updated) setServerItinerary((prev) => mergeItineraryFromApi(prev, updated));
         setLocationUpdateKey((prev) => prev + 1);
         toast.success('Changes saved', { id: 'trip-details-saved' });
       } catch (e) {

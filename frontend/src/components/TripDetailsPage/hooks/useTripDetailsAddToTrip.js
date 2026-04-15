@@ -17,6 +17,7 @@ import {
   normalizeAttachment,
   normalizeExternalUrl,
   parseDateTimeLocal,
+  resolveSmartDurationMinutes,
 } from '../lib/tripDetailsPageHelpers';
 
 export function useTripDetailsAddToTrip({
@@ -182,12 +183,19 @@ export function useTripDetailsAddToTrip({
       reviewCount: marker.reviewCount,
     };
 
-    const preferredDayNum = markerType === 'food'
-      ? addFoodDay
-      : addPlacesDay;
+    const markerAddDay = Number(marker.addToTripDayNum);
+    const hasSmartItineraryDay = Number.isFinite(markerAddDay) && markerAddDay > 0;
+    const preferredDayNum = hasSmartItineraryDay
+      ? markerAddDay
+      : (markerType === 'food' ? addFoodDay : addPlacesDay);
     const day = days.find((d) => d.dayNum === preferredDayNum) || days.find((d) => d.dayNum === 1);
     const selectedDate = day?.date || days[0]?.date || '';
-    const sourceDurationMins = 60;
+    const sourceDurationMins = Math.max(
+      30,
+      Number(data?.durationMinutes)
+      || Number(data?.durationMinsTotal)
+      || resolveSmartDurationMinutes(data),
+    );
     const sourceDurationParts = durationMinutesToParts(sourceDurationMins);
 
     setAddToTripItem({ type, data, categoryId, category, Icon });

@@ -17,8 +17,10 @@ import TripMap from '../../TripMap/TripMap';
 import TripDetailsFilterDropdown from './TripDetailsFilterDropdown';
 import {
   distanceBetween,
+  durationMinutesToParts,
   getDefaultStartTimeForDate,
   PLACE_SORT_OPTIONS,
+  resolveSmartDurationMinutes,
 } from '../lib/tripDetailsPageHelpers';
 
 export default function TripDetailsAddPlacesModal({
@@ -82,6 +84,39 @@ export default function TripDetailsAddPlacesModal({
     applyImageFallback(event);
   };
 
+  const openAddToTripFromBrowseOrSmartPlace = (place) => {
+    if (!place) return;
+    const dayNumValue = Number(place?.dayNum);
+    const dayRow = Number.isFinite(dayNumValue) && dayNumValue > 0
+      ? days.find((d) => d.dayNum === dayNumValue)
+      : days.find((d) => d.dayNum === addPlacesDay);
+    const selectedDate = dayRow?.date || days[0]?.date || '';
+    const smartItemType = String(place.itemType || '').toLowerCase() === 'food' ? 'food' : 'place';
+    const sourceDurationMins = Math.max(
+      30,
+      Number(place?.durationMinutes)
+      || Number(place?.durationMinsTotal)
+      || resolveSmartDurationMinutes(place),
+    );
+    const durationParts = durationMinutesToParts(sourceDurationMins);
+    setAddToTripItem({
+      type: smartItemType,
+      data: place,
+      categoryId: smartItemType === 'food' ? 'food' : 'places',
+      category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
+      Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
+    });
+    setAddToTripDate(selectedDate);
+    setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00', sourceDurationMins));
+    setAddToTripDurationHrs(String(durationParts.durationHrs));
+    setAddToTripDurationMins(String(durationParts.durationMins));
+    setAddToTripNotes('');
+    setAddToTripCost('');
+    setAddToTripExternalLink(place.website || '');
+    setAddToTripTravelDocs([]);
+    setAddToTripModalOpen(true);
+  };
+
 const showingPlaceDetail = placeDetailsView != null;
 const showingItineraryDetail = itineraryDetailsView != null;
 const showingAnyDetail = showingPlaceDetail || showingItineraryDetail;
@@ -138,21 +173,25 @@ const mapPlaces = showingPlaceDetail && detailPlace
     : filteredPlaces;
 const addPlacesMarkers = mapPlaces
   .filter((p) => p.lat != null && p.lng != null)
-  .map((p, i) => ({
-    id: p.id,
-    sourceId: p.id,
-    markerType: String(p.itemType || '').toLowerCase() === 'food' ? 'food' : 'place',
-    name: p.name,
-    lat: p.lat,
-    lng: p.lng,
-    dayNum: Number(p.dayNum) > 0 ? Number(p.dayNum) : (i % Math.max(days.length, 1)) + 1,
-    address: p.address || cityQuery,
-    rating: p.rating,
-    reviewCount: p.reviewCount,
-    image: p.image,
-    website: p.website,
-    originalData: p,
-  }));
+  .map((p, i) => {
+    const markerDayNum = Number(p.dayNum) > 0 ? Number(p.dayNum) : (i % Math.max(days.length, 1)) + 1;
+    return {
+      id: p.id,
+      sourceId: p.id,
+      markerType: String(p.itemType || '').toLowerCase() === 'food' ? 'food' : 'place',
+      name: p.name,
+      lat: p.lat,
+      lng: p.lng,
+      dayNum: markerDayNum,
+      addToTripDayNum: showingItineraryDetail && Number(p.dayNum) > 0 ? Number(p.dayNum) : null,
+      address: p.address || cityQuery,
+      rating: p.rating,
+      reviewCount: p.reviewCount,
+      image: p.image,
+      website: p.website,
+      originalData: p,
+    };
+  });
 const firstItineraryPlaceWithCoords = itineraryPlaces.find((place) => place.lat != null && place.lng != null);
 const mapCenterDetail = detailPlace && detailPlace.lat != null
   ? [detailPlace.lat, detailPlace.lng]
@@ -242,6 +281,18 @@ return (
                           </div>
                           <div className="trip-details__itinerary-detail-place-note">
                             {place.overview || 'Suggested stop from this smart itinerary.'}
+                          </div>
+                          <div className="trip-details__itinerary-detail-place-footer">
+                            <button
+                              type="button"
+                              className="trip-details__itinerary-detail-place-add"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAddToTripFromBrowseOrSmartPlace(place);
+                              }}
+                            >
+                              Add to trip
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -492,27 +543,7 @@ return (
                     <button
                       type="button"
                       className="trip-details__place-detail-add-btn"
-                      onClick={() => {
-                        const day = days.find((d) => d.dayNum === addPlacesDay);
-                        const selectedDate = day?.date || days[0]?.date || '';
-                        const smartItemType = String(detailPlace.itemType || '').toLowerCase() === 'food' ? 'food' : 'place';
-                        setAddToTripItem({
-                          type: smartItemType,
-                          data: detailPlace,
-                          categoryId: smartItemType === 'food' ? 'food' : 'places',
-                          category: smartItemType === 'food' ? 'Food & Beverage' : 'Places',
-                          Icon: smartItemType === 'food' ? UtensilsCrossed : Camera,
-                        });
-                        setAddToTripDate(selectedDate);
-                        setAddToTripStartTime(getDefaultStartTimeForDate(tripExpenseItems, selectedDate, '07:00'));
-                        setAddToTripDurationHrs('1');
-                        setAddToTripDurationMins('0');
-                        setAddToTripNotes('');
-                        setAddToTripCost('');
-                        setAddToTripExternalLink(detailPlace.website || '');
-                        setAddToTripTravelDocs([]);
-                        setAddToTripModalOpen(true);
-                      }}
+                      onClick={() => openAddToTripFromBrowseOrSmartPlace(detailPlace)}
                     >
                       Add to trip
                     </button>

@@ -195,6 +195,7 @@ export async function fetchPublicItineraries(params = {}, signal) {
 export async function fetchItineraryById(id, signal) {
   const res = await fetch(`${apiUrl('/api/itineraries')}/${encodeURIComponent(id)}`, {
     signal,
+    cache: 'no-store',
     headers: authHeaders(),
   });
   if (!res.ok) {

@@ -26,14 +26,28 @@ export function getTripDaysFromTrip(trip) {
   return days;
 }
 
+/**
+ * Merges a partial itinerary payload from the API into previous state.
+ * If the response omits tripExpenseItems or places (undefined), keep prior values
+ * so we never treat a partial JSON body as an intentional empty itinerary.
+ */
+export function mergeItineraryFromApi(prev, next) {
+  if (!next) return prev;
+  if (!prev) return next;
+  const merged = { ...prev, ...next };
+  if (next.tripExpenseItems === undefined) merged.tripExpenseItems = prev.tripExpenseItems;
+  if (next.places === undefined) merged.places = prev.places;
+  return merged;
+}
+
 export function itineraryDocToTrip(doc) {
   if (!doc) return null;
   const id = String(doc._id ?? doc.id ?? '');
-  return {
-    ...doc,
-    id,
-    tripExpenseItems: Array.isArray(doc.tripExpenseItems) ? doc.tripExpenseItems : [],
-  };
+  const out = { ...doc, id };
+  if (!Array.isArray(out.tripExpenseItems)) {
+    delete out.tripExpenseItems;
+  }
+  return out;
 }
 export const FOOD_FILTER_OPTIONS = [
   'All',

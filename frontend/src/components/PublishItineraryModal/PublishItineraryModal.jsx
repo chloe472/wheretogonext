@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { X, Check, Loader2, ImagePlus, MoreVertical } from 'lucide-react';
 import { publishItinerary, uploadItineraryImage } from '../../api/itinerariesApi';
@@ -334,6 +335,9 @@ export default function PublishItineraryModal({
     ? (isEditMode ? 'Updated' : 'Published')
     : (isEditMode ? 'Edit Published Content' : 'Publish To Community');
   const successText = isEditMode ? 'Your published itinerary is updated.' : 'Your itinerary is live.';
+  const successHint = 'You can open its public page anytime to see how it looks.';
+  const publishedItineraryId = String(itinerary?._id || itinerary?.id || '').trim();
+  const viewItineraryTo = publishedItineraryId ? `/itineraries/${publishedItineraryId}` : '';
   const submitLabel = isEditMode ? 'Save changes' : 'Publish';
 
   return (
@@ -390,9 +394,18 @@ export default function PublishItineraryModal({
               <Check size={40} strokeWidth={3} />
             </div>
             <p className="publish-modal__success-text">{successText}</p>
-            <button type="button" className="publish-modal__btn publish-modal__btn--primary" onClick={onClose}>
-              Done
-            </button>
+            <p className="publish-modal__success-hint">{successHint}</p>
+            <div className="publish-modal__success-actions">
+              {viewItineraryTo ? (
+                <Link
+                  to={viewItineraryTo}
+                  className="publish-modal__btn publish-modal__btn--primary"
+                  onClick={onClose}
+                >
+                  View itinerary
+                </Link>
+              ) : null}
+            </div>
           </div>
         ) : (
           <>
