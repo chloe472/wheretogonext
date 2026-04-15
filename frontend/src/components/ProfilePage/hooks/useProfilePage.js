@@ -640,8 +640,12 @@ const shareUrl = profile?.id || profileId
       return;
     }
     try {
+      const matchedReq = requests.find((r) => String(r.id || '') === String(resolvedId));
       await acceptFriendRequest(resolvedId);
-      const friendName = profile?.name || 'this traveler';
+      const friendName = matchedReq?.from?.name
+        || matchedReq?.from?.email
+        || profile?.name
+        || 'this traveler';
       toast.success(`You're now friends with ${friendName}.`);
       await Promise.all([refreshProfile(), refreshRequests()]);
     } catch (err) {
@@ -666,6 +670,7 @@ const shareUrl = profile?.id || profileId
       if (isFriend) {
         await removeFriend(profile.id);
         await refreshProfile();
+        toast.success('Friend successfully removed.');
       } else if (requestStatus === 'outgoing') {
         await removeFriend(profile.id);
         await Promise.all([refreshProfile(), refreshRequests()]);
@@ -1000,6 +1005,7 @@ const shareUrl = profile?.id || profileId
     try {
       await removeFriend(friendId);
       await refreshProfile();
+      toast.success('Friend successfully removed.');
     } catch (err) {
       setErrorMsg(err?.message || 'Could not remove friend.');
     }
