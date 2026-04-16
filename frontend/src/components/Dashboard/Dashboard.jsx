@@ -283,11 +283,33 @@ export default function Dashboard({ user, onLogout }) {
         loading={shareLoading}
         friends={shareFriends}
         collaborators={shareItinerary?.collaborators || []}
+        owner={shareItinerary?.creator}
+        currentUserId={String(user?.id || user?._id || '')}
+        currentUserEmail={user?.email || ''}
         onClose={() => setShareModalOpen(false)}
         onShareWithFriend={(friend) => handleShareSendToFriends([friend.id], { [friend.id]: 'viewer' })}
         onInviteByEmail={handleShareInviteByEmail}
         onInviteByUser={handleShareInviteByUser}
         onSearchUsers={searchUsers}
+        onSaveCollaboratorRoles={async (pendingRoles) => {
+          const currentCollabs = Array.isArray(shareItinerary?.collaborators) ? shareItinerary.collaborators : [];
+          for (const [userId, role] of Object.entries(pendingRoles || {})) {
+            const collab = currentCollabs.find(
+              (entry) => String(entry?.user?.id || entry?.userId || '') === String(userId)
+            );
+            if (!collab) continue;
+            if ((collab?.role || 'viewer') === role) continue;
+            await handleShareUpdateCollaborator(collab, role);
+          }
+        }}
+        onRemoveCollaborator={async (userId) => {
+          const currentCollabs = Array.isArray(shareItinerary?.collaborators) ? shareItinerary.collaborators : [];
+          const collab = currentCollabs.find(
+            (entry) => String(entry?.user?.id || entry?.userId || '') === String(userId)
+          );
+          if (!collab) throw new Error('Collaborator not found.');
+          await handleShareRemoveCollaborator(collab);
+        }}
         onCopy={handleShareCopyLink}
       />
     </div>

@@ -52,15 +52,28 @@ function dedupeFilterFromPayload(payload) {
 async function createNotificationDeduped(payload) {
   const filter = dedupeFilterFromPayload(payload);
   if (filter) {
-    const exists = await Notification.findOne(filter).lean();
+    const exists = await Notification.findOne(filter).select('_id recipient').lean();
     if (exists?._id) {
-      const populated = await Notification.findById(exists._id)
+      const updated = await Notification.findByIdAndUpdate(
+        exists._id,
+        {
+          $set: {
+            actor: payload.actor || null,
+            title: payload.title,
+            message: payload.message,
+            link: payload.link,
+            meta: payload.meta || {},
+            readAt: null,
+          },
+        },
+        { new: true }
+      )
         .populate('actor', 'name picture')
         .lean();
-      if (populated) {
-        pushToUser(String(populated.recipient), 'notification', serializeNotification(populated));
+      if (updated) {
+        pushToUser(String(updated.recipient), 'notification', serializeNotification(updated));
       }
-      return null;
+      return updated;
     }
   }
   const doc = await Notification.create(payload);

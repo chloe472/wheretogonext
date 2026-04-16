@@ -27,7 +27,7 @@ router.get('/', requireAuth, async (req, res) => {
 
     const [rows, unreadCount] = await Promise.all([
       Notification.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ updatedAt: -1, createdAt: -1 })
         .limit(limit)
         .populate('actor', 'name picture')
         .lean(),

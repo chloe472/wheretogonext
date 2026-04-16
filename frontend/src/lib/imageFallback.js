@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '../api/apiConfig.js';
+
 function normalizeHint(value = '') {
   return String(value || '').trim();
 }
@@ -18,11 +20,11 @@ function escapeSvgText(value = '') {
 }
 
 function getBackendAssetOrigin() {
-  const envBase = String(import.meta?.env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
-  if (envBase) return envBase;
+  const apiBase = String(getApiBaseUrl() || '').trim().replace(/\/$/, '');
+  if (apiBase) return apiBase;
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
-    const backendPort = String(import.meta?.env?.VITE_BACKEND_PORT || '5000');
+    const backendPort = String(import.meta?.env?.VITE_BACKEND_PORT || '5001');
     if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '3000') {
       return `${protocol}//${hostname}:${backendPort}`;
     }

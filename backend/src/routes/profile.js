@@ -288,15 +288,19 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
     );
 
     const accepter = await User.findById(req.userId).select('name email').lean();
-    createNotification({
-      recipientId: String(reqDoc.from),
-      actorId: req.userId,
-      type: 'friend_request_accepted',
-      title: 'Friend request accepted',
-      message: `${accepter?.name || accepter?.email || 'Someone'} accepted your friend request.`,
-      link: '/profile?tab=friends&section=friends',
-      meta: { acceptedByUserId: String(req.userId) },
-    }).catch((err) => console.error('Accept request notification error:', err));
+    try {
+      await createNotification({
+        recipientId: String(reqDoc.from),
+        actorId: req.userId,
+        type: 'friend_request_accepted',
+        title: 'Friend request accepted',
+        message: `${accepter?.name || accepter?.email || 'Someone'} accepted your friend request.`,
+        link: '/profile?tab=friends&section=friends',
+        meta: { acceptedByUserId: String(req.userId) },
+      });
+    } catch (notificationErr) {
+      console.error('Accept request notification error:', notificationErr);
+    }
 
     await FriendRequest.deleteOne({ _id: id });
     return res.json({ ok: true });
@@ -333,23 +337,24 @@ router.post('/requests/by-identifier', requireAuth, async (req, res) => {
     const existingFriend = await Friendship.findOne({ userA, userB }).lean();
     if (existingFriend) return res.status(200).json({ ok: true, status: 'friends' });
 
-    const upsertResult = await FriendRequest.updateOne(
+    const friendReq = await FriendRequest.findOneAndUpdate(
       { from: req.userId, to: target._id },
       { $setOnInsert: { from: req.userId, to: target._id, status: 'pending' } },
-      { upsert: true }
-    );
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
 
-    if (Number(upsertResult?.upsertedCount || 0) > 0) {
-      createNotification({
-        recipientId: String(target._id),
-        actorId: req.userId,
-        type: 'friend_request_received',
-        title: 'New friend request',
-        message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
-        link: '/profile?tab=friends&section=requests',
-        meta: { fromUserId: String(req.userId) },
-      }).catch((err) => console.error('Friend request notification error:', err));
-    }
+    await createNotification({
+      recipientId: String(target._id),
+      actorId: req.userId,
+      type: 'friend_request_received',
+      title: 'New friend request',
+      message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
+      link: '/profile?tab=friends&section=requests',
+      meta: {
+        fromUserId: String(req.userId),
+        requestId: String(friendReq?._id || ''),
+      },
+    });
 
     return res.status(201).json({
       ok: true,
@@ -576,23 +581,24 @@ router.post('/:id/friends', requireAuth, async (req, res) => {
     const existingFriend = await Friendship.findOne({ userA, userB }).lean();
     if (existingFriend) return res.status(200).json({ ok: true });
 
-    const upsertResult = await FriendRequest.updateOne(
+    const friendReq = await FriendRequest.findOneAndUpdate(
       { from: req.userId, to: id },
       { $setOnInsert: { from: req.userId, to: id, status: 'pending' } },
-      { upsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    if (Number(upsertResult?.upsertedCount || 0) > 0) {
-      createNotification({
-        recipientId: id,
-        actorId: req.userId,
-        type: 'friend_request_received',
-        title: 'New friend request',
-        message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
-        link: '/profile?tab=friends&section=requests',
-        meta: { fromUserId: String(req.userId) },
-      }).catch((err) => console.error('Friend request notification error:', err));
-    }
+    await createNotification({
+      recipientId: id,
+      actorId: req.userId,
+      type: 'friend_request_received',
+      title: 'New friend request',
+      message: `${req.user?.name || req.user?.email || 'Someone'} sent you a friend request.`,
+      link: '/profile?tab=friends&section=requests',
+      meta: {
+        fromUserId: String(req.userId),
+        requestId: String(friendReq?._id || ''),
+      },
+    });
 
     return res.status(201).json({ ok: true, status: 'pending' });
   } catch (err) {

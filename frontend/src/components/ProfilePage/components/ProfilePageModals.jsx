@@ -17,6 +17,43 @@ export default function ProfilePageModals({
   publishModal,
   dialogModal,
 }) {
+  const resolvedShareModal = shareModal
+    ? {
+        ...shareModal,
+        onShareWithFriend:
+          shareModal.onShareWithFriend ||
+          (typeof shareModal.onSendToFriends === 'function'
+            ? (friend) => shareModal.onSendToFriends([friend.id], { [friend.id]: 'viewer' })
+            : undefined),
+        onSaveCollaboratorRoles:
+          shareModal.onSaveCollaboratorRoles ||
+          (typeof shareModal.onUpdateCollaborator === 'function'
+            ? async (pendingRoles) => {
+                const currentCollabs = Array.isArray(shareModal.collaborators) ? shareModal.collaborators : [];
+                for (const [userId, role] of Object.entries(pendingRoles || {})) {
+                  const collab = currentCollabs.find(
+                    (entry) => String(entry?.user?.id || entry?.userId || '') === String(userId)
+                  );
+                  if (!collab) continue;
+                  if ((collab?.role || 'viewer') === role) continue;
+                  await shareModal.onUpdateCollaborator(collab, role);
+                }
+              }
+            : undefined),
+        onRemoveCollaborator:
+          typeof shareModal.onRemoveCollaborator === 'function'
+            ? async (userId) => {
+                const currentCollabs = Array.isArray(shareModal.collaborators) ? shareModal.collaborators : [];
+                const collab = currentCollabs.find(
+                  (entry) => String(entry?.user?.id || entry?.userId || '') === String(userId)
+                );
+                if (!collab) throw new Error('Collaborator not found.');
+                await shareModal.onRemoveCollaborator(collab);
+              }
+            : undefined,
+      }
+    : shareModal;
+
   return (
     <>
       <ProfileEditModal {...editModal} />
@@ -24,7 +61,7 @@ export default function ProfilePageModals({
       <ProfileDestinationsModal {...destinationsModal} />
       <ProfileAddDestinationModal {...addDestinationModal} />
       <ProfileRenameTripModal {...renameModal} />
-      <TripShareModal {...shareModal} />
+      <TripShareModal {...resolvedShareModal} />
       <PublishItineraryModal
         open={publishModal.open}
         onClose={publishModal.onClose}

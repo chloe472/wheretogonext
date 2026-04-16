@@ -18,6 +18,7 @@ export async function fetchMyProfile({ signal } = {}) {
   const res = await fetch(apiUrl('/api/profile/me'), {
     method: 'GET',
     headers: getBearerAuthHeaders(),
+    cache: 'no-store',
     signal,
   });
   return handleJsonResponse(res);

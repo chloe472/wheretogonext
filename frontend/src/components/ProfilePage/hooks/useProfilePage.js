@@ -1223,6 +1223,7 @@ const shareUrl = profile?.id || profileId
       setPhotoPreview(null);
       setPhotoFile(null);
       setEditOpen(false);
+      toast.success('Profile saved!');
       if (onUserUpdate) {
         onUserUpdate({
           ...user,

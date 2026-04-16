@@ -234,6 +234,10 @@ export default function TripShareModal({
       onClose?.();
       return;
     }
+    if (typeof onSaveCollaboratorRoles !== 'function') {
+      toast.error('Saving access changes is not available right now.');
+      return;
+    }
     setRoleSaving(true);
     try {
       await onSaveCollaboratorRoles(pendingRoles);
@@ -592,7 +596,13 @@ export default function TripShareModal({
                         <button
                           type="button"
                           className="trip-share__collab-remove"
-                          onClick={() => onRemoveCollaborator(userId)}
+                          onClick={() => {
+                            if (typeof onRemoveCollaborator !== 'function') {
+                              toast.error('Removing collaborators is not available right now.');
+                              return;
+                            }
+                            onRemoveCollaborator(userId);
+                          }}
                           aria-label={`Remove ${user?.name || 'tripmate'}`}
                         >
                           Remove

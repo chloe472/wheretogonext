@@ -102,7 +102,8 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
       es = new EventSource(streamUrl);
 
       es.addEventListener('connected', () => {
-        reconnectDelay = 2000; 
+        reconnectDelay = 2000;
+        loadLatest();
       });
 
       es.addEventListener('notification', (e) => {
@@ -110,12 +111,10 @@ export default function DashboardHeader({ user, onLogout, activeNav = 'dashboard
         try {
           const notification = JSON.parse(e.data);
           setNotifications((prev) => {
-            if (prev.some((n) => n.id === notification.id)) return prev;
-            return [notification, ...prev];
+            const withoutExisting = prev.filter((n) => n.id !== notification.id);
+            return [notification, ...withoutExisting].slice(0, 20);
           });
-          if (!notification.isRead) {
-            setUnreadCount((c) => c + 1);
-          }
+          loadLatest();
         } catch {  }
       });
 
