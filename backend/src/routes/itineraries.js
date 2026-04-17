@@ -93,9 +93,6 @@ function parseDurationFilter(durationParam) {
   return null;
 }
 
-/**
- * Mongo filter: trip length in range by stored `days` OR inclusive day count from startDate/endDate (YYYY-MM-DD).
- */
 function durationRangeMongoFilter(range) {
   if (!range || typeof range.$gte !== 'number') return null;
   const gte = range.$gte;

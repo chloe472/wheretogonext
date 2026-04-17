@@ -245,11 +245,6 @@ function parseLocationNameOnlyJson(text) {
   }
 }
 
-/**
- * Second vision pass: when the main JSON has no coords and no name, ask explicitly
- * for a recognizable landmark name (e.g. text-free Moraine Lake photos).
- * Returns "" on failure or if the model cannot name a place.
- */
 export async function inferLandmarkNameFromImage(imagePath) {
   if (!GEMINI_API_KEY) return '';
 
