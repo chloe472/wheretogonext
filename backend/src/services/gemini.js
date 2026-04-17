@@ -132,23 +132,6 @@ function mapsUrls(lat, lng) {
   };
 }
 
-/**
- * Vision analysis for a single screenshot file on disk.
- * @param {string} imagePath - Absolute path to an image file
- * @returns {Promise<{
- *   location_name: string,
- *   latitude: number|null,
- *   longitude: number|null,
- *   confidence: string,
- *   address: string,
- *   city: string,
- *   country: string,
- *   has_error: boolean,
- *   error_message?: string,
- *   google_maps_url: string,
- *   street_view_url: string,
- * }>}
- */
 export async function analyzeScreenshot(imagePath) {
   if (!GEMINI_API_KEY) {
     return emptyResult(true, 'GEMINI_API_KEY not configured');

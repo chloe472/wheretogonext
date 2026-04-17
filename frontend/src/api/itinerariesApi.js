@@ -1,6 +1,5 @@
 import { apiUrl, getBearerAuthHeaders, TOKEN_STORAGE_KEY } from './apiConfig.js';
 
-/** Inclusive trip length for Explore sort/filter (aligns with backend computeDaysFromDateRange / places). */
 export function computeExploreDayCount(it) {
   const start = String(it?.startDate || '').trim().slice(0, 10);
   const end = String(it?.endDate || '').trim().slice(0, 10);
@@ -19,9 +18,6 @@ export function computeExploreDayCount(it) {
   return Number.isFinite(d) && d >= 1 ? d : 1;
 }
 
-/**
- * Maps GET /api/itineraries response items to the shape SearchResultsPage cards expect.
- */
 export function mapItineraryToCard(it) {
   const creator = it.creator && typeof it.creator === 'object' ? it.creator : {};
   const creatorName = creator.name || creator.email || 'Traveler';
@@ -65,7 +61,6 @@ export function mapSortToApiParam(sortBy) {
   return 'newest';
 }
 
-/** Client-side sorts; Most Popular is by view count (matches API intent if order was lost). */
 export function applyClientSort(cards, sortBy) {
   const list = [...cards];
   switch (sortBy) {
@@ -85,11 +80,6 @@ export function applyClientSort(cards, sortBy) {
   }
 }
 
-/**
- * Explore / community list: when the user has profile interests (same labels as itinerary.categories),
- * rank itineraries with more overlapping categories first; then apply the selected sort as tie-breaker.
- * When filtersActive (search / adventure / duration), skips interest boost and sorts by sortBy only.
- */
 export function applyExploreOrdering(cards, sortBy, profileInterests, filtersActive = false) {
   if (filtersActive) {
     return applyClientSort([...cards], sortBy);
@@ -133,7 +123,6 @@ export function applyExploreOrdering(cards, sortBy, profileInterests, filtersAct
     return applyClientSort([...cards], sortBy);
   }
 
-  // Most Popular must rank by views globally; use interest overlap only as a tie-breaker.
   if (sortBy === 'Most Popular') {
     const list = [...cards];
     list.sort((a, b) => {
@@ -144,7 +133,6 @@ export function applyExploreOrdering(cards, sortBy, profileInterests, filtersAct
     return list;
   }
 
-  // Duration: shortest trips first globally; interest overlap only breaks ties.
   if (sortBy === 'Duration: Short to long') {
     const list = [...cards];
     list.sort((a, b) => {

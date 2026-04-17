@@ -166,9 +166,6 @@ function normalizeDayTitles(input) {
   return next;
 }
 
-/**
- * Map trip day index from itinerary startDate (YYYY-MM-DD) and item date.
- */
 function dayNumberFromStartAndItemDate(startDateStr, itemDateStr) {
   const s = String(startDateStr || '').trim().slice(0, 10);
   const d = String(itemDateStr || '').trim().slice(0, 10);
